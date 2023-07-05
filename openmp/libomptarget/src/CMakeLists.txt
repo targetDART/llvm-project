@@ -24,6 +24,7 @@ add_llvm_library(omptarget
   rtl.cpp
   LegacyAPI.cpp
   TargetDART.cpp
+  TD_communication.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LIBOMPTARGET_INCLUDE_DIR}
