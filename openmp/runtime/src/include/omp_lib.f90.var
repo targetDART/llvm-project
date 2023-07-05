@@ -276,6 +276,11 @@
             integer (kind=omp_integer_kind) chunk_size
           end subroutine omp_get_schedule
 
+          subroutine testFunction() bind(c)
+            import
+            integer (kind=omp_integer_kind) testFunction
+          end subroutine testFunction
+
           function omp_get_proc_bind() bind(c)
             use omp_lib_kinds
             integer (kind=omp_proc_bind_kind) omp_get_proc_bind

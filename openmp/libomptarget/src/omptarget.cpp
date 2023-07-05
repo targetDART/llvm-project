@@ -15,7 +15,7 @@
 #include "device.h"
 #include "private.h"
 #include "rtl.h"
-
+#include <iostream>
 #include <cassert>
 #include <cstdint>
 #include <vector>
@@ -333,6 +333,8 @@ bool checkDeviceAndCtors(int64_t &DeviceID, ident_t *Loc) {
   if (DeviceID == omp_get_initial_device()) {
     DP("Device is host (%" PRId64 "), returning as if offload is disabled\n",
        DeviceID);
+
+    printf("initial device used\n");
     return true;
   }
 
@@ -1616,6 +1618,7 @@ static int processDataAfter(ident_t *Loc, int64_t DeviceId, void *HostPtr,
 /// integer different from zero otherwise.
 int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
            KernelArgsTy &KernelArgs, AsyncInfoTy &AsyncInfo) {
+
   int32_t DeviceId = Device.DeviceID;
   TableMap *TM = getTableMap(HostPtr);
   // No map for this host pointer found!

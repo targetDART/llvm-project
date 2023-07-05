@@ -23,6 +23,7 @@ add_llvm_library(omptarget
   ompt_callback.cpp
   rtl.cpp
   LegacyAPI.cpp
+  TargetDART.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LIBOMPTARGET_INCLUDE_DIR}

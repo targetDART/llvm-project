@@ -78,6 +78,12 @@
     extern void   __KAI_KMPC_CONVENTION  omp_get_schedule            (omp_sched_t *, int *);
     extern int    __KAI_KMPC_CONVENTION  omp_get_max_task_priority   (void);
 
+
+    extern int    __KAI_KMPC_CONVENTION  initTargetDART   (int *, char ***, void*);
+    extern int    __KAI_KMPC_CONVENTION  finalizeTargetDART   (void);
+    extern int  __KAI_KMPC_CONVENTION  testFunction   (int *, char ***);
+
+
     /* lock API functions */
     typedef struct omp_lock_t {
         void * _lk;

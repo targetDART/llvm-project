@@ -433,6 +433,7 @@ int __tgt_target_kernel_replay(ident_t *Loc, int64_t DeviceId, void *HostPtr,
 void __tgt_set_info_flag(uint32_t);
 
 int __tgt_print_device_info(int64_t DeviceId);
+
 #ifdef __cplusplus
 }
 #endif

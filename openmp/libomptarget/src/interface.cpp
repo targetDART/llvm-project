@@ -17,12 +17,14 @@
 #include "rtl.h"
 
 #include "Utilities.h"
+#include "TargetDART.h"
 
 #include <cassert>
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
 #include <type_traits>
+#include <iostream>
 
 ////////////////////////////////////////////////////////////////////////////////
 /// adds requires flags
@@ -224,12 +226,17 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                KernelArgsTy *KernelArgs) {
   static_assert(std::is_convertible_v<TargetAsyncInfoTy, AsyncInfoTy>,
                 "Target AsyncInfoTy must be convertible to AsyncInfoTy.");
-
   TIMESCOPE_WITH_IDENT(Loc);
 
   DP("Entering target region for device %" PRId64 " with entry point " DPxMOD
      "\n",
      DeviceId, DPxPTR(HostPtr));
+  
+  //TargetDART: steal task for targetDART lib here
+
+  if(DeviceId == 100) {
+    return addTargetDARTTask(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
+  }
 
   if (checkDeviceAndCtors(DeviceId, Loc)) {
     DP("Not offloading to device %" PRId64 "\n", DeviceId);

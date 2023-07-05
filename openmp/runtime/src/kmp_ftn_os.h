@@ -16,6 +16,7 @@
 // KMP_FNT_ENTRIES may be one of: KMP_FTN_PLAIN, KMP_FTN_UPPER, KMP_FTN_APPEND,
 // KMP_FTN_UAPPEND.
 
+
 /* -------------------------- External definitions ------------------------ */
 
 #if KMP_FTN_ENTRIES == KMP_FTN_PLAIN

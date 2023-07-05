@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cstdio>
 #ifndef FTN_STDCALL
 #error The support file kmp_ftn_entry.h should not be compiled by itself.
 #endif

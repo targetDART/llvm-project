@@ -472,17 +472,21 @@ static kmp_int32 __kmp_push_task(kmp_int32 gtid, kmp_task_t *task) {
   // starting from its shadow one.
   if (UNLIKELY(taskdata->td_flags.hidden_helper &&
                !KMP_HIDDEN_HELPER_THREAD(gtid))) {
+    // TargetDART: execute routine here to generate Kernel args. 
+    // TargetDART: Replace give task function
     kmp_int32 shadow_gtid = KMP_GTID_TO_SHADOW_GTID(gtid);
     __kmpc_give_task(task, __kmp_tid_from_gtid(shadow_gtid));
     // Signal the hidden helper threads.
     __kmp_hidden_helper_worker_thread_signal();
+
+    printf("add target task to queue\n");
+
     return TASK_SUCCESSFULLY_PUSHED;
   }
 
   kmp_task_team_t *task_team = thread->th.th_task_team;
   kmp_int32 tid = __kmp_tid_from_gtid(gtid);
   kmp_thread_data_t *thread_data;
-
   KA_TRACE(20,
            ("__kmp_push_task: T#%d trying to push task %p.\n", gtid, taskdata));
 
@@ -1660,6 +1664,7 @@ static void __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_info_t *thread;
   int discard = 0 /* false */;
+  printf("task execution\n");
   KA_TRACE(
       30, ("__kmp_invoke_task(enter): T#%d invoking task %p, current_task=%p\n",
            gtid, taskdata, current_task));
