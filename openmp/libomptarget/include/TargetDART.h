@@ -20,14 +20,16 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 #endif
 
 typedef struct td_task_t{
-    void*           host_ptr;
+    intptr_t        host_base_ptr;
     KernelArgsTy*   KernelArgs;
     int32_t         num_teams;
     int32_t         thread_limit;
     ident_t*        Loc;
+    int             local_proc;
 } td_task_t;
 
 extern MPI_Datatype TD_Kernel_Args;
+extern MPI_Datatype TD_MPI_Task;
 
 // Outsources a target construct to the targetDART runtime
 int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
@@ -39,6 +41,7 @@ tdrc get_base_address(void * main_ptr);
 int32_t set_image_base_address(int idx_image, intptr_t base_address);
 
 tdrc declare_KernelArgs_type();
+tdrc declare_task_type();
 
 
 extern "C" int initTargetDART(int *argc, char ***argv, void* main_ptr);

@@ -2,6 +2,7 @@
 #include "omptarget.h"
 #include "device.h"
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include "private.h"
 #include "mpi.h"
@@ -36,6 +37,7 @@ int targetdart_comm_size;
 int targetdart_comm_rank;
 
 MPI_Datatype TD_Kernel_Args;
+MPI_Datatype TD_MPI_Task;
 
 // array that holds image base addresses
 std::vector<intptr_t> _image_base_addresses;
@@ -47,6 +49,7 @@ static inline int DeviceIdGenerator(KernelArgsTy *KernelArgs) {
 static inline void printInfo(KernelArgsTy *KernelArgs) {
   for (int i = 0; i < KernelArgs->NumArgs; i++) {  
     std::cout << i << ". pointer " << KernelArgs->ArgPtrs[i] << std::endl;
+    std::cout << i << ". base pointer " << KernelArgs->ArgBasePtrs[i] << std::endl;
     std::cout << i << ". size " << KernelArgs->ArgSizes[i] << std::endl;    
   }
   std::cout << "test: " << test << std::endl;
@@ -76,23 +79,24 @@ int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
   *DeviceId = DeviceIdGenerator(KernelArgs);
 
   td_task_t task;
-  task.host_ptr = HostPtr;
+  task.host_base_ptr = (intptr_t) HostPtr - _image_base_addresses[99];
   task.KernelArgs = KernelArgs;
   task.Loc = Loc;
   task.num_teams = NumTeams;
   task.thread_limit = ThreadLimit;
+  task.local_proc = targetdart_comm_rank;
 
   std::cout << "libomptarget on device: " << *DeviceId << std::endl;
   std::cout << "Host pointer " << HostPtr << std::endl;
   printInfo(KernelArgs);
   printLocInfo(Loc);
-  fence++;
+  /*fence++;
   std::cout << "fence: " << fence << std::endl;
   while (fence < 10) {
     sleep(1);
-  }
+  }*/
 
-  std::cout << "left fence" << std::endl;
+  //std::cout << "left fence" << std::endl;
 
   return __tgt_target_kernel(Loc, *DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
 }
@@ -113,8 +117,9 @@ int initTargetDART(int *argc, char ***argv, void* main_ptr) {
       MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
   }
 
-  //decare KernelArgs as MPI Type
+  //decare KernelArgs,task as MPI Type
   declare_KernelArgs_type();
+  declare_task_type();
 
   // create separate communicator for targetdart
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
@@ -207,5 +212,19 @@ tdrc declare_KernelArgs_type() {
   MPI_Type_commit(&TD_Kernel_Args);
 
   return TARGETDART_SUCCESS;
+}
 
+tdrc declare_task_type() {
+  const int nitems = 3;
+  int blocklengths[3] = {1,2,1};
+  MPI_Datatype types[3] = {MPI_LONG, MPI_INT32_T, MPI_INT};
+  MPI_Aint offsets[3];
+  offsets[0] = offsetof(td_task_t, host_base_ptr);
+  offsets[1] = offsetof(td_task_t, num_teams);
+  offsets[2] = offsetof(td_task_t, local_proc);
+
+  MPI_Type_create_struct(nitems, blocklengths, offsets, types, &TD_MPI_Task);
+  MPI_Type_commit(&TD_MPI_Task);
+
+  return TARGETDART_SUCCESS;
 }

@@ -24,5 +24,8 @@ extern int targetdart_comm_rank;
 
 
 extern MPI_Datatype TD_Kernel_Args;
+extern MPI_Datatype TD_MPI_Task;
+
+enum MpiTaskTransferTag {SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_PARAMS, SEND_SOURCE_LOCS};
 
 #endif // _OMPTARGET_TD_COMMUNICATION_H
