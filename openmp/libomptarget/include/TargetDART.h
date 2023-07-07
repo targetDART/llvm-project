@@ -7,7 +7,6 @@
 #include "mpi.h"
 #include "omptarget.h"
 #include "device.h"
-#include "TD_communication.h"
 
 enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 
@@ -42,6 +41,10 @@ int32_t set_image_base_address(int idx_image, intptr_t base_address);
 
 tdrc declare_KernelArgs_type();
 tdrc declare_task_type();
+
+int __td_invoke_task(int DeviceId, td_task_t* task);
+
+intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress);
 
 
 extern "C" int initTargetDART(int *argc, char ***argv, void* main_ptr);

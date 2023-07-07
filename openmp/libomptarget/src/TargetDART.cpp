@@ -10,6 +10,7 @@
 #include <queue>
 #include <dlfcn.h>
 #include <unistd.h>
+#include "TD_communication.h"
 
 // TODO: implement interface
 
@@ -72,6 +73,7 @@ static inline void printLocInfo(ident_t *Loc) {
   
 }
 
+//Adds a task to the TargetDART runtime
 int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
                         int32_t ThreadLimit, void *HostPtr,
                         KernelArgsTy *KernelArgs, int64_t *DeviceId) 
@@ -79,17 +81,28 @@ int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
   *DeviceId = DeviceIdGenerator(KernelArgs);
 
   td_task_t task;
-  task.host_base_ptr = (intptr_t) HostPtr - _image_base_addresses[99];
+  task.host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
   task.KernelArgs = KernelArgs;
   task.Loc = Loc;
   task.num_teams = NumTeams;
   task.thread_limit = ThreadLimit;
   task.local_proc = targetdart_comm_rank;
 
+
+  std::cout << "Rank " << targetdart_comm_rank << " Host pointer " << HostPtr << std::endl;
+
+  if (targetdart_comm_rank == 0) {
+    td_send_task(1, task);
+  } else {
+    td_receive_task(&task);
+  }
+
   std::cout << "libomptarget on device: " << *DeviceId << std::endl;
-  std::cout << "Host pointer " << HostPtr << std::endl;
+  std::cout << "Rank " << targetdart_comm_rank << " Host pointer " << HostPtr << std::endl;
+  if (targetdart_comm_rank != 0) {
   printInfo(KernelArgs);
   printLocInfo(Loc);
+  }
   /*fence++;
   std::cout << "fence: " << fence << std::endl;
   while (fence < 10) {
@@ -98,7 +111,7 @@ int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
 
   //std::cout << "left fence" << std::endl;
 
-  return __tgt_target_kernel(Loc, *DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
+  return __td_invoke_task(*DeviceId, &task);
 }
 
 // initializes the targetDART lib
@@ -161,6 +174,9 @@ int finalizeTargetDART() {
   return TARGETDART_SUCCESS;
 }
 
+int __td_invoke_task(int DeviceId, td_task_t* task) {
+  return __tgt_target_kernel(task->Loc, DeviceId, task->num_teams, task->thread_limit, (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
+}
 
 /*
  * Function set_image_base_address
@@ -175,6 +191,18 @@ int32_t set_image_base_address(int idx_image, intptr_t base_address) {
     DBP("set_image_base_address (enter) Setting base_address: " DPxMOD " for img: %d\n", DPxPTR((void*)base_address), idx_image);
     _image_base_addresses[idx_image] = base_address;
     return TARGETDART_SUCCESS;
+}
+
+/*
+ * Function apply_image_base_address
+ * Adds the base address to the address if iBaseAddress == true
+ * Else it creates a base address
+ */
+intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress) {
+    if (isBaseAddress) {
+      return base_address + _image_base_addresses[99];
+    }
+    return base_address - _image_base_addresses[99];
 }
 
 /**

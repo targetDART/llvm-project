@@ -14,7 +14,7 @@
 
 // TODO: implement communication interface for TargetDART
 
-bool td_send_task(int dest, td_task_t &task) {
+int td_send_task(int dest, td_task_t &task) {
     //Send Task Data
     MPI_Send(&task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     //Send static KernelArgs values excluding pointervalues
@@ -35,31 +35,32 @@ bool td_send_task(int dest, td_task_t &task) {
     // Send source location to support debuggin information
     MPI_Send(task.Loc, 4, MPI_INT32_T, dest, SEND_SOURCE_LOCS, targetdart_comm);
 
+    //Send base location
+    intptr_t Locptr = apply_image_base_address((intptr_t) task.Loc->psource, false);
+    MPI_Send(&Locptr, 1, MPI_LONG, dest, SEND_LOCS_PSOURCE, targetdart_comm);
+
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
     return TARGETDART_SUCCESS;
 }
 
-bool td_receive_task(td_task_t *task) {
+int td_receive_task(td_task_t *task) {
 
     //Receive Task Data
     MPI_Recv(task, 1, TD_MPI_Task, MPI_ANY_SOURCE , SEND_TASK, targetdart_comm, MPI_STATUS_IGNORE);
 
     //Receive static KernelArgs values excluding pointervalues
-    KernelArgsTy *KernelArgs = new KernelArgsTy;
-    MPI_Recv(KernelArgs, 1, TD_Kernel_Args, MPI_ANY_SOURCE, SEND_KERNEL_ARGS, targetdart_comm, MPI_STATUS_IGNORE);
-    task->KernelArgs = KernelArgs;
+    task->KernelArgs = new KernelArgsTy;
+    MPI_Recv(task->KernelArgs, 1, TD_Kernel_Args, MPI_ANY_SOURCE, SEND_KERNEL_ARGS, targetdart_comm, MPI_STATUS_IGNORE);
     
     //Receive Argument sizes for actual data transfers
-    int64_t *sizes = new int64_t[task->KernelArgs->NumArgs];
-    MPI_Recv(sizes, task->KernelArgs->NumArgs, MPI_INT64_T, MPI_ANY_SOURCE, SEND_PARAM_SIZES, targetdart_comm, MPI_STATUS_IGNORE);
-    task->KernelArgs->ArgSizes = sizes;
+    task->KernelArgs->ArgSizes = new int64_t[task->KernelArgs->NumArgs];
+    MPI_Recv(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, MPI_ANY_SOURCE, SEND_PARAM_SIZES, targetdart_comm, MPI_STATUS_IGNORE);
     
     //Receive Argument types for each kernel
-    int64_t *types = new int64_t[task->KernelArgs->NumArgs];
-    MPI_Recv(types, task->KernelArgs->NumArgs, MPI_INT64_T, MPI_ANY_SOURCE, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
-    task->KernelArgs->ArgTypes = types;
+    task->KernelArgs->ArgTypes = new int64_t[task->KernelArgs->NumArgs];
+    MPI_Recv(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, MPI_ANY_SOURCE, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
 
     //Declare Mappers and Names
     task->KernelArgs->ArgMappers = new void*[task->KernelArgs->NumArgs];
@@ -84,6 +85,11 @@ bool td_receive_task(td_task_t *task) {
     // Receive source location to support debuggin information
     task->Loc = new ident_t;
     MPI_Recv(task->Loc, 4, MPI_INT32_T, MPI_ANY_SOURCE, SEND_SOURCE_LOCS, targetdart_comm, MPI_STATUS_IGNORE);
+    
+    //Receive base location
+    intptr_t Locptr;
+    MPI_Recv(&Locptr, 1, MPI_LONG, MPI_ANY_SOURCE, SEND_LOCS_PSOURCE, targetdart_comm, MPI_STATUS_IGNORE);
+    task->Loc->psource = (const char*) apply_image_base_address(Locptr, true);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference

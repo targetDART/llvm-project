@@ -8,6 +8,8 @@
 #include "device.h"
 #include "mpi.h"
 
+#include "TargetDART.h"
+
 // communicator for remote task requests
 extern MPI_Comm targetdart_comm;
 // communicator for sending back mapped values
@@ -26,6 +28,10 @@ extern int targetdart_comm_rank;
 extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
 
-enum MpiTaskTransferTag {SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_PARAMS, SEND_SOURCE_LOCS};
+enum MpiTaskTransferTag {SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE};
+
+int td_send_task(int dest, td_task_t &task);
+
+int td_receive_task(td_task_t *task);
 
 #endif // _OMPTARGET_TD_COMMUNICATION_H
