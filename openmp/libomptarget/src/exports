@@ -64,7 +64,6 @@ VERS1.0 {
     __tgt_interop_destroy;
     initTargetDART;
     finalizeTargetDART;
-    testFunction;
   local:
     *;
 };

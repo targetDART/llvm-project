@@ -7,28 +7,7 @@
 #include "mpi.h"
 #include "omptarget.h"
 #include "device.h"
-
-enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
-
-#ifndef DBP
-#ifdef TD_DEBUG
-#define DBP( ... ) { RELP(__VA_ARGS__); }
-#else
-#define DBP( ... ) { }
-#endif
-#endif
-
-typedef struct td_task_t{
-    intptr_t        host_base_ptr;
-    KernelArgsTy*   KernelArgs;
-    int32_t         num_teams;
-    int32_t         thread_limit;
-    ident_t*        Loc;
-    int             local_proc;
-} td_task_t;
-
-extern MPI_Datatype TD_Kernel_Args;
-extern MPI_Datatype TD_MPI_Task;
+#include "TD_common.h"
 
 // Outsources a target construct to the targetDART runtime
 int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
