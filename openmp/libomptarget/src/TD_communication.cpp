@@ -16,6 +16,10 @@
 // TODO: implement communication interface for TargetDART
 
 int td_send_task(int dest, td_task_t &task) {
+
+    //TODO: Use MPI pack to summarize the messages into a single Send
+    //TODO: Use non-blocking send
+
     //Send Task Data
     MPI_Send(&task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     //Send static KernelArgs values excluding pointervalues
@@ -29,7 +33,7 @@ int td_send_task(int dest, td_task_t &task) {
     for (int i = 0; i < task.KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         int64_t IsMapTo = task.KernelArgs->ArgTypes[i] & 0x001;
-        if (IsMapTo)
+        if (IsMapTo != 0)
             MPI_Send(task.KernelArgs->ArgPtrs[i], task.KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
     }
 
@@ -37,8 +41,8 @@ int td_send_task(int dest, td_task_t &task) {
     MPI_Send(task.Loc, 4, MPI_INT32_T, dest, SEND_SOURCE_LOCS, targetdart_comm);
 
     //Send base location
-    intptr_t Locptr = apply_image_base_address((intptr_t) task.Loc->psource, false);
-    MPI_Send(&Locptr, 1, MPI_LONG, dest, SEND_LOCS_PSOURCE, targetdart_comm);
+    int64_t Locptr = (int64_t) apply_image_base_address((intptr_t) task.Loc->psource, false);
+    MPI_Send(&Locptr, 1, MPI_INT64_T, dest, SEND_LOCS_PSOURCE, targetdart_comm);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
@@ -47,6 +51,8 @@ int td_send_task(int dest, td_task_t &task) {
 }
 
 int td_receive_task(int source, td_task_t *task) {
+
+    //TODO: use MPI probe for complete receives
 
     //Receive Task Data
     MPI_Recv(task, 1, TD_MPI_Task, source , SEND_TASK, targetdart_comm, MPI_STATUS_IGNORE);
@@ -73,7 +79,7 @@ int td_receive_task(int source, td_task_t *task) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         task->KernelArgs->ArgPtrs[i] = new int8_t[task->KernelArgs->ArgSizes[i]];
         int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
-        if (IsMapTo)
+        if (IsMapTo != 0)
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
     
         //Fill Mappers and Names with null
@@ -88,9 +94,9 @@ int td_receive_task(int source, td_task_t *task) {
     MPI_Recv(task->Loc, 4, MPI_INT32_T, source, SEND_SOURCE_LOCS, targetdart_comm, MPI_STATUS_IGNORE);
     
     //Receive base location
-    intptr_t Locptr;
-    MPI_Recv(&Locptr, 1, MPI_LONG, source, SEND_LOCS_PSOURCE, targetdart_comm, MPI_STATUS_IGNORE);
-    task->Loc->psource = (const char*) apply_image_base_address(Locptr, true);
+    int64_t Locptr;
+    MPI_Recv(&Locptr, 1, MPI_INT64_T, source, SEND_LOCS_PSOURCE, targetdart_comm, MPI_STATUS_IGNORE);
+    task->Loc->psource = (const char*) apply_image_base_address((intptr_t) Locptr, true);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference

@@ -15,7 +15,11 @@
 
 // TODO: implement interface
 
-bool initialized = false;
+// Mixed endianness is not supported
+
+static bool __td_initialized = false;
+
+static bool __td_did_initialize_mpi = false;
 
 // communicator for remote task requests
 MPI_Comm targetdart_comm;
@@ -81,19 +85,29 @@ int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
 }
 
 // initializes the targetDART lib
+/*
+main_ptr needs to be the same function in the same binary in all processes.
+Preferably main().
+If MPI is used in the user code, MPI must be initialized before TargetDART.
+*/
 int initTargetDART(int *argc, char ***argv, void* main_ptr) {
-  if (initialized) {
+  if (__td_initialized) {
     return TARGETDART_SUCCESS;
   }
 
   // check whether MPI is initialized, otherwise do so
-  int initialized, err;
-  initialized = 0;
-  err = MPI_Initialized(&initialized);
-  if(!initialized) {
+  int mpi_initialized, err;
+  mpi_initialized = 0;
+  int provided;
+  err = MPI_Initialized(&mpi_initialized);
+  if(!mpi_initialized) {
       // MPI_Init(NULL, NULL);
-      int provided;
       MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
+      __td_did_initialize_mpi = true;
+  }
+  MPI_Query_thread(&provided);
+  if(provided != MPI_THREAD_MULTIPLE) {
+    //TODO: Fehler meldung
   }
 
   //decare KernelArgs,task as MPI Type
@@ -101,6 +115,7 @@ int initTargetDART(int *argc, char ***argv, void* main_ptr) {
   declare_task_type();
 
   // create separate communicator for targetdart
+  //TODO: reduce to single communicator for coordination (Deadlock danger?)
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
   if(err != 0) handle_error_en(err, "MPI_Comm_dup - targetdart_comm");
   MPI_Comm_size(targetdart_comm, &targetdart_comm_size);
@@ -134,9 +149,13 @@ int initTargetDART(int *argc, char ***argv, void* main_ptr) {
   return TARGETDART_SUCCESS;
 }
 
-// finalizes targetDART lib
+/* finalizes targetDART lib, iff TD initilized MPI it also needs to finalize it.
+ * Should be one of the last functions in your program.
+*/
 int finalizeTargetDART() {
-  MPI_Finalize();
+  if (__td_did_initialize_mpi) {
+    MPI_Finalize();
+  }
   return TARGETDART_SUCCESS;
 }
 
@@ -176,6 +195,7 @@ intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress) {
 * Function get_base_address
 * Generates the base address for the current process
 * 
+* Works only for identical BINARIES
 */
 tdrc get_base_address(void * main_ptr) {
   Dl_info info;
