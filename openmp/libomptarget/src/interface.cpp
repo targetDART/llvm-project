@@ -235,7 +235,7 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   //TargetDART: steal task for targetDART lib here
 
   if(DeviceId == 100) {
-    return addTargetDARTTask(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
+    return td_add_task(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
   }
 
   if (checkDeviceAndCtors(DeviceId, Loc)) {

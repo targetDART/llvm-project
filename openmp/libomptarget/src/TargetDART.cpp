@@ -61,7 +61,7 @@ static inline void printLocInfo(ident_t *Loc) {
 }
 
 //Adds a task to the TargetDART runtime
-int addTargetDARTTask( ident_t *Loc, int32_t NumTeams,
+int td_add_task( ident_t *Loc, int32_t NumTeams,
                         int32_t ThreadLimit, void *HostPtr,
                         KernelArgsTy *KernelArgs, int64_t *DeviceId) 
 {

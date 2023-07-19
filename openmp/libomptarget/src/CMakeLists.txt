@@ -26,6 +26,7 @@ add_llvm_library(omptarget
   TargetDART.cpp
   TD_communication.cpp
   TD_common.cpp
+  TD_scheduling.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LIBOMPTARGET_INCLUDE_DIR}
