@@ -19,7 +19,7 @@
     #define MEM_ORDER std::memory_order::memory_order_relaxed
 #endif
 
-class TaskQueue {
+class TD_Task_Queue {
 private:
     //TODO ALIGNMENT might be super important for performance
     //TODO double check all memory ordering semantics or just switch to sequential consistency
@@ -45,14 +45,14 @@ public:
     alignas(64) std::atomic<uint64_t> size{0};
 
 public:
-    void init();
+    TD_Task_Queue();
 
     [[nodiscard]] bool offerTask(td_task_t* task);
 
     [[nodiscard]] td_task_t* pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction);
 };
 
-[[nodiscard]] bool TaskQueue::offerTask(td_task_t* task) {
+[[nodiscard]] bool TD_Task_Queue::offerTask(td_task_t* task) {
     uint64_t oldTail = tail.load(std::memory_order_relaxed);
     bool noSuccess = true;
     while(noSuccess) {
@@ -89,7 +89,7 @@ public:
  * @tparam T Type of elements stored in the Task Queue (usually T = Task)
  * @return The first element of the queue which is removed from the queue.
  */
-[[nodiscard]] td_task_t* TaskQueue::pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction) {
+[[nodiscard]] td_task_t* TD_Task_Queue::pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction) {
     while (size.load(MEM_ORDER) == 0) {
         if (blockingFunction != nullptr) {
             bool shutdown = (*blockingFunction)(size, 0);
@@ -147,9 +147,9 @@ public:
     return entry;
 }
 
-void TaskQueue::init() {
-    this->head.store((uint64_t)0);
-    this->tail.store((uint64_t)0);
+inline TD_Task_Queue::TD_Task_Queue() {
+    head.store((uint64_t)0);
+    tail.store((uint64_t)0);
     //Probably useless and takes too much time
 //    for (std::atomic<T*>& atomic : this->workBuffer) {
 //        atomic.store(nullptr);
