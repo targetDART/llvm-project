@@ -10,12 +10,25 @@
 #include "device.h"
 #include "TD_common.h"
 #include "TD_queue.h"
+#include "TD_cost_estimation.h"
+
+
+typedef struct td_progression_t{
+    uint64_t    advancement;
+    uint64_t    compute_load;
+    uint64_t    memory_load;
+    double      time_load;
+};
+
+std::vector<td_progression_t> td_global_progression;
+
+void td_advance(uint64_t value);
 
 class TD_Device_Queue {
 
     private:
 
-    alignas(64) std::atomic<uint64_t> cost{0};
+    alignas(64) std::atomic<double> cost{0};
 
     TD_Task_Queue base_queue;
 
@@ -30,6 +43,7 @@ class TD_Device_Queue {
     tdrc poll_task(td_task_t* task);
 
     TD_Device_Queue();
+    ~TD_Device_Queue();
 };
 
 class TD_Node {
@@ -37,15 +51,13 @@ class TD_Node {
     std::vector<TD_Device_Queue*> td_devices;
 
     public:
-    double get_total_cost();
+    uint64_t get_total_cost();
 
-    double get_total_tasks();
+    uint64_t get_total_tasks();
+
+    TD_Node();
+    ~TD_Node();
 };
 
-
-
-tdrc td_init_devices(int64_t num);
-
-tdrc td_finalize_devices();
 
 #endif

@@ -129,11 +129,12 @@ int initTargetDART(int *argc, char ***argv, void* main_ptr) {
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm_activate);
   if(err != 0) handle_error_en(err, "MPI_Comm_dup - targetdart_comm_activate");
 
+  /**
   MPI_Errhandler_set(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
   MPI_Errhandler_set(targetdart_comm, MPI_ERRORS_RETURN);
   MPI_Errhandler_set(targetdart_comm_mapped, MPI_ERRORS_RETURN);
   MPI_Errhandler_set(targetdart_comm_cancel, MPI_ERRORS_RETURN);
-  MPI_Errhandler_set(targetdart_comm_load, MPI_ERRORS_RETURN);
+  MPI_Errhandler_set(targetdart_comm_load, MPI_ERRORS_RETURN);*/
 
   // define the base address of the current process
   get_base_address(main_ptr);

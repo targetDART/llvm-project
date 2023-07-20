@@ -23,13 +23,16 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 #endif
 #endif
 
+enum td_device_affinity {TD_CPU, TD_GPU, TD_ANY};
+
 typedef struct td_task_t{
-    intptr_t        host_base_ptr;
-    KernelArgsTy*   KernelArgs;
-    int32_t         num_teams;
-    int32_t         thread_limit;
-    ident_t*        Loc;
-    int             local_proc;
+    intptr_t            host_base_ptr;
+    KernelArgsTy*       KernelArgs;
+    int32_t             num_teams;
+    int32_t             thread_limit;
+    ident_t*            Loc;
+    int                 local_proc;
+    td_device_affinity  affinity;
 } td_task_t;
 
 
