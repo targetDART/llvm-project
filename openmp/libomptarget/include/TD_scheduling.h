@@ -20,7 +20,7 @@ typedef struct td_progression_t{
     double      time_load;
 };
 
-std::vector<td_progression_t> td_global_progression;
+extern std::vector<td_progression_t> td_global_progression;
 
 void td_advance(uint64_t value);
 
@@ -46,18 +46,8 @@ class TD_Device_Queue {
     ~TD_Device_Queue();
 };
 
-class TD_Node {
-    private:
-    std::vector<TD_Device_Queue*> td_devices;
 
-    public:
-    uint64_t get_total_cost();
-
-    uint64_t get_total_tasks();
-
-    TD_Node();
-    ~TD_Node();
-};
+extern std::vector<TD_Device_Queue> td_device_list;
 
 
 #endif

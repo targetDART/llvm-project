@@ -79,9 +79,15 @@
     extern int    __KAI_KMPC_CONVENTION  omp_get_max_task_priority   (void);
 
 
-    extern int    __KAI_KMPC_CONVENTION  initTargetDART   (int *, char ***, void*);
+    /* targetDART definitions start */
+
+    extern int    __KAI_KMPC_CONVENTION  initTargetDART   (void*);
     extern int    __KAI_KMPC_CONVENTION  finalizeTargetDART   (void);
-    extern int  __KAI_KMPC_CONVENTION  testFunction   (int *, char ***);
+
+    #define TARGETDART_ANY -1000
+    #define TARGETDART_CPU -1001
+    #define TARGETDART_GPU -1002
+    /* targetDART definitions end */
 
 
     /* lock API functions */
