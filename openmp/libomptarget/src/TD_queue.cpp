@@ -104,7 +104,7 @@
     return entry;
 }
 
-inline TD_Task_Queue::TD_Task_Queue() {
+TD_Task_Queue::TD_Task_Queue() {
     head.store((uint64_t)0);
     tail.store((uint64_t)0);
     //Probably useless and takes too much time

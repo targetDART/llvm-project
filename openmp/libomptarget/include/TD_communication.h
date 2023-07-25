@@ -23,7 +23,7 @@ extern int targetdart_comm_rank;
 
 enum MpiTaskTransferTag {SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE};
 
-int td_send_task(int dest, td_task_t &task);
+int td_send_task(int dest, td_task_t *task);
 
 int td_receive_task(int source, td_task_t *task);
 

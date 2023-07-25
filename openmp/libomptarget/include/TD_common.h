@@ -23,7 +23,7 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 #endif
 #endif
 
-enum td_device_affinity {TD_CPU, TD_GPU, TD_ANY};
+enum td_device_affinity {TD_CPU=-1000, TD_GPU=-1001, TD_ANY=-1002};
 
 typedef struct td_task_t{
     intptr_t            host_base_ptr;

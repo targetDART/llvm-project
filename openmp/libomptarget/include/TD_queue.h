@@ -44,7 +44,6 @@ public:
     //having a separate cache line for busy waiting seems to reduce cache line ping pong
     alignas(64) std::atomic<uint64_t> size{0};
 
-public:
     TD_Task_Queue();
 
     [[nodiscard]] tdrc offerTask(td_task_t* task);

@@ -1,8 +1,10 @@
 #include "TargetDART.h"
+#include "omp.h"
 #include "omptarget.h"
 #include "device.h"
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include "private.h"
 #include "mpi.h"
@@ -28,14 +30,6 @@ static bool __td_did_initialize_mpi = false;
 
 // communicator for remote task requests
 MPI_Comm targetdart_comm;
-// communicator for sending back mapped values
-MPI_Comm targetdart_comm_mapped;
-// communicator for cancelling offloaded tasks
-MPI_Comm targetdart_comm_cancel;
-// communicator for load information
-MPI_Comm targetdart_comm_load;
-// communicator for activating replicated tasks
-MPI_Comm targetdart_comm_activate;
 
 int targetdart_comm_size;
 int targetdart_comm_rank;
@@ -60,21 +54,26 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
 {
   *DeviceId = DeviceIdGenerator(KernelArgs);
   // create internal task data structure
-  td_task_t task;
-  task.host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
-  task.KernelArgs = KernelArgs;
-  task.Loc = Loc;
-  task.num_teams = NumTeams;
-  task.thread_limit = ThreadLimit;
-  task.local_proc = targetdart_comm_rank;
+  td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
+  task->host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
+  task->KernelArgs = KernelArgs;
+  task->Loc = Loc;
+  task->num_teams = NumTeams;
+  task->thread_limit = ThreadLimit;
+  task->local_proc = targetdart_comm_rank;
+  task->affinity = (td_device_affinity) *DeviceId;
+
+  //initial assignment to CPU
+  //TODO: start with Greedy assignment
+  td_device_list.at(omp_get_num_devices()).add_local_task(task);
 
   if (targetdart_comm_rank == 0) {
     td_send_task(1, task);
   } else {
-    td_receive_task(0, &task);
+    td_receive_task(0, task);
   }
 
-  return __td_invoke_task(*DeviceId, &task);
+  return __td_invoke_task(*DeviceId, task);
 }
 
 // initializes the targetDART lib

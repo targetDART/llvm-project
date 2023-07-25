@@ -13,35 +13,37 @@
 #include "TargetDART.h"
 #include "TD_common.h"
 
+//TODO: add Communication thread implementation
+
 // TODO: implement communication interface for TargetDART
 
-int td_send_task(int dest, td_task_t &task) {
+int td_send_task(int dest, td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
 
     //Send Task Data
-    MPI_Send(&task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
+    MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     //Send static KernelArgs values excluding pointervalues
-    MPI_Send(task.KernelArgs, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
+    MPI_Send(task->KernelArgs, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
     //Send Argument sizes for actual data transfers
-    MPI_Send(task.KernelArgs->ArgSizes, task.KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
+    MPI_Send(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
     //Send Argument types for each kernel
-    MPI_Send(task.KernelArgs->ArgTypes, task.KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
+    MPI_Send(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
 
     //Send all parameter values
-    for (int i = 0; i < task.KernelArgs->NumArgs; i++) {
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapTo = task.KernelArgs->ArgTypes[i] & 0x001;
+        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
         if (IsMapTo != 0)
-            MPI_Send(task.KernelArgs->ArgPtrs[i], task.KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+            MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
     }
 
     // Send source location to support debuggin information
-    MPI_Send(task.Loc, 4, MPI_INT32_T, dest, SEND_SOURCE_LOCS, targetdart_comm);
+    MPI_Send(task->Loc, 4, MPI_INT32_T, dest, SEND_SOURCE_LOCS, targetdart_comm);
 
     //Send base location
-    int64_t Locptr = (int64_t) apply_image_base_address((intptr_t) task.Loc->psource, false);
+    int64_t Locptr = (int64_t) apply_image_base_address((intptr_t) task->Loc->psource, false);
     MPI_Send(&Locptr, 1, MPI_INT64_T, dest, SEND_LOCS_PSOURCE, targetdart_comm);
 
     //Base Pointers == pointers can be assumed for simple cases.
