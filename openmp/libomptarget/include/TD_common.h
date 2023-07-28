@@ -5,6 +5,7 @@
 //TODO: define communication interface for TargetDART
 
 #include <cstdint>
+#include "omp.h"
 #include "omptarget.h"
 #include "device.h"
 #include "mpi.h"
@@ -23,7 +24,8 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 #endif
 #endif
 
-enum td_device_affinity {TD_CPU=-1000, TD_GPU=-1001, TD_ANY=-1002};
+//TODO: Add support for more accelerators (FPGA, Aurora etc.)
+enum td_device_affinity {TD_CPU=TARGETDART_CPU, TD_GPU=TARGETDART_GPU, TD_ANY=TARGETDART_ANY};
 
 typedef struct td_task_t{
     intptr_t            host_base_ptr;

@@ -42,12 +42,17 @@ class TD_Device_Queue {
 
     tdrc poll_task(td_task_t* task);
 
-    TD_Device_Queue();
+    double get_load();
+
+    TD_Device_Queue(bool isGPU=true);
     ~TD_Device_Queue();
 };
 
 
 extern std::vector<TD_Device_Queue> td_device_list;
+
+tdrc td_add_to_load_local(td_task_t * task);
+tdrc td_add_to_load_remote(td_task_t * task);
 
 
 #endif

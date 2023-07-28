@@ -13,6 +13,7 @@
 #include <dlfcn.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #include "TD_communication.h"
 #include "TD_common.h"
@@ -114,7 +115,7 @@ int initTargetDART(void* main_ptr) {
 
   //Initialize the data structures for scheduling
   td_device_list = std::vector<TD_Device_Queue>(omp_get_num_devices());
-  td_cost = std::unordered_map<intptr_t, std::vector<double>>();
+  td_cost = std::unordered_map<intptr_t, std::pair<double, double>>();
 
 
   // define the base address of the current process
