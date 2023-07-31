@@ -22,10 +22,12 @@ std::vector<td_progression_t> td_global_progression;
 std::vector<TD_Device_Queue> td_device_list;
 
 tdrc TD_Device_Queue::add_remote_task(td_task_t* task) {
+    cost.fetch_add(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
     return remote_queue.offerTask(task);
 }
 
 tdrc TD_Device_Queue::add_local_task(td_task_t* task){
+    cost.fetch_add(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
     return base_queue.offerTask(task);
 }
 
@@ -40,19 +42,22 @@ tdrc TD_Device_Queue::poll_task(td_task_t* task){
     if (task == nullptr) {
         return TARGETDART_FAILURE;
     }
+    
+    cost.fetch_sub(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
 
     return TARGETDART_SUCCESS;
 }
 
-TD_Device_Queue::TD_Device_Queue(bool isGPU){
-    
+TD_Device_Queue::TD_Device_Queue(td_device_type type){
+    device_type = type;
     return;
 }
+
 TD_Device_Queue::~TD_Device_Queue(){
     return;
 }
 
-double TD_Device_Queue::get_load() {
+COST_DATA_TYPE TD_Device_Queue::get_load() {
     return cost.load();
 }
 

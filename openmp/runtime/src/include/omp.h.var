@@ -87,6 +87,8 @@
     #define TARGETDART_ANY -1000
     #define TARGETDART_CPU -1001
     #define TARGETDART_GPU -1002
+    #define TARGETDART_FPGA -1003
+    #define TARGETDART_VEC -1004
     /* targetDART definitions end */
 
 

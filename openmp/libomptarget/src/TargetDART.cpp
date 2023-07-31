@@ -65,8 +65,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->affinity = (td_device_affinity) *DeviceId;
 
   //initial assignment to CPU
-  //TODO: start with Greedy assignment
-  td_device_list.at(omp_get_num_devices()).add_local_task(task);
+  td_add_to_load_local(task);
 
   if (targetdart_comm_rank == 0) {
     td_send_task(1, task);
@@ -115,7 +114,7 @@ int initTargetDART(void* main_ptr) {
 
   //Initialize the data structures for scheduling
   td_device_list = std::vector<TD_Device_Queue>(omp_get_num_devices());
-  td_cost = std::unordered_map<intptr_t, std::pair<double, double>>();
+  std::unordered_map<intptr_t,std::vector<double>> td_cost;
 
 
   // define the base address of the current process

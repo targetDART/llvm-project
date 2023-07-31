@@ -13,26 +13,19 @@
 #include "TD_cost_estimation.h"
 
 
-typedef struct td_progression_t{
-    uint64_t    advancement;
-    uint64_t    compute_load;
-    uint64_t    memory_load;
-    double      time_load;
-};
-
 extern std::vector<td_progression_t> td_global_progression;
-
-void td_advance(uint64_t value);
 
 class TD_Device_Queue {
 
     private:
 
-    alignas(64) std::atomic<double> cost{0};
+    alignas(64) std::atomic<COST_DATA_TYPE> cost{0};
 
     TD_Task_Queue base_queue;
 
     TD_Task_Queue remote_queue;
+
+    td_device_type device_type;
 
     public:
 
@@ -42,9 +35,9 @@ class TD_Device_Queue {
 
     tdrc poll_task(td_task_t* task);
 
-    double get_load();
+    COST_DATA_TYPE get_load();
 
-    TD_Device_Queue(bool isGPU=true);
+    TD_Device_Queue(td_device_type type=TD_GPU);
     ~TD_Device_Queue();
 };
 
