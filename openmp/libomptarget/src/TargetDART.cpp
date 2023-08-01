@@ -67,11 +67,18 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   //initial assignment to CPU
   td_add_to_load_local(task);
 
-  if (targetdart_comm_rank == 0) {
+  /*if (targetdart_comm_rank == 0) {
     td_send_task(1, task);
   } else {
     td_receive_task(0, task);
-  }
+  }*/
+
+  // TODO: make sure the current thread sleeps here until the task is executed.
+  // Run a dedicated device thread which consumes the task for its assigned device. 
+  //(think about multiple threads per device, at least for GPUs to overlap com/comp)
+  // ensure that the local thread cannot progress until the task is finished and the Data is available again 
+  // Ideas: yield + ping, Barrier, Mutex, busy-waiting
+  // requires additional parameters in task
 
   return __td_invoke_task(*DeviceId, task);
 }
