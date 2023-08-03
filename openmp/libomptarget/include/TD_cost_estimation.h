@@ -32,6 +32,7 @@ void td_advance(uint64_t value);
 // a map of costs for each known task.
 // the value defines the cost as vector, index is defined by td_device_cost
 // only add base pointers to this table to allow communication of the table
+// Access must happen in a critical section (e.g. omp critical) to avoid data races
 extern std::unordered_map<intptr_t,std::vector<double>> td_cost;
 
 // returns the cost of the given task for the chosen device
