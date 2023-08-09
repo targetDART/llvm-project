@@ -83,6 +83,7 @@
 
     extern int    __KAI_KMPC_CONVENTION  initTargetDART   (void*);
     extern int    __KAI_KMPC_CONVENTION  finalizeTargetDART   (void);
+    //TODO: add advance and phase progress
 
     #define TARGETDART_ANY -1000
     #define TARGETDART_CPU -1001

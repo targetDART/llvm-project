@@ -15,6 +15,7 @@
 
 typedef struct td_progression_t{
     uint64_t    advancement;
+    uint64_t    phase_progress;
     uint64_t    compute_load;
     uint64_t    memory_load;
     double      time_load;
@@ -26,8 +27,11 @@ typedef struct td_state_stamp_t{
     double      current_time;
 };
 
-// increases the global advancement by value 
+// increases the local advancement by value 
 void td_advance(uint64_t value);
+
+// Must be called the same number of times by every process
+void td_phase_progress(uint64_t progress);
 
 // a map of costs for each known task.
 // the value defines the cost as vector, index is defined by td_device_cost
