@@ -56,7 +56,7 @@ td_state_stamp_t td_stop_timer();
 // Sums up two timestamps into a single progression state
 td_progression_t td_sum_states(td_state_stamp_t start_counter, td_state_stamp_t stop_counter);
 
-// Sums up two progression states into a single progression state
-td_progression_t td_sum_progression(td_progression_t device0, td_progression_t device1);
+// Updates the local progression state
+td_progression_t td_update_progression(td_progression_t device0, td_progression_t device1);
 
 #endif

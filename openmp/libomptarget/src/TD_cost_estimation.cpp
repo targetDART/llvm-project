@@ -65,11 +65,19 @@ td_progression_t td_sum_states(td_state_stamp_t start_counter, td_state_stamp_t 
 }
 
 
-td_progression_t td_sum_progression(td_progression_t device0, td_progression_t device1){
+td_progression_t td_update_progression(td_progression_t original, td_progression_t update){
     td_progression_t progress = {0,0,0,0};
-    progress.advancement = std::min(device0.advancement, device1.advancement);
-    progress.compute_load = device0.compute_load + device1.compute_load;
-    progress.memory_load = device0.memory_load + device1.memory_load;
-    progress.time_load = device0.time_load + device1.time_load;
+    progress.advancement = std::min(original.advancement, update.advancement);
+    progress.compute_load = original.compute_load + update.compute_load;
+    progress.memory_load = original.memory_load + update.memory_load;
+    progress.time_load = original.time_load + update.time_load;
     return progress;
+}
+
+void td_advance(uint64_t value) {
+    node_progression.advancement += value;
+}
+
+void td_phase_progress(uint64_t progress){
+    node_progression.phase_progress = progress;
 }
