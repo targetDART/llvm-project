@@ -146,7 +146,7 @@ void __td_do_partial_global_reschedule(double target_load, td_device_affinity af
         }
     }
     for (int t = 0; t < transferred_tasks.size(); t++) {
-        td_send_task(td_comm_rank - offset, transferred_tasks.at(t));
+        td_send_task(td_comm_rank + offset, transferred_tasks.at(t));
     }
 }
 
@@ -185,17 +185,17 @@ void td_global_reschedule(td_device_affinity affinity) {
 
     //general case transfers predecessor
     for (int i = 1; i < pre_distance; i++) {
-        __td_do_partial_global_reschedule(target_load, affinity, i);
+        __td_do_partial_global_reschedule(target_load, affinity, -i);
     }
     //general case transfers successor
     for (int i = 1; i < post_distance; i++) {
-        __td_do_partial_global_reschedule(target_load, affinity, -i);
+        __td_do_partial_global_reschedule(target_load, affinity, i);
     }
     
     long pre_remainder_load = ((long) pre_transfer) % ((long) target_load);    
-    __td_do_partial_global_reschedule(pre_remainder_load, affinity, pre_distance);
+    __td_do_partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
     long post_remainder_load = ((long) post_transfer) % ((long) target_load);    
-    __td_do_partial_global_reschedule(post_remainder_load, affinity, -post_distance);
+    __td_do_partial_global_reschedule(post_remainder_load, affinity, post_distance);
 
     //TODO: Receive tasks
     //TODO: Transform task migration to non-blocking to avoid serialization.
