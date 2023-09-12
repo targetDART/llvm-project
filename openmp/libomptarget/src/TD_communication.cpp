@@ -107,3 +107,19 @@ int td_receive_task(int source, td_task_t *task) {
 
     return TARGETDART_SUCCESS;
 }
+
+void td_trigger_global_repartitioning(td_device_affinity affinity) {
+    doRepartition = true;
+}
+
+td_global_sched_params_t __td_global_cost_communicator(td_device_affinity affinity, COST_DATA_TYPE local_cost_param) {
+    COST_DATA_TYPE reduce = 0;
+    COST_DATA_TYPE exScan = 0;
+    COST_DATA_TYPE local_cost = local_cost_param;
+
+    //TODO: used efficient combined implementation for allreduce and exscan
+    MPI_Allreduce((void*) &local_cost, (void*) &reduce, 1, COST_MPI_DATA_TYPE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Exscan((void*) &local_cost, (void*) &exScan, 1, COST_MPI_DATA_TYPE, MPI_SUM, MPI_COMM_WORLD);
+
+    return {reduce, exScan, local_cost};
+}

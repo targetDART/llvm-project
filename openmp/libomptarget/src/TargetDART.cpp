@@ -32,8 +32,8 @@ static bool __td_did_initialize_mpi = false;
 // communicator for remote task requests
 MPI_Comm targetdart_comm;
 
-int targetdart_comm_size;
-int targetdart_comm_rank;
+int td_comm_size;
+int td_comm_rank;
 
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
@@ -61,7 +61,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->Loc = Loc;
   task->num_teams = NumTeams;
   task->thread_limit = ThreadLimit;
-  task->local_proc = targetdart_comm_rank;
+  task->local_proc = td_comm_rank;
   task->affinity = (td_device_affinity) *DeviceId;
 
   //initial assignment to CPU
@@ -116,8 +116,8 @@ int initTargetDART(void* main_ptr) {
   // create separate communicator for targetdart
   //TODO: reduce to single communicator for coordination (Deadlock danger?)
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
-  MPI_Comm_size(targetdart_comm, &targetdart_comm_size);
-  MPI_Comm_rank(targetdart_comm, &targetdart_comm_rank);
+  MPI_Comm_size(targetdart_comm, &td_comm_size);
+  MPI_Comm_rank(targetdart_comm, &td_comm_rank);
 
   //Initialize the data structures for scheduling
   td_device_list = std::vector<TD_Device_Queue>(omp_get_num_devices());

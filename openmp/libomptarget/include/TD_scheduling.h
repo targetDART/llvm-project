@@ -12,6 +12,7 @@
 #include "TD_queue.h"
 #include "TD_cost_estimation.h"
 
+#define BALANCE_FACTOR 0.8
 
 extern std::vector<td_progression_t> td_global_progression;
 
@@ -37,6 +38,8 @@ class TD_Device_Queue {
 
     COST_DATA_TYPE get_load();
 
+    td_device_type get_device_type();
+
     TD_Device_Queue(td_device_type type=TD_GPU);
     ~TD_Device_Queue();
 };
@@ -47,5 +50,8 @@ extern std::vector<TD_Device_Queue> td_device_list;
 tdrc td_add_to_load_local(td_task_t * task);
 tdrc td_add_to_load_remote(td_task_t * task);
 
+
+// returns the total load on the current device for a given affinity
+COST_DATA_TYPE td_get_local_load(td_device_affinity affinity);
 
 #endif

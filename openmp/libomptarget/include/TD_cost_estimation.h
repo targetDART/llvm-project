@@ -10,9 +10,6 @@
 #include "device.h"
 #include "TD_common.h"
 
-#define DEFAULT_TASK_COST 1
-#define COST_DATA_TYPE long
-
 typedef struct td_progression_t{
     uint64_t    advancement;
     uint64_t    phase_progress;
