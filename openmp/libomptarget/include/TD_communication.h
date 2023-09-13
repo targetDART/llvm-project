@@ -37,6 +37,11 @@ void td_trigger_global_repartitioning(td_device_affinity affinity);
 /**
 * implements a global repratitioning of tasks accross all processes.
 */
-td_global_sched_params_t __td_global_cost_communicator(td_device_affinity affinity, COST_DATA_TYPE local_cost_param);
+td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_param);
+
+/**
+* implements a log(n) based vector exchange within MPI
+*/
+std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE local_cost_param);
 
 #endif // _OMPTARGET_TD_COMMUNICATION_H

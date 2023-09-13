@@ -44,6 +44,10 @@ class TD_Device_Queue {
     ~TD_Device_Queue();
 };
 
+typedef struct td_sort_cost_tuple_t{
+    COST_DATA_TYPE        cost;
+    int                   id;
+} td_sort_cost_tuple_t;
 
 extern std::vector<TD_Device_Queue> td_device_list;
 

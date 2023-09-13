@@ -145,13 +145,14 @@ void __td_do_partial_global_reschedule(double target_load, td_device_affinity af
             transferred_tasks.push_back(next_task);
         }
     }
+    //TODO: think about MPI_pack as well
     for (int t = 0; t < transferred_tasks.size(); t++) {
         td_send_task(td_comm_rank + offset, transferred_tasks.at(t));
     }
 }
 
 void td_global_reschedule(td_device_affinity affinity) {
-    td_global_sched_params_t params = __td_global_cost_communicator(affinity, td_get_local_load(affinity));
+    td_global_sched_params_t params = td_global_cost_communicator(td_get_local_load(affinity));
     double target_load = ((double) params.total_cost) / td_comm_size;
 
     double pre_transfer = 0;
@@ -200,5 +201,62 @@ void td_global_reschedule(td_device_affinity affinity) {
     //TODO: Receive tasks
     //TODO: Transform task migration to non-blocking to avoid serialization.
 
+
+}
+
+
+template<typename T1>
+int __td_coswap(std::vector<T1> *load_vector, int idx1, int idx2, int proc_idx) {
+    if (idx1 == idx2) {
+        return proc_idx;
+    }
+    std::swap(load_vector[0][idx1], load_vector[0][idx2]);
+
+    //calculate current index to avoid searching for it later
+    int local_idx = proc_idx;
+    if (idx1 == local_idx) {
+        local_idx = idx2;
+    } else if (idx2 == local_idx) {
+        local_idx = idx1;
+    } 
+    return local_idx;
+}
+
+int __td_cosort(std::vector<td_sort_cost_tuple_t> *load_vector) {
+    int proc_idx = td_comm_rank;
+    //TODO: use more efficient search implementation merge + insertion 
+    for (int i = load_vector->size() - 1; i > 0; i--) {
+        COST_DATA_TYPE max = 0;
+        int max_idx = -1;
+        for (int j = 0; j < i; j++) {
+            if (load_vector->at(j).cost > max) {
+                max = load_vector->at(j).cost;
+                max_idx = j;
+            }
+            proc_idx = __td_coswap(load_vector, max_idx, i, proc_idx);
+        }
+    }
+    return proc_idx;
+}
+
+//TODO: reactive schedule
+void td_fine_schedule(td_device_affinity affinity) {
+    std::vector<COST_DATA_TYPE> cost_vector = td_global_cost_vector_propagation(td_get_local_load(affinity));
+    std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
+
+    for (int i = 0; i < combined_vector.size(); i++) {
+        combined_vector[i].cost = cost_vector[i];
+        combined_vector[i].id = i;
+    }
+    /*
+    std::sort(combined_vector.begin(), combined_vector.end(), [](td_sort_cost_tuple_t a, td_sort_cost_tuple_t b) 
+                                                                                {
+                                                                                    return a.cost < b.cost;
+                                                                                });
+    */
+    int local_idx = __td_cosort(&combined_vector);
+    int partner_idx = 0;//TODO: compute
+    
+    
 
 }

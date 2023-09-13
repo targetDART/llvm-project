@@ -1,6 +1,7 @@
 #include "TD_communication.h"
 #include "omptarget.h"
 #include "device.h"
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -10,6 +11,7 @@
 #include <queue>
 #include <dlfcn.h>
 #include <unistd.h>
+#include <vector>
 #include "TargetDART.h"
 #include "TD_common.h"
 
@@ -112,14 +114,66 @@ void td_trigger_global_repartitioning(td_device_affinity affinity) {
     doRepartition = true;
 }
 
-td_global_sched_params_t __td_global_cost_communicator(td_device_affinity affinity, COST_DATA_TYPE local_cost_param) {
+td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_param) {
     COST_DATA_TYPE reduce = 0;
     COST_DATA_TYPE exScan = 0;
     COST_DATA_TYPE local_cost = local_cost_param;
 
-    //TODO: used efficient combined implementation for allreduce and exscan
+    //TODO: use efficient combined implementation for allreduce and exscan
     MPI_Allreduce((void*) &local_cost, (void*) &reduce, 1, COST_MPI_DATA_TYPE, MPI_SUM, MPI_COMM_WORLD);
     MPI_Exscan((void*) &local_cost, (void*) &exScan, 1, COST_MPI_DATA_TYPE, MPI_SUM, MPI_COMM_WORLD);
 
     return {reduce, exScan, local_cost};
+}
+
+std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
+    std::vector<COST_DATA_TYPE> cost_vector(td_comm_size, 0);
+    cost_vector[td_comm_rank] = local_cost_param; 
+
+    int iterations = std::ceil(std::log2(td_comm_size));
+
+    //TODO: avoid redundant data elements, iff the size is not a power of 2
+    //TODO: utilize MPI_put
+    for (int i = 0; i < iterations; i++) {
+        int shift = std::pow(2,i);
+        int target = (td_comm_rank + shift) % td_comm_size;
+        //inverted shift to calculate the source rank for receiving
+        int source = (td_comm_rank - shift + td_comm_size) % td_comm_size;
+
+        //Calculate the number of elements send for each iteration, covering cornercases
+        int send1, send2, recv1, recv2;
+
+        if (target < td_comm_rank) {
+            send1 = td_comm_size - td_comm_rank;
+            send2 = target;
+        } else {
+            send1 = shift;
+            send2 = 0;
+        }
+
+        if (source > td_comm_rank) {
+            recv1 = td_comm_size - source;
+            recv2 = td_comm_rank;
+        } else {
+            recv1 = shift;
+            recv2 = 0;
+        }
+
+        //send data 
+        MPI_Request rqsts[4];
+        MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, MPI_COMM_WORLD, &rqsts[0]);
+        if (send2 != 0) {
+            MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, MPI_COMM_WORLD, &rqsts[1]);
+        }
+        //recv data
+        MPI_Irecv(&cost_vector[td_comm_rank], recv1, COST_MPI_DATA_TYPE, source, 1, MPI_COMM_WORLD, &rqsts[2]);
+        if (send2 != 0) {
+            MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, MPI_COMM_WORLD, &rqsts[3]);
+        }
+
+        MPI_Waitall(4, rqsts, MPI_STATUSES_IGNORE);
+
+    }
+
+    return cost_vector;
 }
