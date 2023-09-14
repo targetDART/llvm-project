@@ -105,7 +105,6 @@ tdrc td_add_to_load_remote(td_task_t * task) {
     return __td_greedy_assignment(task, false);
 }
 
-
 COST_DATA_TYPE td_get_local_load(td_device_affinity affinity) {
     COST_DATA_TYPE total_load = 0;
 
@@ -134,11 +133,20 @@ COST_DATA_TYPE td_get_local_load(td_device_affinity affinity) {
     return total_load;
 }
 
+td_task_t *__td_get_next_task(td_device_affinity affinity) {
+    return {}; //TODO: get task from correct queue
+}
+
+/**
+* Implements the rescheduling of tasks for the local MPI process and its current victim, defined by offset.
+* target_load: defines the load the victim should have in total after migration.
+* affinity: defines which kinds of tasks should be considered for a rescheduling.
+*/
 void __td_do_partial_global_reschedule(double target_load, td_device_affinity affinity, int offset) {
     std::vector<td_task_t*> transferred_tasks;
     COST_DATA_TYPE totalcost = 0;
     while (totalcost < BALANCE_FACTOR * target_load) {
-        td_task_t *next_task = {}; //TODO: get task from correct queue
+        td_task_t *next_task = __td_get_next_task(affinity); 
         if (td_get_task_cost(next_task->host_base_ptr, get_device_from_affinity(affinity)) >= target_load/BALANCE_FACTOR) {
             break;
         } else {
@@ -204,7 +212,9 @@ void td_global_reschedule(td_device_affinity affinity) {
 
 }
 
-
+/**
+* swaps two elements from a vector and updates gives the new index of proc_idx, if it overlaps with idx1 or idx2.
+*/
 template<typename T1>
 int __td_coswap(std::vector<T1> *load_vector, int idx1, int idx2, int proc_idx) {
     if (idx1 == idx2) {
@@ -222,6 +232,10 @@ int __td_coswap(std::vector<T1> *load_vector, int idx1, int idx2, int proc_idx) 
     return local_idx;
 }
 
+/**
+* Sorts a vector and provides the new index of the local value.
+* The load of the local MPI rank must correspond to the entry idx = rank.
+*/
 int __td_cosort(std::vector<td_sort_cost_tuple_t> *load_vector) {
     int proc_idx = td_comm_rank;
     //TODO: use more efficient search implementation merge + insertion 
@@ -239,8 +253,25 @@ int __td_cosort(std::vector<td_sort_cost_tuple_t> *load_vector) {
     return proc_idx;
 }
 
-//TODO: reactive schedule
-void td_fine_schedule(td_device_affinity affinity) {
+/**
+* Returns 0 iff local_cost = remote_cost
+* Returns the desire load to transfer from local to remote, iff local_cost > remote_cost
+* Returns the desire load to transfer from remote to local as a negative value, iff local_cost < remote_cost
+*/
+COST_DATA_TYPE __td_compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE remote_cost) {
+    COST_DATA_TYPE result;
+    if (local_cost == remote_cost) {
+        result = 0;
+    } else if (local_cost > remote_cost) {
+        result = TD_SIMPLE_REACTIVITY_LOAD;
+    } else {
+        result = -TD_SIMPLE_REACTIVITY_LOAD;
+    }
+    return result;
+}
+
+
+void td_iterative_schedule(td_device_affinity affinity) {
     std::vector<COST_DATA_TYPE> cost_vector = td_global_cost_vector_propagation(td_get_local_load(affinity));
     std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
 
@@ -254,9 +285,25 @@ void td_fine_schedule(td_device_affinity affinity) {
                                                                                     return a.cost < b.cost;
                                                                                 });
     */
+    // implement Chameleon based victim selection
     int local_idx = __td_cosort(&combined_vector);
-    int partner_idx = 0;//TODO: compute
-    
-    
+    int partner_idx = combined_vector.size() - local_idx - 1;
+    int partner_proc = combined_vector.at(partner_idx).id;
 
+    COST_DATA_TYPE transfer_load = __td_compute_transfer_load(combined_vector.at(local_idx).cost, combined_vector.at(partner_idx).cost);
+
+    if (transfer_load == 0) {
+        return;
+    } else if (transfer_load > 0) {
+        for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
+            td_task_t *task = __td_get_next_task(affinity);
+            td_send_task(partner_proc, task);
+        }
+    } else {
+        for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
+            td_task_t task;
+            td_receive_task(partner_proc, &task);
+            //TODO: add task to correct queue
+        }
+    } 
 }

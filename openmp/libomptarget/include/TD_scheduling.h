@@ -13,6 +13,7 @@
 #include "TD_cost_estimation.h"
 
 #define BALANCE_FACTOR 0.8
+#define TD_SIMPLE_REACTIVITY_LOAD 1
 
 extern std::vector<td_progression_t> td_global_progression;
 
@@ -57,5 +58,15 @@ tdrc td_add_to_load_remote(td_task_t * task);
 
 // returns the total load on the current device for a given affinity
 COST_DATA_TYPE td_get_local_load(td_device_affinity affinity);
+
+/**
+* This implements the prefix sum based scheduling proposed here: https://ieeexplore.ieee.org/abstract/document/6270840/
+*/
+void td_global_reschedule(td_device_affinity affinity);
+
+/**
+* this function implments the reactive rescheduling defined in the chameleon project.
+*/
+void td_iterative_schedule(td_device_affinity affinity);
 
 #endif
