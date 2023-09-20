@@ -67,6 +67,11 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   //initial assignment to CPU
   td_add_to_load_local(task);
 
+  /*
+  Number of hidden_helper_threads is defined by __kmp_hidden_helper_threads_num in kmp_runtime.cpp line 9142
+  Default is currently 8
+  */
+
   /*if (targetdart_comm_rank == 0) {
     td_send_task(1, task);
   } else {

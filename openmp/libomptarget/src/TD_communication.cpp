@@ -14,8 +14,8 @@
 #include <vector>
 #include "TargetDART.h"
 #include "TD_common.h"
+ 
 
-//TODO: add Communication thread implementation
 
 // TODO: implement communication interface for TargetDART
 
@@ -110,9 +110,6 @@ int td_receive_task(int source, td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
-void td_trigger_global_repartitioning(td_device_affinity affinity) {
-    doRepartition = true;
-}
 
 td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_param) {
     COST_DATA_TYPE reduce = 0;

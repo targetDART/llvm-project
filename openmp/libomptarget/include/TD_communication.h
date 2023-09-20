@@ -21,18 +21,11 @@ extern MPI_Comm targetdart_comm;
 extern int td_comm_size;
 extern int td_comm_rank;
 
-bool doRepartition = false;
-
 enum MpiTaskTransferTag {SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE};
 
 int td_send_task(int dest, td_task_t *task);
 
 int td_receive_task(int source, td_task_t *task);
-
-/**
-* triggers a global repratitioning of tasks accross all processes.
-*/
-void td_trigger_global_repartitioning(td_device_affinity affinity);
 
 /**
 * implements a global repratitioning of tasks accross all processes.
