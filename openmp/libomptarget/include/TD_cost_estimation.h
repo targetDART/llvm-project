@@ -38,11 +38,11 @@ extern std::unordered_map<intptr_t,std::vector<double>> td_cost;
 
 // returns the cost of the given task for the chosen device
 // returns a default value if the task is unknown
-COST_DATA_TYPE td_get_task_cost(intptr_t hostptr, td_device_type device);
+COST_DATA_TYPE td_get_task_cost(intptr_t hostptr, td_device_affinity device);
 
 // Sets the cost on a specific device 
 // returns false if a value is already present
-tdrc td_set_task_cost(intptr_t hostptr, td_device_type device, COST_DATA_TYPE cost);
+tdrc td_set_task_cost(intptr_t hostptr, td_device_affinity device, COST_DATA_TYPE cost);
 
 // Starts the cost gathering for a given task
 td_state_stamp_t td_start_timer();

@@ -13,59 +13,47 @@
 #include <queue>
 #include <dlfcn.h>
 #include <unistd.h>
+#include <unordered_map>
 #include <vector>
 #include "TD_scheduling.h"
 #include "TD_cost_estimation.h"
 #include "TD_queue.h"
 #include "TD_communication.h"
 
-
 std::vector<td_progression_t> td_global_progression;
-std::vector<TD_Device_Queue> td_device_list;
 
-tdrc TD_Device_Queue::add_remote_task(td_task_t* task) {
-    cost.fetch_add(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
-    return remote_queue.offerTask(task);
-}
+/**
+* 0: TD_ANY affinity queue
+* 1: TD_CPU affinity queue
+* 2: TD_GPU affinity queue
+* 3: TD_FPGA affinity queue
+* 4: TD_VEC affinity queue
+* 5 to num_devices + 5: device specific queues
+*/
+std::vector<TD_Task_Queue> td_local_task_queues;
+/**
+* 0: TD_ANY affinity queue
+* 1: TD_CPU affinity queue
+* 2: TD_GPU affinity queue
+* 3: TD_FPGA affinity queue
+* 4: TD_VEC affinity queue
+*/
+std::vector<TD_Task_Queue> td_remote_task_queues;
+/**
+* 0: TD_ANY affinity queue
+* 1: TD_CPU affinity queue
+* 2: TD_GPU affinity queue
+* 3: TD_FPGA affinity queue
+* 4: TD_VEC affinity queue
+*/
+std::vector<TD_Task_Queue> td_replica_task_queues;
 
-tdrc TD_Device_Queue::add_local_task(td_task_t* task){
-    cost.fetch_add(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
-    return base_queue.offerTask(task);
-}
-
-//Execute remote first
-//TODO: test optimal order of queue progression
-tdrc TD_Device_Queue::poll_task(td_task_t* task){
-    task = remote_queue.pollTask(nullptr);
-    if (task == nullptr) {
-        task = base_queue.pollTask(nullptr);
-    }
-
-    if (task == nullptr) {
-        return TARGETDART_FAILURE;
-    }
-    
-    cost.fetch_sub(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
-
-    return TARGETDART_SUCCESS;
-}
-
-TD_Device_Queue::TD_Device_Queue(td_device_type type){
-    device_type = type;
-    return;
-}
-
-TD_Device_Queue::~TD_Device_Queue(){
-    return;
-}
-
-COST_DATA_TYPE TD_Device_Queue::get_load() {
-    return cost.load();
-}
-
-td_device_type TD_Device_Queue::get_device_type(){
-    return device_type;
-}
+/**
+* 0: local queues
+* 1: remote queues
+* 2: replica queues
+*/
+std::vector<std::vector<TD_Task_Queue>*> td_queue_classes;
 
 /**
 * Greedy assignment of tasks to the Device queues of the system
@@ -77,22 +65,14 @@ tdrc __td_greedy_assignment(td_task_t* task, bool local) {
 
     if (task->affinity == TD_CPU) {
         if (local) {            
-            return td_device_list.at(omp_get_num_devices()).add_local_task(task);
+            return td_local_task_queues.at(TD_CPU).offerTask(task, TD_CPU);
         }
-        return td_device_list.at(omp_get_num_devices()).add_remote_task(task);
+        return td_remote_task_queues.at(TD_CPU).offerTask(task, TD_CPU);
     } else if (task->affinity == TD_GPU) {
         num_devices -= 1;
     }
-
-    for (int i = 0; i < num_devices; i++) {
-        if (td_device_list.at(i).get_load() < min_load) {
-            min_id = i;
-        }
-    }
-    if (local) {            
-        return td_device_list.at(min_id).add_local_task(task);
-    }
-    return td_device_list.at(min_id).add_remote_task(task);
+    //TODO reimplement with new structure
+    return TARGETDART_FAILURE;
 }
 
 // adds a task to the local queue with the lowest load
@@ -105,31 +85,10 @@ tdrc td_add_to_load_remote(td_task_t * task) {
     return __td_greedy_assignment(task, false);
 }
 
-COST_DATA_TYPE td_get_local_load(td_device_affinity affinity) {
+COST_DATA_TYPE td_get_local_load(TD_Task_Queue *queue, td_device_affinity affinity) {
     COST_DATA_TYPE total_load = 0;
 
-    for (int i = 0; i < td_device_list.size(); i++) {        
-        if (affinity == TD_ANY_AF || affinity == TD_CPU_AF) {
-            if (td_device_list.at(i).get_device_type() == TD_CPU) {
-                total_load += td_device_list.at(i).get_load();
-            }
-        } 
-        if (affinity == TD_ANY_AF || affinity == TD_GPU_AF) {
-            if (td_device_list.at(i).get_device_type() == TD_GPU) {
-                total_load += td_device_list.at(i).get_load();
-            }
-        } 
-        if (affinity == TD_ANY_AF || affinity == TD_FPGA_AF) {
-            if (td_device_list.at(i).get_device_type() == TD_FPGA) {
-                total_load += td_device_list.at(i).get_load();
-            }
-        } 
-        if (affinity == TD_ANY_AF || affinity == TD_VECTOR_AF) {
-            if (td_device_list.at(i).get_device_type() == TD_VECTOR) {
-                total_load += td_device_list.at(i).get_load();
-            }
-        }
-    }
+    //TODO: reimplement with new structure
     return total_load;
 }
 
@@ -147,7 +106,7 @@ void __td_do_partial_global_reschedule(double target_load, td_device_affinity af
     COST_DATA_TYPE totalcost = 0;
     while (totalcost < BALANCE_FACTOR * target_load) {
         td_task_t *next_task = __td_get_next_task(affinity); 
-        if (td_get_task_cost(next_task->host_base_ptr, get_device_from_affinity(affinity)) >= target_load/BALANCE_FACTOR) {
+        if (td_get_task_cost(next_task->host_base_ptr, affinity) >= target_load/BALANCE_FACTOR) {
             break;
         } else {
             transferred_tasks.push_back(next_task);

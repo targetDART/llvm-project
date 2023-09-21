@@ -62,10 +62,15 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->num_teams = NumTeams;
   task->thread_limit = ThreadLimit;
   task->local_proc = td_comm_rank;
-  task->affinity = (td_device_affinity) *DeviceId;
 
-  //initial assignment to CPU
-  td_add_to_load_local(task);
+  //initial assignment
+  if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
+    task->affinity = TD_FIXED_AF;
+    //TODO: add to fixed local queue. Tasks in this queue are not supposed to be migrated, but help the cost estimation.
+  } else  {
+    task->affinity = (td_device_affinity) (*DeviceId - DEVICE_BASE);
+    td_add_to_load_local(task);
+  }
 
   /*
   Number of hidden_helper_threads is defined by __kmp_hidden_helper_threads_num in kmp_runtime.cpp line 9142
@@ -125,7 +130,7 @@ int initTargetDART(void* main_ptr) {
   MPI_Comm_rank(targetdart_comm, &td_comm_rank);
 
   //Initialize the data structures for scheduling
-  td_device_list = std::vector<TD_Device_Queue>(omp_get_num_devices());
+  td_local_task_queues = std::vector<TD_Task_Queue>(omp_get_num_devices() + NUM_FLEXIBLE_AFFINITIES);
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
 
 

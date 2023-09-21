@@ -38,17 +38,23 @@ private:
     // instead of using % BUFFER_SIZE directly. This way the next index should be on a different cache line (assuming 8 atomics fit into a cache line together)
     //Vector size is a power of two. Atomics are used to allow having multiple readers/writers.
     alignas(64) std::vector<std::atomic<td_task_t*>> workBuffer = std::vector<std::atomic<td_task_t*>> (BUFFER_SIZE);
-public:
+
     //tail incremented when offering
     alignas(64) std::atomic<uint64_t> tail{0};
     //having a separate cache line for busy waiting seems to reduce cache line ping pong
     alignas(64) std::atomic<uint64_t> size{0};
+    //stores the current load on the queue
+    alignas(64) std::atomic<COST_DATA_TYPE> cost{0};
+
+public:
 
     TD_Task_Queue();
 
-    [[nodiscard]] tdrc offerTask(td_task_t* task);
+    [[nodiscard]] COST_DATA_TYPE get_cost();
 
-    [[nodiscard]] td_task_t* pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction);
+    [[nodiscard]] tdrc offerTask(td_task_t* task, td_device_affinity device_type);
+
+    [[nodiscard]] td_task_t* pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction, td_device_affinity device_type);
 };
 
 #endif

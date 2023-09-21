@@ -8,8 +8,9 @@
 #include <memory>
 #include "TD_common.h"
 #include "TD_queue.h"
+#include "TD_cost_estimation.h"
 
-[[nodiscard]] tdrc TD_Task_Queue::offerTask(td_task_t* task) {
+[[nodiscard]] tdrc TD_Task_Queue::offerTask(td_task_t* task, td_device_affinity device_type) {
     uint64_t oldTail = tail.load(std::memory_order_relaxed);
     bool noSuccess = TARGETDART_SUCCESS;
     while(noSuccess) {
@@ -36,6 +37,7 @@
         }
     }
     size.fetch_add(1, MEM_ORDER);
+    cost.fetch_add(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
     return TARGETDART_SUCCESS;
 }
 
@@ -46,7 +48,7 @@
  * @tparam T Type of elements stored in the Task Queue (usually T = Task)
  * @return The first element of the queue which is removed from the queue.
  */
-[[nodiscard]] td_task_t* TD_Task_Queue::pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction) {
+[[nodiscard]] td_task_t* TD_Task_Queue::pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction, td_device_affinity device_type) {
     while (size.load(MEM_ORDER) == 0) {
         if (blockingFunction != nullptr) {
             bool shutdown = (*blockingFunction)(size, 0);
@@ -101,6 +103,7 @@
         }
     }
     size.fetch_add(-1, MEM_ORDER);
+    cost.fetch_sub(td_get_task_cost(entry->host_base_ptr, device_type), MEM_ORDER);
     return entry;
 }
 
@@ -111,4 +114,8 @@ TD_Task_Queue::TD_Task_Queue() {
 //    for (std::atomic<T*>& atomic : this->workBuffer) {
 //        atomic.store(nullptr);
 //    }
+}
+
+[[nodiscard]] COST_DATA_TYPE TD_Task_Queue::get_cost() {
+    return cost.load();
 }

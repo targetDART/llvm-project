@@ -14,11 +14,11 @@ void td_schedule_thread_loop(bool *continue_loop) {
     while (*continue_loop) {
         if (iter == ITER_TILL_REPARTITION || doRepartition) {
             iter = 0;
-            td_global_reschedule(TD_ANY_AF);
+            td_global_reschedule(TD_ANY);
         }
         iter++;
         
-        td_iterative_schedule(TD_ANY_AF);
+        td_iterative_schedule(TD_ANY);
     }
 }
 

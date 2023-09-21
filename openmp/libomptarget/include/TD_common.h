@@ -28,11 +28,13 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 #define COST_DATA_TYPE long
 #define COST_MPI_DATA_TYPE MPI_LONG
 #define ITER_TILL_REPARTITION 100
+#define SPECIFIC_DEVICE_RANGE_START TARGETDART_DEVICE(0)
+#define NUM_FLEXIBLE_AFFINITIES 5
 
 //TODO: Add support for more accelerators (FPGA, Aurora etc.)
-enum td_device_affinity {TD_CPU_AF=TARGETDART_CPU, TD_GPU_AF=TARGETDART_GPU, TD_ANY_AF=TARGETDART_ANY, TD_FPGA_AF=TARGETDART_FPGA, TD_VECTOR_AF=TARGETDART_VEC};
-
-enum td_device_type {TD_CPU=0, TD_GPU=1, TD_FPGA=2, TD_VECTOR=3};
+enum td_device_affinity {TD_CPU=TARGETDART_CPU - DEVICE_BASE, TD_GPU=TARGETDART_GPU - DEVICE_BASE, 
+                        TD_ANY=TARGETDART_ANY - DEVICE_BASE, TD_FPGA=TARGETDART_FPGA - DEVICE_BASE, 
+                        TD_VECTOR=TARGETDART_VEC - DEVICE_BASE, TD_FIXED_AF};
 
 
 typedef struct td_task_t{
@@ -61,8 +63,6 @@ extern int td_comm_rank;
 tdrc declare_KernelArgs_type();
 
 tdrc declare_task_type();
-
-td_device_type get_device_from_affinity(td_device_affinity affinity);
 
 #endif // _OMPTARGET_TD_COMMON_H
 

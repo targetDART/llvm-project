@@ -15,7 +15,7 @@ td_progression_t node_progression = {0, 0, 0, 0};
 
 std::unordered_map<intptr_t,std::vector<double>> td_cost;
 
-COST_DATA_TYPE td_get_task_cost(intptr_t hostptr, td_device_type device) {
+COST_DATA_TYPE td_get_task_cost(intptr_t hostptr, td_device_affinity device) {
     if (td_cost.find(hostptr) == td_cost.end()) {
         return DEFAULT_TASK_COST;
     }
@@ -23,12 +23,12 @@ COST_DATA_TYPE td_get_task_cost(intptr_t hostptr, td_device_type device) {
 }
 
 
-tdrc td_set_task_cost(intptr_t hostptr, td_device_type device, COST_DATA_TYPE cost){
+tdrc td_set_task_cost(intptr_t hostptr, td_device_affinity device, COST_DATA_TYPE cost){
     #pragma omp critical
     {
         if (td_cost.find(hostptr) == td_cost.end()) {
            
-            std::vector<double> cost = {DEFAULT_TASK_COST, DEFAULT_TASK_COST, DEFAULT_TASK_COST, DEFAULT_TASK_COST};
+            std::vector<double> cost = {DEFAULT_TASK_COST, DEFAULT_TASK_COST, DEFAULT_TASK_COST, DEFAULT_TASK_COST, DEFAULT_TASK_COST};
             td_cost[hostptr] = cost;
         }        
         if (td_cost[hostptr][device] == DEFAULT_TASK_COST) {            

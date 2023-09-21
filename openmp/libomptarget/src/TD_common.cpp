@@ -42,18 +42,3 @@ tdrc declare_task_type() {
 
     return TARGETDART_SUCCESS;
 }
-
-
-td_device_type get_device_from_affinity(td_device_affinity affinity){
-    if (affinity == TD_CPU_AF || affinity == TD_ANY_AF) {
-        return TD_CPU;
-    } else if (affinity == TD_GPU_AF) {
-        return TD_GPU;
-    } else if (affinity == TD_FPGA_AF) {
-        return TD_FPGA;
-    } else if (affinity == TD_VECTOR_AF) {
-        return TD_VECTOR;
-    } else {
-        return TD_CPU;
-    }
-}
