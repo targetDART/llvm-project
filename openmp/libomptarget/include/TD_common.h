@@ -34,7 +34,12 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 //TODO: Add support for more accelerators (FPGA, Aurora etc.)
 enum td_device_affinity {TD_CPU=TARGETDART_CPU - DEVICE_BASE, TD_GPU=TARGETDART_GPU - DEVICE_BASE, 
                         TD_ANY=TARGETDART_ANY - DEVICE_BASE, TD_FPGA=TARGETDART_FPGA - DEVICE_BASE, 
-                        TD_VECTOR=TARGETDART_VEC - DEVICE_BASE, TD_FIXED_AF};
+                        TD_VECTOR=TARGETDART_VEC - DEVICE_BASE, TD_FIXED};
+
+enum td_queue_class {TD_LOCAL=0, TD_REMOTE=1, TD_REPLICA=2};
+
+#define TD_AFFINITIES {TD_ANY, TD_GPU, TD_CPU, TD_VECTOR, TD_FPGA}
+#define TD_NUM_AFFINITIES 5
 
 
 typedef struct td_task_t{

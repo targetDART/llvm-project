@@ -27,6 +27,8 @@ void td_trigger_global_repartitioning(td_device_affinity affinity) {
     doRepartition = true;
 }
 
+
+
 void td_exec_thread_loop(td_device_affinity affinities...) {
     //TODO implement task polling and execution.
 }

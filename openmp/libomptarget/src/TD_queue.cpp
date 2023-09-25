@@ -10,7 +10,7 @@
 #include "TD_queue.h"
 #include "TD_cost_estimation.h"
 
-[[nodiscard]] tdrc TD_Task_Queue::offerTask(td_task_t* task, td_device_affinity device_type) {
+[[nodiscard]] tdrc TD_Task_Queue::offer_task(td_task_t* task) {
     uint64_t oldTail = tail.load(std::memory_order_relaxed);
     bool noSuccess = TARGETDART_SUCCESS;
     while(noSuccess) {
@@ -37,7 +37,7 @@
         }
     }
     size.fetch_add(1, MEM_ORDER);
-    cost.fetch_add(td_get_task_cost(task->host_base_ptr, device_type), MEM_ORDER);
+    cost.fetch_add(td_get_task_cost(task->host_base_ptr, task->affinity), MEM_ORDER);
     return TARGETDART_SUCCESS;
 }
 
@@ -48,7 +48,7 @@
  * @tparam T Type of elements stored in the Task Queue (usually T = Task)
  * @return The first element of the queue which is removed from the queue.
  */
-[[nodiscard]] td_task_t* TD_Task_Queue::pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction, td_device_affinity device_type) {
+[[nodiscard]] td_task_t* TD_Task_Queue::poll_task(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction) {
     while (size.load(MEM_ORDER) == 0) {
         if (blockingFunction != nullptr) {
             bool shutdown = (*blockingFunction)(size, 0);
@@ -103,8 +103,17 @@
         }
     }
     size.fetch_add(-1, MEM_ORDER);
-    cost.fetch_sub(td_get_task_cost(entry->host_base_ptr, device_type), MEM_ORDER);
+    cost.fetch_sub(td_get_task_cost(entry->host_base_ptr, entry->affinity), MEM_ORDER);
     return entry;
+}
+
+[[nodiscard]] tdrc TD_Task_Queue::get_task(td_task_t* task){
+    task = poll_task(nullptr);
+
+    if (task == nullptr) {
+        return TARGETDART_FAILURE;
+    }
+    return TARGETDART_SUCCESS;
 }
 
 TD_Task_Queue::TD_Task_Queue() {

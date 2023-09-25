@@ -46,15 +46,17 @@ private:
     //stores the current load on the queue
     alignas(64) std::atomic<COST_DATA_TYPE> cost{0};
 
+    [[nodiscard]] td_task_t* poll_task(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction);
+
 public:
 
     TD_Task_Queue();
 
     [[nodiscard]] COST_DATA_TYPE get_cost();
 
-    [[nodiscard]] tdrc offerTask(td_task_t* task, td_device_affinity device_type);
-
-    [[nodiscard]] td_task_t* pollTask(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction, td_device_affinity device_type);
+    [[nodiscard]] tdrc offer_task(td_task_t* task);
+    
+    [[nodiscard]] tdrc get_task(td_task_t* task);
 };
 
 #endif

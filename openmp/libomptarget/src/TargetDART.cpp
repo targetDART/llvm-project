@@ -65,7 +65,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
 
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
-    task->affinity = TD_FIXED_AF;
+    task->affinity = TD_FIXED;
     //TODO: add to fixed local queue. Tasks in this queue are not supposed to be migrated, but help the cost estimation.
   } else  {
     task->affinity = (td_device_affinity) (*DeviceId - DEVICE_BASE);

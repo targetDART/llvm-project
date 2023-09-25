@@ -2,6 +2,7 @@
 #include "omp.h"
 #include "omptarget.h"
 #include "device.h"
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -58,42 +59,168 @@ std::vector<std::vector<TD_Task_Queue>*> td_queue_classes;
 /**
 * Greedy assignment of tasks to the Device queues of the system
 */
-tdrc __td_greedy_assignment(td_task_t* task, bool local) {
-    int min_id = 0;
-    double min_load = DBL_MAX;
-    int num_devices = omp_get_num_devices() + 1;
-
-    if (task->affinity == TD_CPU) {
-        if (local) {            
-            return td_local_task_queues.at(TD_CPU).offerTask(task, TD_CPU);
-        }
-        return td_remote_task_queues.at(TD_CPU).offerTask(task, TD_CPU);
-    } else if (task->affinity == TD_GPU) {
-        num_devices -= 1;
+tdrc __td_greedy_assignment(td_task_t* task, td_queue_class queue) {
+    
+    if (task->affinity == TD_FIXED) {
+        handle_error_en(-1, "Fixed task assigned to migratable queue");
+        return TARGETDART_FAILURE;
     }
-    //TODO reimplement with new structure
-    return TARGETDART_FAILURE;
+
+    return td_queue_classes.at(queue)->at(task->affinity).offer_task(task);
 }
 
 // adds a task to the local queue with the lowest load
 tdrc td_add_to_load_local(td_task_t* task) {
-    return __td_greedy_assignment(task, true);
+    return __td_greedy_assignment(task, TD_LOCAL);
 }
 
 // adds a task to the remote queue with the lowest load
 tdrc td_add_to_load_remote(td_task_t * task) {
-    return __td_greedy_assignment(task, false);
+    return __td_greedy_assignment(task, TD_REMOTE);
 }
 
-COST_DATA_TYPE td_get_local_load(TD_Task_Queue *queue, td_device_affinity affinity) {
-    COST_DATA_TYPE total_load = 0;
-
-    //TODO: reimplement with new structure
-    return total_load;
+// adds a task to the replica queue with the lowest load
+tdrc td_add_to_load_replica(td_task_t * task) {
+    return __td_greedy_assignment(task, TD_REPLICA);
 }
 
-td_task_t *__td_get_next_task(td_device_affinity affinity) {
-    return {}; //TODO: get task from correct queue
+
+// get the cost of a given queue
+inline COST_DATA_TYPE __get_queue_cost(std::vector<TD_Task_Queue> *queue_list, td_device_affinity affinity) {
+    return queue_list->at(affinity).get_cost();
+}
+
+// get the cost of the local queue
+COST_DATA_TYPE td_get_local_load(td_device_affinity affinity) {
+    return __get_queue_cost(&td_local_task_queues, affinity);
+}
+
+// get the cost of the remote queue
+COST_DATA_TYPE td_get_remote_load(td_device_affinity affinity) {
+    return __get_queue_cost(&td_remote_task_queues, affinity);
+}
+
+// get the cost of the replica queue
+COST_DATA_TYPE td_get_replica_load(td_device_affinity affinity) {
+    return __get_queue_cost(&td_replica_task_queues, affinity);
+}
+
+// get the load that can be migrated to another process
+COST_DATA_TYPE td_get_migratable_load() {
+    COST_DATA_TYPE sum = 0;
+    for (td_device_affinity affinity : TD_AFFINITIES) {
+        sum += td_get_local_load(affinity);
+        sum += td_get_remote_load(affinity);
+    }
+    return sum;
+}
+
+// get the complete load on the system
+COST_DATA_TYPE td_get_total_load() {
+    COST_DATA_TYPE sum = td_get_migratable_load();
+    for (td_device_affinity affinity : TD_AFFINITIES) {
+        sum += td_get_replica_load(affinity);
+    }
+    for (int i = TD_NUM_AFFINITIES; i < td_local_task_queues.size(); i++) {
+        sum += td_local_task_queues.at(i).get_cost();
+    }
+    return sum;
+}
+
+
+tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task) {
+    tdrc ret_code;
+
+    /**
+    1. queue to access: fixed device 
+    */
+    ret_code = td_local_task_queues.at(TD_NUM_AFFINITIES + deviceID).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    2. queue to access: local affinity queue
+    */
+    ret_code = td_local_task_queues.at(affinity).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    3. queue to access: local (TD_ANY) queue
+    */
+    ret_code = td_local_task_queues.at(TD_ANY).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    4. queue to access: remote affinity queue
+    */
+    ret_code = td_remote_task_queues.at(affinity).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    5. queue to access: remote (TD_ANY) queue
+    */
+    ret_code = td_remote_task_queues.at(TD_ANY).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    6. queue to access: replica affinity queue
+    */
+    ret_code = td_replica_task_queues.at(affinity).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    7. queue to access: replica (TD_ANY) queue
+    */
+    ret_code = td_replica_task_queues.at(TD_ANY).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+
+    return TARGETDART_FAILURE;
+}
+
+tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t *task) {
+    tdrc ret_code;
+
+    /**
+    2. queue to access: local affinity queue
+    */
+    ret_code = td_local_task_queues.at(affinity).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+    /**
+    4. queue to access: remote affinity queue
+    */
+    ret_code = td_remote_task_queues.at(affinity).get_task(task);
+
+    if (ret_code == TARGETDART_SUCCESS) {
+        return TARGETDART_SUCCESS;
+    }
+
+
+    return TARGETDART_FAILURE;
 }
 
 /**
@@ -105,7 +232,11 @@ void __td_do_partial_global_reschedule(double target_load, td_device_affinity af
     std::vector<td_task_t*> transferred_tasks;
     COST_DATA_TYPE totalcost = 0;
     while (totalcost < BALANCE_FACTOR * target_load) {
-        td_task_t *next_task = __td_get_next_task(affinity); 
+        td_task_t *next_task;
+        tdrc return_code = __td_get_next_migratable_task(affinity, next_task);
+        if (return_code == TARGETDART_FAILURE) {
+            break;
+        }
         if (td_get_task_cost(next_task->host_base_ptr, affinity) >= target_load/BALANCE_FACTOR) {
             break;
         } else {
@@ -255,7 +386,8 @@ void td_iterative_schedule(td_device_affinity affinity) {
         return;
     } else if (transfer_load > 0) {
         for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
-            td_task_t *task = __td_get_next_task(affinity);
+            td_task_t *task; 
+            tdrc ret_code = __td_get_next_migratable_task(affinity, task);
             td_send_task(partner_proc, task);
         }
     } else {

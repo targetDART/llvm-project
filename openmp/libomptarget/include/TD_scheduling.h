@@ -43,4 +43,9 @@ void td_global_reschedule(td_device_affinity affinity);
 */
 void td_iterative_schedule(td_device_affinity affinity);
 
+/**
+* This function provides the next task for  given device + affinity.
+*/
+tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task);
+
 #endif
