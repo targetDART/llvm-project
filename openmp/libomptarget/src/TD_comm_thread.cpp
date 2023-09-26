@@ -38,16 +38,16 @@ void td_exec_thread_loop(td_device_affinity affinity, int deviceID) {
         if (td_get_next_task(affinity, deviceID, task) == TARGETDART_SUCCESS) {
             //execute the task on your own device
             int return_code = td_invoke_task(deviceID, task);
+            task->return_code = return_code;
             if (return_code == TARGETDART_FAILURE) {                
                 handle_error_en(-1, "Task execution failed.");
-                exit(-1);
+                //exit(-1);
             }
             //finalize after the task finished
             if (task->local_proc != td_comm_rank) {
                 td_send_task_result(task);
             } else {
                 td_signal(task->uid);
-                //TODO: send returncode to OMP thread
             }
         } 
     }

@@ -55,6 +55,7 @@ typedef struct td_task_t{
     int                 local_proc;
     td_device_affinity  affinity;
     long long           uid;
+    int                 return_code;
 } td_task_t;
 
 typedef struct td_global_sched_params_t{

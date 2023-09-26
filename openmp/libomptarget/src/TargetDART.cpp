@@ -107,7 +107,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   // Ideas: yield + ping, Barrier, Mutex, busy-waiting
   // requires additional parameters in task
 
-  return td_invoke_task(*DeviceId, task);
+  return task->return_code;
 }
 
 // initializes the targetDART lib

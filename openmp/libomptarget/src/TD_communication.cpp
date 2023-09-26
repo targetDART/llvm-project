@@ -118,6 +118,9 @@ tdrc td_send_task_result(td_task_t *task) {
     //Send Task uid
     MPI_Send(&task->uid, 1, MPI_LONG_LONG, task->local_proc, SEND_RESULT_UID, targetdart_comm);
 
+    //Send Task returncode
+    MPI_Send(&task->return_code, 1, MPI_INT, task->local_proc, SEND_RESULT_RETURN_CODE, targetdart_comm);
+
     //Send all parameter values
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
@@ -140,6 +143,10 @@ tdrc td_receive_task_result(int source) {
     MPI_Recv(uid, 1, MPI_LONG_LONG, source , SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
 
     td_task_t *task = td_remote_task_map[*uid];
+
+
+    //Receive Task return code
+    MPI_Recv(&task->return_code, 1, MPI_INT, source , SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
 
     //Receive all parameter values
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
