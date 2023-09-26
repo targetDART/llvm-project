@@ -9,6 +9,7 @@
 #include "private.h"
 #include "mpi.h"
 #include <link.h>
+#include <pthread.h>
 #include <queue>
 #include <dlfcn.h>
 #include <unistd.h>
@@ -19,6 +20,7 @@
 #include "TD_common.h"
 #include "TD_cost_estimation.h"
 #include "TD_scheduling.h"
+#include "TD_comm_thread.h"
 
 
 // TODO: implement interface
@@ -29,18 +31,26 @@ static bool __td_initialized = false;
 
 static bool __td_did_initialize_mpi = false;
 
+// stores all tasks that are migrated or replicated to simplify receiving results.
+std::unordered_map<long long, td_task_t*> td_remote_task_map;
+
+
+std::vector<long long> __td_tasks_generated_per_thread;
+
 // communicator for remote task requests
 MPI_Comm targetdart_comm;
 
 int td_comm_size;
 int td_comm_rank;
 
+bool td_finalize;
+
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
 
 // array that holds image base addresses
 std::vector<intptr_t> _image_base_addresses;
-
+std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
 
 // initial scheduler
 // TODO: replace with correct scheduler
@@ -62,6 +72,11 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->num_teams = NumTeams;
   task->thread_limit = ThreadLimit;
   task->local_proc = td_comm_rank;
+  task->uid = (__td_tasks_generated_per_thread[omp_get_thread_num()] << 4) + omp_get_thread_num();
+  __td_tasks_generated_per_thread[omp_get_thread_num()]++;
+
+  td_pthread_conditional_wrapper_t cond_var = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
+  td_task_conditional_map[task->uid] = &cond_var;
 
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
@@ -72,6 +87,8 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
     td_add_to_load_local(task);
   }
 
+  //yields until the current task has finished.
+  td_yield(task->uid);
   /*
   Number of hidden_helper_threads is defined by __kmp_hidden_helper_threads_num in kmp_runtime.cpp line 9142
   Default is currently 8
@@ -90,7 +107,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   // Ideas: yield + ping, Barrier, Mutex, busy-waiting
   // requires additional parameters in task
 
-  return __td_invoke_task(*DeviceId, task);
+  return td_invoke_task(*DeviceId, task);
 }
 
 // initializes the targetDART lib
@@ -131,7 +148,11 @@ int initTargetDART(void* main_ptr) {
 
   //Initialize the data structures for scheduling
   td_local_task_queues = std::vector<TD_Task_Queue>(omp_get_num_devices() + NUM_FLEXIBLE_AFFINITIES);
+  __td_tasks_generated_per_thread = std::vector<long long>(omp_get_num_threads(), 0);
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
+  // Initialize the map of remote and replicated tasks
+  td_remote_task_map = std::unordered_map<long long, td_task_t*>();
+  td_task_conditional_map = std::unordered_map<long long, td_pthread_conditional_wrapper_t*>();
 
 
   // define the base address of the current process
@@ -145,6 +166,8 @@ int initTargetDART(void* main_ptr) {
     }
   }
 
+  td_finalize = true;
+
   return TARGETDART_SUCCESS;
 }
 
@@ -155,12 +178,9 @@ int finalizeTargetDART() {
   if (__td_did_initialize_mpi) {
     MPI_Finalize();
   }
+  //TODO: synchronize all threads and processes
+  td_finalize = true;
   return TARGETDART_SUCCESS;
-}
-
-// executes the task on the targeted Device 
-int __td_invoke_task(int DeviceId, td_task_t* task) {
-  return __tgt_target_kernel(task->Loc, DeviceId, task->num_teams, task->thread_limit, (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
 }
 
 /*

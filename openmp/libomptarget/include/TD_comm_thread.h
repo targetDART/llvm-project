@@ -9,3 +9,5 @@ extern bool doRepartition;
 * triggers a global repratitioning of tasks accross all processes.
 */
 void td_trigger_global_repartitioning(td_device_affinity affinity);
+
+int td_invoke_task(int DeviceId, td_task_t* task);

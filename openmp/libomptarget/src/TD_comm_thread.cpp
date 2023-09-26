@@ -3,6 +3,8 @@
 #include "TD_common.h"
 #include "TD_scheduling.h"
 #include "TD_comm_thread.h"
+#include "TD_communication.h"
+#include <cstdlib>
 
 
 bool doRepartition = false;
@@ -29,6 +31,29 @@ void td_trigger_global_repartitioning(td_device_affinity affinity) {
 
 
 
-void td_exec_thread_loop(td_device_affinity affinities...) {
-    //TODO implement task polling and execution.
+void td_exec_thread_loop(td_device_affinity affinity, int deviceID) {
+    while (!td_finalize) {
+        td_task_t *task;
+
+        if (td_get_next_task(affinity, deviceID, task) == TARGETDART_SUCCESS) {
+            //execute the task on your own device
+            int return_code = td_invoke_task(deviceID, task);
+            if (return_code == TARGETDART_FAILURE) {                
+                handle_error_en(-1, "Task execution failed.");
+                exit(-1);
+            }
+            //finalize after the task finished
+            if (task->local_proc != td_comm_rank) {
+                td_send_task_result(task);
+            } else {
+                td_signal(task->uid);
+                //TODO: send returncode to OMP thread
+            }
+        } 
+    }
+}
+
+// executes the task on the targeted Device 
+int td_invoke_task(int DeviceId, td_task_t* task) {
+  return __tgt_target_kernel(task->Loc, DeviceId, task->num_teams, task->thread_limit, (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
 }

@@ -110,6 +110,50 @@ int td_receive_task(int source, td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
+tdrc td_send_task_result(td_task_t *task) {
+
+    //TODO: Use MPI pack to summarize the messages into a single Send
+    //TODO: Use non-blocking send
+
+    //Send Task uid
+    MPI_Send(&task->uid, 1, MPI_LONG_LONG, task->local_proc, SEND_RESULT_UID, targetdart_comm);
+
+    //Send all parameter values
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+        //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
+        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & 0x002;
+        if (IsMapFrom != 0)
+            MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->local_proc, SEND_RESULT_DATA, targetdart_comm);
+    }
+
+    //Base Pointers == pointers can be assumed for simple cases.
+    //For complex combinations of pointers and scalars OMP breaks without our interference
+
+    return TARGETDART_SUCCESS;
+}
+
+tdrc td_receive_task_result(int source) {
+
+    //TODO: use MPI probe for complete receives
+    long long *uid;
+    //Receive Task Data
+    MPI_Recv(uid, 1, MPI_LONG_LONG, source , SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+
+    td_task_t *task = td_remote_task_map[*uid];
+
+    //Receive all parameter values
+    task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+        //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
+        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & 0x002;
+        if (IsMapFrom != 0)
+            MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
+    }
+
+
+    return TARGETDART_SUCCESS;
+}
+
 
 td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_param) {
     COST_DATA_TYPE reduce = 0;

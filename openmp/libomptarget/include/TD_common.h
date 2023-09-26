@@ -5,10 +5,14 @@
 //TODO: define communication interface for TargetDART
 
 #include <cstdint>
+#include <pthread.h>
+#include <unordered_map>
+#include <vector>
 #include "omp.h"
 #include "omptarget.h"
 #include "device.h"
 #include "mpi.h"
+#include "pthread.h"
 
 
 #define handle_error_en(en, msg) \
@@ -50,6 +54,7 @@ typedef struct td_task_t{
     ident_t*            Loc;
     int                 local_proc;
     td_device_affinity  affinity;
+    long long           uid;
 } td_task_t;
 
 typedef struct td_global_sched_params_t{
@@ -58,16 +63,34 @@ typedef struct td_global_sched_params_t{
     COST_DATA_TYPE        local_cost;
 } td_global_sched_params_t;
 
+typedef struct td_pthread_conditional_wrapper_t {
+    pthread_mutex_t thread_mutex;
+    pthread_cond_t  conditional;
+} td_pthread_conditional_wrapper_t;
+
 extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
+extern bool td_finalize;
+extern std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
 
 
 extern int td_comm_size;
 extern int td_comm_rank;
+extern std::unordered_map<long long, td_task_t*> td_remote_task_map;
 
 tdrc declare_KernelArgs_type();
 
 tdrc declare_task_type();
+
+/**
+* lets the current thread sleep until a signal for the task with uid task_uid sends a signal, indicating, that it finished
+*/
+void td_yield(long long task_uid);
+
+/**
+* Sends a signal that the task with uid task_uid has finished execution, so OMP can resume its management
+*/
+void td_signal(long long task_uid);
 
 #endif // _OMPTARGET_TD_COMMON_H
 
