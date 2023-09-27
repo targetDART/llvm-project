@@ -1,11 +1,9 @@
 #include "TargetDART.h"
 #include "omptarget.h"
-#include "device.h"
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include "private.h"
-#include "mpi.h"
 #include <link.h>
 #include <queue>
 #include <dlfcn.h>
@@ -57,4 +55,14 @@ void td_signal(long long task_uid) {
     pthread_mutex_lock(&cond_var->thread_mutex);
     pthread_cond_signal(&cond_var->conditional);
     pthread_mutex_unlock(&cond_var->thread_mutex);
+}
+
+int td_get_num_threads() {
+    //TODO: implement correct alternative for omp_get_num_threads
+    return 0;// omp_get_num_threads(); 
+}
+
+int td_get_thread_num() {
+    //TODO: implement correct alternative for omp_get_thread_num
+    return 0;// omp_get_thread_num();
 }

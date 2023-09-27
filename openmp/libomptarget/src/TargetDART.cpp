@@ -72,8 +72,8 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->num_teams = NumTeams;
   task->thread_limit = ThreadLimit;
   task->local_proc = td_comm_rank;
-  task->uid = (__td_tasks_generated_per_thread[omp_get_thread_num()] << 4) + omp_get_thread_num();
-  __td_tasks_generated_per_thread[omp_get_thread_num()]++;
+  task->uid = (__td_tasks_generated_per_thread[td_get_thread_num()] << 16) + td_get_thread_num();
+  __td_tasks_generated_per_thread[td_get_thread_num()]++;
 
   td_pthread_conditional_wrapper_t cond_var = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
   td_task_conditional_map[task->uid] = &cond_var;
@@ -148,7 +148,7 @@ int initTargetDART(void* main_ptr) {
 
   //Initialize the data structures for scheduling
   td_local_task_queues = std::vector<TD_Task_Queue>(omp_get_num_devices() + NUM_FLEXIBLE_AFFINITIES);
-  __td_tasks_generated_per_thread = std::vector<long long>(omp_get_num_threads(), 0);
+  __td_tasks_generated_per_thread = std::vector<long long>(td_get_num_threads(), 0);
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
   // Initialize the map of remote and replicated tasks
   td_remote_task_map = std::unordered_map<long long, td_task_t*>();
