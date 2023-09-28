@@ -5,6 +5,7 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 #include "private.h"
@@ -59,19 +60,18 @@ std::vector<std::vector<TD_Task_Queue>*> td_queue_classes;
 /**
 * Greedy assignment of tasks to the Device queues of the system
 */
-tdrc __td_greedy_assignment(td_task_t* task, td_queue_class queue) {
+tdrc __td_greedy_assignment(td_task_t* task, td_queue_class queue, int deviceID=0) {
     
     if (task->affinity == TD_FIXED) {
-        handle_error_en(-1, "Fixed task assigned to migratable queue");
-        return TARGETDART_FAILURE;
+        td_queue_classes.at(queue)->at(deviceID + TD_NUM_AFFINITIES).offer_task(task);
     }
 
     return td_queue_classes.at(queue)->at(task->affinity).offer_task(task);
 }
 
 // adds a task to the local queue with the lowest load
-tdrc td_add_to_load_local(td_task_t* task) {
-    return __td_greedy_assignment(task, TD_LOCAL);
+tdrc td_add_to_load_local(td_task_t* task, int deviceID) {
+    return __td_greedy_assignment(task, TD_LOCAL, deviceID);
 }
 
 // adds a task to the remote queue with the lowest load
@@ -243,6 +243,7 @@ void __td_do_partial_global_reschedule(double target_load, td_device_affinity af
             transferred_tasks.push_back(next_task);
         }
     }
+    
     //TODO: think about MPI_pack as well
     for (int t = 0; t < transferred_tasks.size(); t++) {
         td_send_task(td_comm_rank + offset, transferred_tasks.at(t));
@@ -328,7 +329,7 @@ int __td_coswap(std::vector<T1> *load_vector, int idx1, int idx2, int proc_idx) 
 */
 int __td_cosort(std::vector<td_sort_cost_tuple_t> *load_vector) {
     int proc_idx = td_comm_rank;
-    //TODO: use more efficient search implementation merge + insertion 
+    //TODO: use more efficient sort implementation merge + insertion 
     for (int i = load_vector->size() - 1; i > 0; i--) {
         COST_DATA_TYPE max = 0;
         int max_idx = -1;
@@ -392,9 +393,9 @@ void td_iterative_schedule(td_device_affinity affinity) {
         }
     } else {
         for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
-            td_task_t task;
-            td_receive_task(partner_proc, &task);
-            //TODO: add task to correct queue
+            td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
+            td_receive_task(partner_proc, task);
+            td_add_to_load_remote(task);
         }
     } 
 }

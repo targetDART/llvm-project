@@ -168,8 +168,8 @@ td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_p
     COST_DATA_TYPE local_cost = local_cost_param;
 
     //TODO: use efficient combined implementation for allreduce and exscan
-    MPI_Allreduce((void*) &local_cost, (void*) &reduce, 1, COST_MPI_DATA_TYPE, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Exscan((void*) &local_cost, (void*) &exScan, 1, COST_MPI_DATA_TYPE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce((void*) &local_cost, (void*) &reduce, 1, COST_MPI_DATA_TYPE, MPI_SUM, targetdart_comm);
+    MPI_Exscan((void*) &local_cost, (void*) &exScan, 1, COST_MPI_DATA_TYPE, MPI_SUM, targetdart_comm);
 
     return {reduce, exScan, local_cost};
 }
@@ -209,14 +209,14 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
 
         //send data 
         MPI_Request rqsts[4];
-        MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, MPI_COMM_WORLD, &rqsts[0]);
+        MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
         if (send2 != 0) {
-            MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, MPI_COMM_WORLD, &rqsts[1]);
+            MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[1]);
         }
         //recv data
-        MPI_Irecv(&cost_vector[td_comm_rank], recv1, COST_MPI_DATA_TYPE, source, 1, MPI_COMM_WORLD, &rqsts[2]);
+        MPI_Irecv(&cost_vector[td_comm_rank], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[2]);
         if (send2 != 0) {
-            MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, MPI_COMM_WORLD, &rqsts[3]);
+            MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, targetdart_comm, &rqsts[3]);
         }
 
         MPI_Waitall(4, rqsts, MPI_STATUSES_IGNORE);

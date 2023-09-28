@@ -93,9 +93,5 @@ void td_yield(long long task_uid);
 */
 void td_signal(long long task_uid);
 
-int td_get_num_threads();
-
-int td_get_thread_num();
-
 #endif // _OMPTARGET_TD_COMMON_H
 

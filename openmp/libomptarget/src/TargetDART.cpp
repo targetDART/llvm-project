@@ -2,6 +2,7 @@
 #include "omp.h"
 #include "omptarget.h"
 #include "device.h"
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -34,8 +35,8 @@ static bool __td_did_initialize_mpi = false;
 // stores all tasks that are migrated or replicated to simplify receiving results.
 std::unordered_map<long long, td_task_t*> td_remote_task_map;
 
-
-std::vector<long long> __td_tasks_generated_per_thread;
+// stores how many tasks have been generated in total
+std::atomic<long> __td_tasks_generated = {0};
 
 // communicator for remote task requests
 MPI_Comm targetdart_comm;
@@ -72,8 +73,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->num_teams = NumTeams;
   task->thread_limit = ThreadLimit;
   task->local_proc = td_comm_rank;
-  task->uid = (__td_tasks_generated_per_thread[td_get_thread_num()] << 16) + td_get_thread_num();
-  __td_tasks_generated_per_thread[td_get_thread_num()]++;
+  task->uid = __td_tasks_generated.fetch_add(1);
 
   td_pthread_conditional_wrapper_t cond_var = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
   td_task_conditional_map[task->uid] = &cond_var;
@@ -81,14 +81,12 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
     task->affinity = TD_FIXED;
-    //TODO: add to fixed local queue. Tasks in this queue are not supposed to be migrated, but help the cost estimation.
+    td_add_to_load_local(task, (*DeviceId - DEVICE_BASE - TD_NUM_AFFINITIES));
   } else  {
     task->affinity = (td_device_affinity) (*DeviceId - DEVICE_BASE);
     td_add_to_load_local(task);
   }
 
-  //yields until the current task has finished.
-  td_yield(task->uid);
   /*
   Number of hidden_helper_threads is defined by __kmp_hidden_helper_threads_num in kmp_runtime.cpp line 9142
   Default is currently 8
@@ -100,7 +98,10 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
     td_receive_task(0, task);
   }*/
 
-  // TODO: make sure the current thread sleeps here until the task is executed.
+
+  //yields until the current task has finished.
+  td_yield(task->uid);
+  // make sure the current thread sleeps here until the task is executed.
   // Run a dedicated device thread which consumes the task for its assigned device. 
   //(think about multiple threads per device, at least for GPUs to overlap com/comp)
   // ensure that the local thread cannot progress until the task is finished and the Data is available again 
@@ -148,7 +149,6 @@ int initTargetDART(void* main_ptr) {
 
   //Initialize the data structures for scheduling
   td_local_task_queues = std::vector<TD_Task_Queue>(omp_get_num_devices() + NUM_FLEXIBLE_AFFINITIES);
-  __td_tasks_generated_per_thread = std::vector<long long>(td_get_num_threads(), 0);
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
   // Initialize the map of remote and replicated tasks
   td_remote_task_map = std::unordered_map<long long, td_task_t*>();
@@ -179,7 +179,7 @@ int finalizeTargetDART() {
     MPI_Finalize();
   }
   //TODO: synchronize all threads and processes
-  td_finalize = true;
+  td_finalize_threads();
   return TARGETDART_SUCCESS;
 }
 

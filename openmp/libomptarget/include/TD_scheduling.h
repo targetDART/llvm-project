@@ -26,8 +26,9 @@ extern std::vector<TD_Task_Queue> td_local_task_queues;
 extern std::vector<TD_Task_Queue> td_remote_task_queues;
 extern std::vector<TD_Task_Queue> td_replica_task_queues;
 
-tdrc td_add_to_load_local(td_task_t * task);
+tdrc td_add_to_load_local(td_task_t * task, int deviceID=0);
 tdrc td_add_to_load_remote(td_task_t * task);
+tdrc td_add_to_load_replica(td_task_t * task);
 
 
 // returns the total load on the current device for a given affinity

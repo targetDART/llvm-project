@@ -124,6 +124,6 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 tdrc td_finalize_threads() {
     #pragma omp taskwait
 
-    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(targetdart_comm);
     td_finalize = true;
 }
