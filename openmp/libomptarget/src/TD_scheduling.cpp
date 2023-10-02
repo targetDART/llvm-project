@@ -14,6 +14,7 @@
 #include <link.h>
 #include <queue>
 #include <dlfcn.h>
+#include <type_traits>
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
@@ -32,7 +33,7 @@ std::vector<td_progression_t> td_global_progression;
 * 4: TD_VEC affinity queue
 * 5 to num_devices + 5: device specific queues
 */
-std::vector<TD_Task_Queue> td_local_task_queues;
+std::vector<TD_Task_Queue*>* __td_local_task_queues;
 /**
 * 0: TD_ANY affinity queue
 * 1: TD_CPU affinity queue
@@ -40,7 +41,7 @@ std::vector<TD_Task_Queue> td_local_task_queues;
 * 3: TD_FPGA affinity queue
 * 4: TD_VEC affinity queue
 */
-std::vector<TD_Task_Queue> td_remote_task_queues;
+std::vector<TD_Task_Queue*>* __td_remote_task_queues;
 /**
 * 0: TD_ANY affinity queue
 * 1: TD_CPU affinity queue
@@ -48,25 +49,53 @@ std::vector<TD_Task_Queue> td_remote_task_queues;
 * 3: TD_FPGA affinity queue
 * 4: TD_VEC affinity queue
 */
-std::vector<TD_Task_Queue> td_replica_task_queues;
+std::vector<TD_Task_Queue*>* __td_replica_task_queues;
 
 /**
 * 0: local queues
 * 1: remote queues
 * 2: replica queues
 */
-std::vector<std::vector<TD_Task_Queue>*> td_queue_classes;
+std::vector<std::vector<TD_Task_Queue*>*>* td_queue_classes;
+
+tdrc td_init_task_queues() {
+    printf("test\n");
+    __td_local_task_queues = new std::vector<TD_Task_Queue*>();
+    __td_remote_task_queues = new std::vector<TD_Task_Queue*>();
+    __td_replica_task_queues = new std::vector<TD_Task_Queue*>();
+    for (int i = 0; i < TD_NUM_AFFINITIES; i++) {
+        auto queue = new TD_Task_Queue();
+        queue->init();
+        __td_local_task_queues->push_back(queue);
+        auto queue2 = new TD_Task_Queue();
+        queue2->init();
+        __td_remote_task_queues->push_back(queue2);
+        auto queue3 = new TD_Task_Queue();
+        queue3->init();
+        __td_replica_task_queues->push_back(queue3);
+    }
+    for (int i = 0; i <= omp_get_num_devices(); i++) {
+        auto queue = new TD_Task_Queue();
+        queue->init();
+        __td_local_task_queues->push_back(queue);
+    }
+    td_queue_classes = new std::vector<std::vector<TD_Task_Queue*>*>({__td_local_task_queues, __td_remote_task_queues, __td_replica_task_queues});
+
+    return TARGETDART_SUCCESS;
+}
 
 /**
 * Greedy assignment of tasks to the Device queues of the system
 */
 tdrc __td_greedy_assignment(td_task_t* task, td_queue_class queue, int deviceID=0) {
+
+    std::cout << deviceID << " " << task->affinity << std::endl;
     
     if (task->affinity == TD_FIXED) {
-        td_queue_classes.at(queue)->at(deviceID + TD_NUM_AFFINITIES).offer_task(task);
+        return td_queue_classes->at(queue)->at(deviceID + TD_NUM_AFFINITIES)->offer_task(task);
     }
 
-    return td_queue_classes.at(queue)->at(task->affinity).offer_task(task);
+    return td_queue_classes->at(queue)->at(task->affinity)->offer_task(task);
 }
 
 // adds a task to the local queue with the lowest load
@@ -86,23 +115,23 @@ tdrc td_add_to_load_replica(td_task_t * task) {
 
 
 // get the cost of a given queue
-inline COST_DATA_TYPE __get_queue_cost(std::vector<TD_Task_Queue> *queue_list, td_device_affinity affinity) {
-    return queue_list->at(affinity).get_cost();
+inline COST_DATA_TYPE __get_queue_cost(std::vector<TD_Task_Queue*> *queue_list, td_device_affinity affinity) {
+    return queue_list->at(affinity)->get_cost();
 }
 
 // get the cost of the local queue
 COST_DATA_TYPE td_get_local_load(td_device_affinity affinity) {
-    return __get_queue_cost(&td_local_task_queues, affinity);
+    return __get_queue_cost(__td_local_task_queues, affinity);
 }
 
 // get the cost of the remote queue
 COST_DATA_TYPE td_get_remote_load(td_device_affinity affinity) {
-    return __get_queue_cost(&td_remote_task_queues, affinity);
+    return __get_queue_cost(__td_remote_task_queues, affinity);
 }
 
 // get the cost of the replica queue
 COST_DATA_TYPE td_get_replica_load(td_device_affinity affinity) {
-    return __get_queue_cost(&td_replica_task_queues, affinity);
+    return __get_queue_cost(__td_replica_task_queues, affinity);
 }
 
 // get the load that can be migrated to another process
@@ -121,29 +150,30 @@ COST_DATA_TYPE td_get_total_load() {
     for (td_device_affinity affinity : TD_AFFINITIES) {
         sum += td_get_replica_load(affinity);
     }
-    for (int i = TD_NUM_AFFINITIES; i < td_local_task_queues.size(); i++) {
-        sum += td_local_task_queues.at(i).get_cost();
+    for (int i = TD_NUM_AFFINITIES; i < __td_local_task_queues->size(); i++) {
+        sum += __td_local_task_queues->at(i)->get_cost();
     }
     return sum;
 }
 
 
-tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task) {
+tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **task) {
     tdrc ret_code;
 
     /**
     1. queue to access: fixed device 
     */
-    ret_code = td_local_task_queues.at(TD_NUM_AFFINITIES + deviceID).get_task(task);
+    ret_code = __td_local_task_queues->at(TD_NUM_AFFINITIES + deviceID)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        std::cout << "1" << std::endl;
         return TARGETDART_SUCCESS;
     }
 
     /**
     2. queue to access: local affinity queue
     */
-    ret_code = td_local_task_queues.at(affinity).get_task(task);
+    ret_code = __td_local_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -152,16 +182,17 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task
     /**
     3. queue to access: local (TD_ANY) queue
     */
-    ret_code = td_local_task_queues.at(TD_ANY).get_task(task);
+    ret_code = __td_local_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        std::cout << "Task: " << task << std::endl;
         return TARGETDART_SUCCESS;
     }
 
     /**
     4. queue to access: remote affinity queue
     */
-    ret_code = td_remote_task_queues.at(affinity).get_task(task);
+    ret_code = __td_remote_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -170,7 +201,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task
     /**
     5. queue to access: remote (TD_ANY) queue
     */
-    ret_code = td_remote_task_queues.at(TD_ANY).get_task(task);
+    ret_code = __td_remote_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -179,7 +210,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task
     /**
     6. queue to access: replica affinity queue
     */
-    ret_code = td_replica_task_queues.at(affinity).get_task(task);
+    ret_code = __td_replica_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -188,7 +219,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task
     /**
     7. queue to access: replica (TD_ANY) queue
     */
-    ret_code = td_replica_task_queues.at(TD_ANY).get_task(task);
+    ret_code = __td_replica_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -198,13 +229,13 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task
     return TARGETDART_FAILURE;
 }
 
-tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t *task) {
+tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t **task) {
     tdrc ret_code;
 
     /**
     2. queue to access: local affinity queue
     */
-    ret_code = td_local_task_queues.at(affinity).get_task(task);
+    ret_code = __td_local_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -213,7 +244,7 @@ tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t *task)
     /**
     4. queue to access: remote affinity queue
     */
-    ret_code = td_remote_task_queues.at(affinity).get_task(task);
+    ret_code = __td_remote_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
@@ -233,7 +264,7 @@ void __td_do_partial_global_reschedule(double target_load, td_device_affinity af
     COST_DATA_TYPE totalcost = 0;
     while (totalcost < BALANCE_FACTOR * target_load) {
         td_task_t *next_task;
-        tdrc return_code = __td_get_next_migratable_task(affinity, next_task);
+        tdrc return_code = __td_get_next_migratable_task(affinity, &next_task);
         if (return_code == TARGETDART_FAILURE) {
             break;
         }
@@ -388,7 +419,7 @@ void td_iterative_schedule(td_device_affinity affinity) {
     } else if (transfer_load > 0) {
         for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
             td_task_t *task; 
-            tdrc ret_code = __td_get_next_migratable_task(affinity, task);
+            tdrc ret_code = __td_get_next_migratable_task(affinity, &task);
             td_send_task(partner_proc, task);
         }
     } else {

@@ -53,18 +53,12 @@ MPI_Datatype TD_MPI_Task;
 std::vector<intptr_t> _image_base_addresses;
 std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
 
-// initial scheduler
-// TODO: replace with correct scheduler
-static inline int DeviceIdGenerator(KernelArgsTy *KernelArgs) {
-  return KernelArgs->NumArgs % (omp_get_num_devices() + 1);
-}
 
 //Adds a task to the TargetDART runtime
 int td_add_task( ident_t *Loc, int32_t NumTeams,
                         int32_t ThreadLimit, void *HostPtr,
                         KernelArgsTy *KernelArgs, int64_t *DeviceId) 
 {
-  *DeviceId = DeviceIdGenerator(KernelArgs);
   // create internal task data structure
   td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
   task->host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
@@ -118,6 +112,9 @@ Preferably main().
 If MPI is used in the user code, MPI must be initialized before TargetDART.
 */
 int initTargetDART(void* main_ptr) {
+
+
+  printf("test\n");
   if (__td_initialized) {
     return TARGETDART_SUCCESS;
   }
@@ -148,7 +145,7 @@ int initTargetDART(void* main_ptr) {
   MPI_Comm_rank(targetdart_comm, &td_comm_rank);
 
   //Initialize the data structures for scheduling
-  td_local_task_queues = std::vector<TD_Task_Queue>(omp_get_num_devices() + NUM_FLEXIBLE_AFFINITIES);
+  td_init_task_queues();
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
   // Initialize the map of remote and replicated tasks
   td_remote_task_map = std::unordered_map<long long, td_task_t*>();
@@ -158,6 +155,11 @@ int initTargetDART(void* main_ptr) {
   // define the base address of the current process
   get_base_address(main_ptr);
 
+  std::cout << TD_ANY << std::endl;
+
+  int placements[3] = {1,2,3};
+  td_init_threads(0, placements);
+
   // Init devices during installation
   for (long i = 0; i < omp_get_num_devices(); i++) {
     if (checkDeviceAndCtors(i, nullptr)) {
@@ -166,7 +168,7 @@ int initTargetDART(void* main_ptr) {
     }
   }
 
-  td_finalize = true;
+  td_finalize = false;
 
   return TARGETDART_SUCCESS;
 }

@@ -1,4 +1,5 @@
 #include "mpi.h"
+#include "omp.h"
 #include "omptarget.h"
 #include "TargetDART.h"
 #include "TD_common.h"
@@ -9,9 +10,12 @@
 #include <cstddef>
 #include <cstdlib>
 #include <tuple>
+#include <vector>
 
 
 bool doRepartition = false;
+
+std::vector<td_device_affinity>* affinity_assignment;
 
 //TODO: add Communication thread implementation
 
@@ -43,12 +47,12 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
 
 
 void *td_exec_thread_loop(void *ptr) {
-    td_device_affinity affinity = std::get<0>(*(std::tuple<td_device_affinity, int>*) ptr);
-    int deviceID = std::get<1>(*(std::tuple<td_device_affinity, int>*) ptr);
+    int deviceID = ((long) ptr);
+    td_device_affinity affinity = affinity_assignment->at(deviceID);
     while (!td_finalize) {
         td_task_t *task;
-
-        if (td_get_next_task(affinity, deviceID, task) == TARGETDART_SUCCESS) {
+        if (td_get_next_task(affinity, deviceID, &task) == TARGETDART_SUCCESS) {
+            std::cout << "start task " << task << std::endl;
             //execute the task on your own device
             int return_code = __td_invoke_task(deviceID, task);
             task->return_code = return_code;
@@ -68,7 +72,7 @@ void *td_exec_thread_loop(void *ptr) {
 }
 
 //wrap the thread initialization and pinning
-void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread, void * param = nullptr) {
+void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread, int id) {
     cpu_set_t cpuset;// = CPU_ALLOC(N);
 
     int s;
@@ -87,7 +91,7 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
     if (s != 0) 
         handle_error_en(s, "pthread_attr_setaffinity_np");
             
-    s = pthread_create(thread, &pthread_attr,  func, param);
+    s = pthread_create(thread, &pthread_attr,  func, (void*) id);
     pthread_attr_destroy(&pthread_attr);
     if (s != 0) 
         std::cout << "Failed to initialize thread" << std::endl;
@@ -99,20 +103,18 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
 * the number of exec placements must be equal to the omp_get_num_devices() + 1.
 */
 tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
-    //TODO: pin threads to specific cores, via CPUSET. Define which cores to use.
 
     pthread_t scheduler;
 
-    __td_init_and_pin_thread(td_schedule_thread_loop, scheduler, &scheduler);
+    //__td_init_and_pin_thread(td_schedule_thread_loop, scheduler, &scheduler);
+
+    affinity_assignment = new std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
+    affinity_assignment->at(omp_get_num_devices()) = TD_CPU;
 
     //initialize all executor threads
     for (int i = 0; i <= omp_get_num_devices(); i++) {
         pthread_t executor;
-        std::tuple<td_device_affinity, int> param = {TD_GPU, i};
-        if (i == omp_get_num_devices()) {
-            param = {TD_CPU, i};
-        }
-        __td_init_and_pin_thread(td_exec_thread_loop, exec_placements[i], &executor, &param);
+        __td_init_and_pin_thread(td_exec_thread_loop, exec_placements[i], &executor, i);
     }
 
     return TARGETDART_SUCCESS;

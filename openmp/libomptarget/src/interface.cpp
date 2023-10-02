@@ -234,7 +234,7 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   
   //TargetDART: steal task for targetDART lib here
 
-  if(DeviceId >= 1000 && DeviceId <= 1004) {
+  if(DeviceId >= 1000 && DeviceId <= 1010) {
     return td_add_task(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
   }
 

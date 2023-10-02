@@ -50,13 +50,13 @@ private:
 
 public:
 
-    TD_Task_Queue();
+    [[nodiscard]] tdrc init();
 
     [[nodiscard]] COST_DATA_TYPE get_cost();
 
     [[nodiscard]] tdrc offer_task(td_task_t* task);
     
-    [[nodiscard]] tdrc get_task(td_task_t* task);
+    [[nodiscard]] tdrc get_task(td_task_t** task);
 };
 
 #endif

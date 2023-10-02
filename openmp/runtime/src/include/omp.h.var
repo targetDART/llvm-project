@@ -92,7 +92,7 @@
     #define TARGETDART_GPU DEVICE_BASE + 2
     #define TARGETDART_FPGA DEVICE_BASE + 3
     #define TARGETDART_VEC DEVICE_BASE + 4
-    #define TARGETDART_DEVICE(n) DEVICE_BASE + n
+    #define TARGETDART_DEVICE(n) DEVICE_BASE + 5 + n
     /* targetDART definitions end */
 
 

@@ -107,22 +107,23 @@
     return entry;
 }
 
-[[nodiscard]] tdrc TD_Task_Queue::get_task(td_task_t* task){
-    task = poll_task(nullptr);
+[[nodiscard]] tdrc TD_Task_Queue::get_task(td_task_t** task){
+    *task = poll_task(nullptr);
 
-    if (task == nullptr) {
+    if (*task == nullptr) {
         return TARGETDART_FAILURE;
     }
     return TARGETDART_SUCCESS;
 }
 
-TD_Task_Queue::TD_Task_Queue() {
+[[nodiscard]] tdrc TD_Task_Queue::init() {
     head.store((uint64_t)0);
     tail.store((uint64_t)0);
     //Probably useless and takes too much time
 //    for (std::atomic<T*>& atomic : this->workBuffer) {
 //        atomic.store(nullptr);
 //    }
+    return TARGETDART_SUCCESS;
 }
 
 [[nodiscard]] COST_DATA_TYPE TD_Task_Queue::get_cost() {

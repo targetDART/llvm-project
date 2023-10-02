@@ -22,10 +22,6 @@ typedef struct td_sort_cost_tuple_t{
     int                   id;
 } td_sort_cost_tuple_t;
 
-extern std::vector<TD_Task_Queue> td_local_task_queues;
-extern std::vector<TD_Task_Queue> td_remote_task_queues;
-extern std::vector<TD_Task_Queue> td_replica_task_queues;
-
 tdrc td_add_to_load_local(td_task_t * task, int deviceID=0);
 tdrc td_add_to_load_remote(td_task_t * task);
 tdrc td_add_to_load_replica(td_task_t * task);
@@ -47,6 +43,11 @@ void td_iterative_schedule(td_device_affinity affinity);
 /**
 * This function provides the next task for  given device + affinity.
 */
-tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t *task);
+tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **task);
+
+/**
+* This function initializes the internal queue structure
+*/
+tdrc td_init_task_queues();
 
 #endif
