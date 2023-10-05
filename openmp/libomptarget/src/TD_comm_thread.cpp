@@ -17,14 +17,12 @@ bool doRepartition = false;
 
 std::vector<td_device_affinity>* affinity_assignment;
 
-//TODO: add Communication thread implementation
-
 void *td_schedule_thread_loop(void *ptr) {
     int iter = 0;
-    while (td_finalize) {
+    while (!td_finalize && td_comm_size > 1) {
         if (iter == ITER_TILL_REPARTITION || doRepartition) {
             iter = 0;
-            td_global_reschedule(TD_ANY);
+            //td_global_reschedule(TD_ANY);
             doRepartition = false;
         }
         iter++;
@@ -106,7 +104,7 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
     pthread_t scheduler;
 
-    //__td_init_and_pin_thread(td_schedule_thread_loop, scheduler, &scheduler);
+    __td_init_and_pin_thread(td_schedule_thread_loop, scheduler_placement, &scheduler, 0);
 
     affinity_assignment = new std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
     affinity_assignment->at(omp_get_num_devices()) = TD_CPU;

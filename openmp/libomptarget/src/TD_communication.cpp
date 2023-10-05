@@ -188,11 +188,14 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         //inverted shift to calculate the source rank for receiving
         int source = (td_comm_rank - shift + td_comm_size) % td_comm_size;
 
+        printf("rank: %d source: %d target: %d\n", td_comm_rank, source, target);
+
         //Calculate the number of elements send for each iteration, covering cornercases
         int send1, send2, recv1, recv2;
 
+        //TODO: fix the size calculation
         if (target < td_comm_rank) {
-            send1 = td_comm_size - td_comm_rank;
+            send1 = td_comm_size - td_comm_rank - 1;
             send2 = target;
         } else {
             send1 = shift;
@@ -200,7 +203,7 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         }
 
         if (source > td_comm_rank) {
-            recv1 = td_comm_size - source;
+            recv1 = td_comm_size - source - 1;
             recv2 = td_comm_rank;
         } else {
             recv1 = shift;
@@ -211,15 +214,21 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         MPI_Request rqsts[4];
         MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
         if (send2 != 0) {
-            MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[1]);
+            MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[2]);
         }
         //recv data
-        MPI_Irecv(&cost_vector[td_comm_rank], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[2]);
-        if (send2 != 0) {
+        MPI_Irecv(&cost_vector[td_comm_rank], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[1]);
+        if (recv2 != 0) {
             MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, targetdart_comm, &rqsts[3]);
         }
 
-        MPI_Waitall(4, rqsts, MPI_STATUSES_IGNORE);
+        MPI_Waitall(2, rqsts, MPI_STATUSES_IGNORE);
+        if (recv2 != 0) {
+            MPI_Wait(&rqsts[3], MPI_STATUS_IGNORE);
+        }
+        if (send2 != 0) {
+            MPI_Wait(&rqsts[2], MPI_STATUS_IGNORE);
+        }
 
     }
 

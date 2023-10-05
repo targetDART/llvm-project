@@ -13,6 +13,7 @@
 #include <pthread.h>
 #include <queue>
 #include <dlfcn.h>
+#include <string>
 #include <unistd.h>
 #include <unordered_map>
 #include <utility>
@@ -52,6 +53,71 @@ MPI_Datatype TD_MPI_Task;
 // array that holds image base addresses
 std::vector<intptr_t> _image_base_addresses;
 std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
+
+//removes spaces from text
+template<typename T>
+T remove_space(T beg, T end)
+{
+    T dest = beg;
+    for (T itr = beg;itr != end; ++itr)
+        if (!isspace(*itr))
+            *(dest++) = *itr;
+    return dest;
+}
+
+// splits a String by "," or ";"
+std::vector<std::string> split(std::string base) {
+	char delimiter = ',';
+	std::vector<std::string> res;
+
+	if (base.find(';') != std::string::npos) {
+		delimiter = ';';
+	}
+
+	bool mode = true;
+
+	long long start = 0;
+	long long length = 0;
+	for ( int i = 0; i < base.size(); i++) {
+		if (base[i] == '\'' || base[i] =='"') {
+			//toggle mode
+			mode = mode != false;
+			length++;
+			continue;
+		}
+		if (mode && base[i] == delimiter) {
+			if (length > 0) {
+				std::string block = base.substr(start, length);
+				block.erase(remove_space(block.begin(), block.end()), block.end());
+				if (block != "") {
+					res.push_back(block);
+				}
+			}
+			start = i + 1;
+			length = 0;
+			continue;
+		}
+		length++;
+	}
+	if (length != 0) {
+		std::string block = base.substr(start, length);
+		res.push_back(block);
+	}
+	return res;
+}
+
+/**
+* Reads the environment variable TD_MANAGEMENT
+*/
+int* __td_get_thread_placement_from_env() {
+  std::string management = std::getenv("TD_MANAGEMENT");
+  std::vector<std::string> assignments = split(management);
+  int *placements = (int*) std::malloc(assignments.size() * sizeof(int));
+  for (int i = 0; i < assignments.size(); i++) {
+    placements[i] = std::stoi(assignments.at(i));
+  }
+  return placements;
+}
 
 
 //Adds a task to the TargetDART runtime
@@ -113,8 +179,6 @@ If MPI is used in the user code, MPI must be initialized before TargetDART.
 */
 int initTargetDART(void* main_ptr) {
 
-
-  printf("test\n");
   if (__td_initialized) {
     return TARGETDART_SUCCESS;
   }
@@ -157,8 +221,11 @@ int initTargetDART(void* main_ptr) {
 
   std::cout << TD_ANY << std::endl;
 
-  int placements[3] = {1,2,3};
-  td_init_threads(0, placements);
+  // initial placements
+  // TODO: Implement callbacks for compile time parameters or Environment variables
+  int *placements = __td_get_thread_placement_from_env();
+  td_init_threads(placements[0], placements + 1);
+  //free(placements);
 
   // Init devices during installation
   for (long i = 0; i < omp_get_num_devices(); i++) {
@@ -177,11 +244,13 @@ int initTargetDART(void* main_ptr) {
  * Should be one of the last functions in your program.
 */
 int finalizeTargetDART() {
+  //synchronize all threads and processes
+  td_finalize_threads();
+
+  //finalize MPI
   if (__td_did_initialize_mpi) {
     MPI_Finalize();
   }
-  //TODO: synchronize all threads and processes
-  td_finalize_threads();
   return TARGETDART_SUCCESS;
 }
 
