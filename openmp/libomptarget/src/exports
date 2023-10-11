@@ -64,6 +64,8 @@ VERS1.0 {
     __tgt_interop_destroy;
     initTargetDART;
     finalizeTargetDART;
+    td_advance;
+    td_phase_progress;
   local:
     *;
 };
