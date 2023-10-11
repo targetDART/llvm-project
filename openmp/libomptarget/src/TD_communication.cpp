@@ -195,7 +195,7 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
 
         //TODO: fix the size calculation
         if (target < td_comm_rank) {
-            send1 = td_comm_size - td_comm_rank - 1;
+            send1 = td_comm_size - td_comm_rank;
             send2 = target;
         } else {
             send1 = shift;
@@ -203,7 +203,7 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         }
 
         if (source > td_comm_rank) {
-            recv1 = td_comm_size - source - 1;
+            recv1 = td_comm_size - source;
             recv2 = td_comm_rank;
         } else {
             recv1 = shift;
@@ -217,7 +217,7 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
             MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[2]);
         }
         //recv data
-        MPI_Irecv(&cost_vector[td_comm_rank], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[1]);
+        MPI_Irecv(&cost_vector[source], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[1]);
         if (recv2 != 0) {
             MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, targetdart_comm, &rqsts[3]);
         }
