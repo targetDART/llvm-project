@@ -59,7 +59,6 @@ std::vector<TD_Task_Queue*>* __td_replica_task_queues;
 std::vector<std::vector<TD_Task_Queue*>*>* td_queue_classes;
 
 tdrc td_init_task_queues() {
-    printf("test\n");
     __td_local_task_queues = new std::vector<TD_Task_Queue*>();
     __td_remote_task_queues = new std::vector<TD_Task_Queue*>();
     __td_replica_task_queues = new std::vector<TD_Task_Queue*>();
@@ -88,8 +87,6 @@ tdrc td_init_task_queues() {
 * Greedy assignment of tasks to the Device queues of the system
 */
 tdrc __td_greedy_assignment(td_task_t* task, td_queue_class queue, int deviceID=0) {
-
-    std::cout << deviceID << " " << task->affinity << std::endl;
     
     if (task->affinity == TD_FIXED) {
         return td_queue_classes->at(queue)->at(deviceID + TD_NUM_AFFINITIES)->offer_task(task);
@@ -166,7 +163,6 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_local_task_queues->at(TD_NUM_AFFINITIES + deviceID)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
-        std::cout << "1" << std::endl;
         return TARGETDART_SUCCESS;
     }
 
@@ -185,7 +181,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_local_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
-        std::cout << "Task: " << task << std::endl;
+        printf("got task: \n");
         return TARGETDART_SUCCESS;
     }
 
@@ -224,7 +220,6 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     if (ret_code == TARGETDART_SUCCESS) {
         return TARGETDART_SUCCESS;
     }
-
 
     return TARGETDART_FAILURE;
 }

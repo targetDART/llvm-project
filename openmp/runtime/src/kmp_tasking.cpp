@@ -1664,7 +1664,6 @@ static void __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
   kmp_taskdata_t *taskdata = KMP_TASK_TO_TASKDATA(task);
   kmp_info_t *thread;
   int discard = 0 /* false */;
-  printf("task execution\n");
   KA_TRACE(
       30, ("__kmp_invoke_task(enter): T#%d invoking task %p, current_task=%p\n",
            gtid, taskdata, current_task));

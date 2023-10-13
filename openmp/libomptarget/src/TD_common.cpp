@@ -45,13 +45,16 @@ tdrc declare_task_type() {
 
 void td_yield(long long task_uid) {
     td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map[task_uid];
-    pthread_mutex_lock(&cond_var->thread_mutex);
+
+    printf("wait\n");
     pthread_cond_wait(&cond_var->conditional,&cond_var->thread_mutex);
     pthread_mutex_unlock(&cond_var->thread_mutex);
 }
 
 void td_signal(long long task_uid) {
     td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map[task_uid];
+
+    printf("continue\n");
     pthread_mutex_lock(&cond_var->thread_mutex);
     pthread_cond_signal(&cond_var->conditional);
     pthread_mutex_unlock(&cond_var->thread_mutex);

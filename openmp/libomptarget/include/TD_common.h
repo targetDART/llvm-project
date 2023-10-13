@@ -71,7 +71,7 @@ typedef struct td_pthread_conditional_wrapper_t {
 
 extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
-extern bool td_finalize;
+extern std::atomic<bool> *td_finalize;
 extern std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
 
 

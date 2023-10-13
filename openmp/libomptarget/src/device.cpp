@@ -561,7 +561,6 @@ int32_t DeviceTy::submitData(void *TgtPtrBegin, void *HstPtrBegin, int64_t Size,
 // Retrieve data from device
 int32_t DeviceTy::retrieveData(void *HstPtrBegin, void *TgtPtrBegin,
                                int64_t Size, AsyncInfoTy &AsyncInfo) {
-  printf("actual GPU2CPU transfer\n");
   if (getInfoLevel() & OMP_INFOTYPE_DATA_TRANSFER) {
     HDTTMapAccessorTy HDTTMap = HostDataToTargetMap.getExclusiveAccessor();
     LookupResult LR = lookupMapping(HDTTMap, HstPtrBegin, Size);

@@ -232,11 +232,14 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
      "\n",
      DeviceId, DPxPTR(HostPtr));
   
+  printf("Kernel call for device: %d\n", DeviceId);
   //TargetDART: steal task for targetDART lib here
 
   if(DeviceId >= 1000 && DeviceId <= 1010) {
     return td_add_task(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
   }
+
+  printf("TargetDART skipped\n");
 
   if (checkDeviceAndCtors(DeviceId, Loc)) {
     DP("Not offloading to device %" PRId64 "\n", DeviceId);
@@ -279,14 +282,18 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   TargetAsyncInfoTy TargetAsyncInfo(Device);
   AsyncInfoTy &AsyncInfo = TargetAsyncInfo;
 
+
   int Rc = OFFLOAD_SUCCESS;
   Rc = target(Loc, Device, HostPtr, *KernelArgs, AsyncInfo);
+
 
   if (Rc == OFFLOAD_SUCCESS)
     Rc = AsyncInfo.synchronize();
 
+
   handleTargetOutcome(Rc == OFFLOAD_SUCCESS, Loc);
   assert(Rc == OFFLOAD_SUCCESS && "__tgt_target_kernel unexpected failure!");
+
 
   return OMP_TGT_SUCCESS;
 }

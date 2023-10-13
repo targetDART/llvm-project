@@ -6,6 +6,7 @@
 #include "TD_scheduling.h"
 #include "TD_comm_thread.h"
 #include "TD_communication.h"
+#include <cstdio>
 #include <iostream>
 #include <cstddef>
 #include <cstdlib>
@@ -14,12 +15,13 @@
 
 
 bool doRepartition = false;
+std::vector<pthread_t> *spawned_threads;
 
 std::vector<td_device_affinity>* affinity_assignment;
 
-void *td_schedule_thread_loop(void *ptr) {
+[[nodiscard]] void *td_schedule_thread_loop(void *ptr) {
     int iter = 0;
-    while (!td_finalize && td_comm_size > 1) {
+    while (!td_finalize->load() && td_comm_size > 1) {
         if (iter == ITER_TILL_REPARTITION || doRepartition) {
             iter = 0;
             //td_global_reschedule(TD_ANY);
@@ -27,8 +29,10 @@ void *td_schedule_thread_loop(void *ptr) {
         }
         iter++;
         
-        td_iterative_schedule(TD_ANY);
+        //td_iterative_schedule(TD_ANY);
     }
+
+    printf("stop scheduler\n");
     pthread_exit(NULL);
 }
 
@@ -44,28 +48,35 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
 }
 
 
-void *td_exec_thread_loop(void *ptr) {
+[[nodiscard]] void *td_exec_thread_loop(void *ptr) {
     int deviceID = ((long) ptr);
+
+    printf("Device is %d\n", deviceID);
     td_device_affinity affinity = affinity_assignment->at(deviceID);
-    while (!td_finalize) {
+    while (!td_finalize->load()) {
         td_task_t *task;
         if (td_get_next_task(affinity, deviceID, &task) == TARGETDART_SUCCESS) {
             std::cout << "start task " << task << std::endl;
             //execute the task on your own device
             int return_code = __td_invoke_task(deviceID, task);
+            printf("Task local %d\n", task->local_proc);
+            printf("return code %d\n", return_code);
             task->return_code = return_code;
-            if (return_code == TARGETDART_FAILURE) {                
-                handle_error_en(-1, "Task execution failed.");
+            if (return_code == TARGETDART_FAILURE) {                      
+                printf("Running task on CPU\n");          
+                //handle_error_en(-1, "Task execution failed.");
                 //exit(-1);
             }
             //finalize after the task finished
             if (task->local_proc != td_comm_rank) {
                 td_send_task_result(task);
             } else {
+                std::cout << "finished task " << task << std::endl;
                 td_signal(task->uid);
             }
         } 
     }
+    printf("stop executor\n");
     pthread_exit(NULL);
 }
 
@@ -93,6 +104,7 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
     pthread_attr_destroy(&pthread_attr);
     if (s != 0) 
         std::cout << "Failed to initialize thread" << std::endl;
+
 }
 
 /*
@@ -102,9 +114,14 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
 */
 tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
+    spawned_threads = new std::vector<pthread_t>(omp_get_num_devices() + 2);
+
     pthread_t scheduler;
 
-    __td_init_and_pin_thread(td_schedule_thread_loop, scheduler_placement, &scheduler, 0);
+    __td_init_and_pin_thread(td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
+
+    //store thread for later joining
+    //spawned_threads->at(0) = &scheduler;
 
     affinity_assignment = new std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
     affinity_assignment->at(omp_get_num_devices()) = TD_CPU;
@@ -112,9 +129,14 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
     //initialize all executor threads
     for (int i = 0; i <= omp_get_num_devices(); i++) {
         pthread_t executor;
-        __td_init_and_pin_thread(td_exec_thread_loop, exec_placements[i], &executor, i);
+        __td_init_and_pin_thread(td_exec_thread_loop, exec_placements[i], &spawned_threads->at(i + 1), i);
+
+        //store thread for later joining
+        //spawned_threads->at(i + 1) = &executor;
     }
 
+    //delete affinity_assignment;
+    printf("spawned threads\n");
     return TARGETDART_SUCCESS;
 }
 
@@ -122,8 +144,23 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 * synchronizes all processes to ensure all tasks are finished.
 */
 tdrc td_finalize_threads() {
+    printf("begin finalize\n");
     #pragma omp taskwait
 
     MPI_Barrier(targetdart_comm);
-    td_finalize = true;
+    td_finalize->store(true);
+
+    printf("num threads %d\n", spawned_threads->size());
+
+    for (int i = 0; i < spawned_threads->size(); i++) {         
+        printf("joining thread: %d\n", i);   
+        //TODO: debug, something inhere is fucked up
+        pthread_join( spawned_threads->at(i), NULL);
+        printf("joined thread: %d\n", i);
+    }
+
+    //delete spawned_threads;
+    printf("finalize threads\n");
+
+    return TARGETDART_SUCCESS;
 }

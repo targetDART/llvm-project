@@ -5,6 +5,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include "private.h"
@@ -45,7 +46,7 @@ MPI_Comm targetdart_comm;
 int td_comm_size;
 int td_comm_rank;
 
-bool td_finalize;
+std::atomic<bool> *td_finalize;
 
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
@@ -125,6 +126,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
                         int32_t ThreadLimit, void *HostPtr,
                         KernelArgsTy *KernelArgs, int64_t *DeviceId) 
 {
+  printf("add task to queue\n");
   // create internal task data structure
   td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
   task->host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
@@ -137,6 +139,9 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
 
   td_pthread_conditional_wrapper_t cond_var = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
   td_task_conditional_map[task->uid] = &cond_var;
+
+  //start yielding lock here to avoid rare deadlocks in which the task is finished, before td_yield() is called 
+  pthread_mutex_lock(&cond_var.thread_mutex);
 
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
@@ -219,7 +224,8 @@ int initTargetDART(void* main_ptr) {
   // define the base address of the current process
   get_base_address(main_ptr);
 
-  std::cout << TD_ANY << std::endl;
+  td_finalize = new std::atomic<bool>(false);
+  //td_finalize->store(false);
 
   // initial placements
   // TODO: Implement callbacks for compile time parameters or Environment variables
@@ -235,8 +241,6 @@ int initTargetDART(void* main_ptr) {
     }
   }
 
-  td_finalize = false;
-
   return TARGETDART_SUCCESS;
 }
 
@@ -250,6 +254,7 @@ int finalizeTargetDART() {
   //finalize MPI
   if (__td_did_initialize_mpi) {
     MPI_Finalize();
+    printf("MPI_finalize\n");
   }
   return TARGETDART_SUCCESS;
 }
@@ -299,6 +304,6 @@ tdrc get_base_address(void * main_ptr) {
   set_image_base_address(99, (intptr_t)info.dli_fbase);    
   // TODO: keep it simply for now and assume that target function is in main binary
   // If it is necessary to apply different behavior each loaded library has to be covered and analyzed
-  free(start_ptr);
+  //free(start_ptr);
   return TARGETDART_SUCCESS;
 }

@@ -334,7 +334,6 @@ bool checkDeviceAndCtors(int64_t &DeviceID, ident_t *Loc) {
     DP("Device is host (%" PRId64 "), returning as if offload is disabled\n",
        DeviceID);
 
-    printf("initial device used\n");
     return true;
   }
 
