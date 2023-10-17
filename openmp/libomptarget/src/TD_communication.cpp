@@ -1,6 +1,7 @@
 #include "TD_communication.h"
 #include "omptarget.h"
 #include "device.h"
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -175,7 +176,6 @@ td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_p
 }
 
 std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
-    printf("do exchange on %d", td_comm_rank); 
     std::vector<COST_DATA_TYPE> cost_vector(td_comm_size, 0);
     cost_vector[td_comm_rank] = local_cost_param; 
 
@@ -188,8 +188,6 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         int target = (td_comm_rank + shift) % td_comm_size;
         //inverted shift to calculate the source rank for receiving
         int source = (td_comm_rank - shift + td_comm_size) % td_comm_size;
-
-        printf("rank: %d source: %d target: %d\n", td_comm_rank, source, target);
 
         //Calculate the number of elements send for each iteration, covering cornercases
         int send1, send2, recv1, recv2;
@@ -234,4 +232,14 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
     }
 
     return cost_vector;
+}
+
+
+bool td_test_finalization(std::atomic<bool> local_finalize) {
+    int finalize = local_finalize.load();
+
+    int result;
+    MPI_Allreduce(&finalize, &result, 1, MPI_INT, MPI_MIN, targetdart_comm);
+    
+    return result;
 }

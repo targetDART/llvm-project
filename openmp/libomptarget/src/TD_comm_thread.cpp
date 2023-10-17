@@ -19,9 +19,12 @@ std::vector<pthread_t> *spawned_threads;
 
 std::vector<td_device_affinity>* affinity_assignment;
 
-[[nodiscard]] void *td_schedule_thread_loop(void *ptr) {
+/**
+* Defines the routine performed by the dedicated scheduling thread.
+*/
+[[nodiscard]] void *__td_schedule_thread_loop(void *ptr) {
     int iter = 0;
-    while (!td_finalize->load() && td_comm_size > 1) {
+    while (!td_test_finalization(td_finalize->load()) && td_comm_size > 1) {
         if (iter == ITER_TILL_REPARTITION || doRepartition) {
             iter = 0;
             //td_global_reschedule(TD_ANY);
@@ -29,7 +32,7 @@ std::vector<td_device_affinity>* affinity_assignment;
         }
         iter++;
         
-        //td_iterative_schedule(TD_ANY);
+        td_iterative_schedule(TD_ANY);
     }
 
     printf("stop scheduler\n");
@@ -47,8 +50,12 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
   return __tgt_target_kernel(task->Loc, DeviceId, task->num_teams, task->thread_limit, (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
 }
 
-
-[[nodiscard]] void *td_exec_thread_loop(void *ptr) {
+/**
+* Defines the routine performed by the executor threads.
+* The parameter ptr defines the target device this thread is assigned to. 
+* The device id defines which affinities are relevant and which queues are accessible.
+*/
+[[nodiscard]] void *__td_exec_thread_loop(void *ptr) {
     int deviceID = ((long) ptr);
 
     printf("Device is %d\n", deviceID);
@@ -118,7 +125,7 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
     pthread_t scheduler;
 
-    __td_init_and_pin_thread(td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
+    __td_init_and_pin_thread(__td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
 
     //store thread for later joining
     //spawned_threads->at(0) = &scheduler;
@@ -129,7 +136,7 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
     //initialize all executor threads
     for (int i = 0; i <= omp_get_num_devices(); i++) {
         pthread_t executor;
-        __td_init_and_pin_thread(td_exec_thread_loop, exec_placements[i], &spawned_threads->at(i + 1), i);
+        __td_init_and_pin_thread(__td_exec_thread_loop, exec_placements[i], &spawned_threads->at(i + 1), i);
 
         //store thread for later joining
         //spawned_threads->at(i + 1) = &executor;
@@ -154,7 +161,6 @@ tdrc td_finalize_threads() {
 
     for (int i = 0; i < spawned_threads->size(); i++) {         
         printf("joining thread: %d\n", i);   
-        //TODO: debug, something inhere is fucked up
         pthread_join( spawned_threads->at(i), NULL);
         printf("joined thread: %d\n", i);
     }

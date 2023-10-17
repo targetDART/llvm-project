@@ -388,7 +388,7 @@ COST_DATA_TYPE __td_compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_T
 }
 
 
-void td_iterative_schedule(td_device_affinity affinity) {
+void td_iterative_schedule(td_device_affinity affinity) {    
     std::vector<COST_DATA_TYPE> cost_vector = td_global_cost_vector_propagation(td_get_local_load(affinity));
     std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
 
@@ -396,19 +396,42 @@ void td_iterative_schedule(td_device_affinity affinity) {
         combined_vector[i].cost = cost_vector[i];
         combined_vector[i].id = i;
     }
-    /*
     std::sort(combined_vector.begin(), combined_vector.end(), [](td_sort_cost_tuple_t a, td_sort_cost_tuple_t b) 
-                                                                                {
+                                                                                {                                                                                
                                                                                     return a.cost < b.cost;
                                                                                 });
-    */
+
+    int local_idx = NULL;
+    for (int i = 0; i < combined_vector.size(); i++) {
+        if (combined_vector.at(i).id == td_comm_rank) {
+            local_idx = i;
+            break;
+        }
+    }
+/*
     // implement Chameleon based victim selection
-    int local_idx = __td_cosort(&combined_vector);
-    int partner_idx = combined_vector.size() - local_idx - 1;
+    int partner_idx = NULL;
+    if (combined_vector.size() % 2 == 0) {
+        int half = combined_vector.size() / 2;
+        if (local_idx < half) {
+            partner_idx = combined_vector.size() + local_idx - half;
+        } else {
+            partner_idx = local_idx - half;
+        }
+    } else {
+        int half = combined_vector.size() / 2;
+        if (local_idx < half) {
+            partner_idx = combined_vector.size() + local_idx - half;
+        } else {
+            partner_idx = local_idx - half - 1;
+        }
+    }
+    partner_idx = combined_vector.size() - local_idx - 1;
     int partner_proc = combined_vector.at(partner_idx).id;
 
     COST_DATA_TYPE transfer_load = __td_compute_transfer_load(combined_vector.at(local_idx).cost, combined_vector.at(partner_idx).cost);
-
+    
+    
     if (transfer_load == 0) {
         return;
     } else if (transfer_load > 0) {
@@ -423,5 +446,5 @@ void td_iterative_schedule(td_device_affinity affinity) {
             td_receive_task(partner_proc, task);
             td_add_to_load_remote(task);
         }
-    } 
+    } */
 }
