@@ -30,9 +30,9 @@ std::vector<td_device_affinity>* affinity_assignment;
             //td_global_reschedule(TD_ANY);
             doRepartition = false;
         }
-        iter++;
-        
+        iter++;        
         td_iterative_schedule(TD_ANY);
+        td_test_and_receive_results();
     }
 
     printf("stop scheduler\n");
@@ -127,9 +127,6 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
     __td_init_and_pin_thread(__td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
 
-    //store thread for later joining
-    //spawned_threads->at(0) = &scheduler;
-
     affinity_assignment = new std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
     affinity_assignment->at(omp_get_num_devices()) = TD_CPU;
 
@@ -138,8 +135,6 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
         pthread_t executor;
         __td_init_and_pin_thread(__td_exec_thread_loop, exec_placements[i], &spawned_threads->at(i + 1), i);
 
-        //store thread for later joining
-        //spawned_threads->at(i + 1) = &executor;
     }
 
     //delete affinity_assignment;
@@ -165,7 +160,7 @@ tdrc td_finalize_threads() {
         printf("joined thread: %d\n", i);
     }
 
-    //delete spawned_threads;
+    //deleted spawned_threads;
     printf("finalize threads\n");
 
     return TARGETDART_SUCCESS;

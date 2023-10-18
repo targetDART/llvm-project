@@ -158,10 +158,25 @@ tdrc td_receive_task_result(int source) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
     }
 
+    td_signal(task->uid);
+
 
     return TARGETDART_SUCCESS;
 }
 
+tdrc td_test_and_receive_results() {
+
+    //test, if a task result can be received
+    MPI_Status status;
+    int flag;
+
+    MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
+    if (flag == true) {
+        td_receive_task_result(status.MPI_SOURCE);
+        return TARGETDART_SUCCESS;
+    }
+    return TARGETDART_FAILURE;
+}
 
 td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_param) {
     COST_DATA_TYPE reduce = 0;

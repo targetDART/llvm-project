@@ -48,6 +48,12 @@ tdrc td_send_task_result(td_task_t *task);
 tdrc td_receive_task_result(int source);
 
 /**
+* Tests if a task result can be received, if yes it receives the result and returns success.
+* If not the function will return a failure;
+*/
+tdrc td_test_and_receive_results();
+
+/**
 * Returns true, iff all participating processes want to finalize
 */
 bool td_test_finalization(std::atomic<bool> local_finalize);

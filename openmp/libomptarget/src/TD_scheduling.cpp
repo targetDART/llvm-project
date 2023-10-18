@@ -408,7 +408,7 @@ void td_iterative_schedule(td_device_affinity affinity) {
             break;
         }
     }
-/*
+    
     // implement Chameleon based victim selection
     int partner_idx = NULL;
     if (combined_vector.size() % 2 == 0) {
@@ -446,5 +446,5 @@ void td_iterative_schedule(td_device_affinity affinity) {
             td_receive_task(partner_proc, task);
             td_add_to_load_remote(task);
         }
-    } */
+    } 
 }
