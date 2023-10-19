@@ -66,11 +66,9 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
             std::cout << "start task " << task << std::endl;
             //execute the task on your own device
             int return_code = __td_invoke_task(deviceID, task);
-            printf("Task local %d\n", task->local_proc);
-            printf("return code %d\n", return_code);
             task->return_code = return_code;
             if (return_code == TARGETDART_FAILURE) {                      
-                printf("Running task on CPU\n");          
+                //printf("Running task on CPU\n");          
                 //handle_error_en(-1, "Task execution failed.");
                 //exit(-1);
             }

@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include "private.h"
 #include "mpi.h"
@@ -24,6 +25,8 @@ int td_send_task(int dest, td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
+
+    td_remote_task_map.insert({task->uid, task});
 
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
@@ -111,11 +114,42 @@ int td_receive_task(int source, td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
+tdrc td_test_and_receive_tasks(td_task_t *task) {
+
+    //test, if a task result can be received
+    MPI_Status status;
+    int flag;
+
+    MPI_Iprobe(MPI_ANY_SOURCE, SEND_TASK, targetdart_comm, &flag, &status);
+    if (flag == true) {
+        printf("receive task result\n");
+        td_receive_task(status.MPI_SOURCE, task);
+        return TARGETDART_SUCCESS;
+    }
+    return TARGETDART_FAILURE;
+}
+
+tdrc td_singal_task_send(int target, bool value) {
+    int flag = value;
+    MPI_Send(&flag, 1, MPI_INT, target, SIGNAL_TASK_SEND, targetdart_comm);
+
+    return TARGETDART_SUCCESS;
+}
+
+tdrc td_receive_signal_task_send(int source) {
+    int flag;
+    MPI_Recv(&flag, 1, MPI_INT, source, SIGNAL_TASK_SEND, targetdart_comm, MPI_STATUS_IGNORE);
+    if (flag) {
+        return TARGETDART_SUCCESS;
+    }
+    return TARGETDART_FAILURE;
+}
+
 tdrc td_send_task_result(td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-
+    printf("send task result\n");
     //Send Task uid
     MPI_Send(&task->uid, 1, MPI_LONG_LONG, task->local_proc, SEND_RESULT_UID, targetdart_comm);
 
@@ -126,8 +160,9 @@ tdrc td_send_task_result(td_task_t *task) {
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & 0x002;
-        if (IsMapFrom != 0)
+        if (IsMapFrom != 0) {
             MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->local_proc, SEND_RESULT_DATA, targetdart_comm);
+        }
     }
 
     //Base Pointers == pointers can be assumed for simple cases.
@@ -139,18 +174,18 @@ tdrc td_send_task_result(td_task_t *task) {
 tdrc td_receive_task_result(int source) {
 
     //TODO: use MPI probe for complete receives
-    long long *uid;
+    long long uid;
     //Receive Task Data
-    MPI_Recv(uid, 1, MPI_LONG_LONG, source , SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    MPI_Recv(&uid, 1, MPI_LONG_LONG, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
 
-    td_task_t *task = td_remote_task_map[*uid];
+    td_task_t *task = td_remote_task_map[uid];
+    td_remote_task_map.erase(uid);
 
 
     //Receive Task return code
-    MPI_Recv(&task->return_code, 1, MPI_INT, source , SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
+    MPI_Recv(&task->return_code, 1, MPI_INT, source, SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
 
     //Receive all parameter values
-    task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & 0x002;
@@ -172,6 +207,7 @@ tdrc td_test_and_receive_results() {
 
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
+        printf("receive task result\n");
         td_receive_task_result(status.MPI_SOURCE);
         return TARGETDART_SUCCESS;
     }

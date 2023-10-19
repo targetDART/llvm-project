@@ -436,15 +436,24 @@ void td_iterative_schedule(td_device_affinity affinity) {
         return;
     } else if (transfer_load > 0) {
         for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
-            td_task_t *task; 
+            td_task_t *task;
+            //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
             tdrc ret_code = __td_get_next_migratable_task(affinity, &task);
-            td_send_task(partner_proc, task);
+            if (ret_code == TARGETDART_SUCCESS) {
+                td_singal_task_send(partner_proc, true);
+                td_send_task(partner_proc, task);
+            } else {
+                td_singal_task_send(partner_proc, false);
+            }
         }
     } else {
         for (int i = 0; i < TD_SIMPLE_REACTIVITY_LOAD; i++) {
-            td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
-            td_receive_task(partner_proc, task);
-            td_add_to_load_remote(task);
+            tdrc ret_code = td_receive_signal_task_send(partner_proc);
+            if (ret_code == TARGETDART_SUCCESS) {                
+                td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
+                td_receive_task(partner_proc, task);
+                td_add_to_load_remote(task);
+            }
         }
     } 
 }
