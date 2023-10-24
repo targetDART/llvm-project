@@ -330,47 +330,6 @@ void td_global_reschedule(td_device_affinity affinity) {
 }
 
 /**
-* swaps two elements from a vector and updates gives the new index of proc_idx, if it overlaps with idx1 or idx2.
-*/
-template<typename T1>
-int __td_coswap(std::vector<T1> *load_vector, int idx1, int idx2, int proc_idx) {
-    if (idx1 == idx2) {
-        return proc_idx;
-    }
-    std::swap(load_vector[0][idx1], load_vector[0][idx2]);
-
-    //calculate current index to avoid searching for it later
-    int local_idx = proc_idx;
-    if (idx1 == local_idx) {
-        local_idx = idx2;
-    } else if (idx2 == local_idx) {
-        local_idx = idx1;
-    } 
-    return local_idx;
-}
-
-/**
-* Sorts a vector and provides the new index of the local value.
-* The load of the local MPI rank must correspond to the entry idx = rank.
-*/
-int __td_cosort(std::vector<td_sort_cost_tuple_t> *load_vector) {
-    int proc_idx = td_comm_rank;
-    //TODO: use more efficient sort implementation merge + insertion 
-    for (int i = load_vector->size() - 1; i > 0; i--) {
-        COST_DATA_TYPE max = 0;
-        int max_idx = -1;
-        for (int j = 0; j < i; j++) {
-            if (load_vector->at(j).cost > max) {
-                max = load_vector->at(j).cost;
-                max_idx = j;
-            }
-            proc_idx = __td_coswap(load_vector, max_idx, i, proc_idx);
-        }
-    }
-    return proc_idx;
-}
-
-/**
 * Returns 0 iff local_cost = remote_cost
 * Returns the desire load to transfer from local to remote, iff local_cost > remote_cost
 * Returns the desire load to transfer from remote to local as a negative value, iff local_cost < remote_cost

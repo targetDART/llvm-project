@@ -233,8 +233,8 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
      DeviceId, DPxPTR(HostPtr));
   
   //TargetDART: steal task for targetDART lib here
-
   if(DeviceId >= 1000 && DeviceId <= 1010) {
+    DB_TD("test print %d", 0);
     return td_add_task(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
   }
 
