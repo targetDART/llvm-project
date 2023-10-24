@@ -35,7 +35,7 @@ std::vector<td_device_affinity>* affinity_assignment;
         td_test_and_receive_results();
     }
 
-    printf("stop scheduler\n");
+    DB_TD("Scheduling thread finished");
     pthread_exit(NULL);
 }
 
@@ -58,30 +58,30 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
 [[nodiscard]] void *__td_exec_thread_loop(void *ptr) {
     int deviceID = ((long) ptr);
 
-    printf("Device is %d\n", deviceID);
+    DB_TD("Starting executor thread for device %d", deviceID);
     td_device_affinity affinity = affinity_assignment->at(deviceID);
     while (!td_finalize->load()) {
         td_task_t *task;
         if (td_get_next_task(affinity, deviceID, &task) == TARGETDART_SUCCESS) {
-            std::cout << "start task " << task << std::endl;
+            DB_TD("start execution of task (%d%d)", task->local_proc, task->uid);
             //execute the task on your own device
             int return_code = __td_invoke_task(deviceID, task);
             task->return_code = return_code;
-            if (return_code == TARGETDART_FAILURE) {                      
-                //printf("Running task on CPU\n");          
+            if (return_code == TARGETDART_FAILURE) {         
                 //handle_error_en(-1, "Task execution failed.");
                 //exit(-1);
             }
             //finalize after the task finished
             if (task->local_proc != td_comm_rank) {
+                DB_TD("finished remote execution of task (%d%d)", task->local_proc, task->uid);
                 td_send_task_result(task);
             } else {
-                std::cout << "finished task " << task << std::endl;
-                td_signal(task->uid);
+                DB_TD("finished local execution of task (%d%d)", task->local_proc, task->uid);
+                td_signal(task);
             }
         } 
-    }
-    printf("stop executor\n");
+    }    
+    DB_TD("executor thread for device %d finished", deviceID);
     pthread_exit(NULL);
 }
 
@@ -108,7 +108,7 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
     s = pthread_create(thread, &pthread_attr,  func, (void*) id);
     pthread_attr_destroy(&pthread_attr);
     if (s != 0) 
-        std::cout << "Failed to initialize thread" << std::endl;
+        handle_error_en(s, "Failed to initialize thread");
 
 }
 
@@ -136,7 +136,7 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
     }
 
     //delete affinity_assignment;
-    printf("spawned threads\n");
+    DB_TD("spawned management threads");
     return TARGETDART_SUCCESS;
 }
 
@@ -144,22 +144,22 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 * synchronizes all processes to ensure all tasks are finished.
 */
 tdrc td_finalize_threads() {
-    printf("begin finalize\n");
+    DB_TD("begin finalization of targetDARTLib, wait for remaining work");
     #pragma omp taskwait
 
     MPI_Barrier(targetdart_comm);
+    DB_TD("Synchronized threads start joining %d managment threads", spawned_threads->size());
     td_finalize->store(true);
 
-    printf("num threads %d\n", spawned_threads->size());
 
     for (int i = 0; i < spawned_threads->size(); i++) {         
-        printf("joining thread: %d\n", i);   
+        DB_TD("joining thread: %d", i);   
         pthread_join( spawned_threads->at(i), NULL);
-        printf("joined thread: %d\n", i);
+        DB_TD("joined thread: %d", i);
     }
 
     //deleted spawned_threads;
-    printf("finalize threads\n");
+    DB_TD("finalized managment threads");
 
     return TARGETDART_SUCCESS;
 }

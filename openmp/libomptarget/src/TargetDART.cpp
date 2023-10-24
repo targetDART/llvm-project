@@ -114,9 +114,12 @@ int* __td_get_thread_placement_from_env() {
   std::string management = std::getenv("TD_MANAGEMENT");
   std::vector<std::string> assignments = split(management);
   int *placements = (int*) std::malloc(assignments.size() * sizeof(int));
-  for (int i = 0; i < assignments.size(); i++) {
+  for (int i = 1; i < assignments.size(); i++) {
     placements[i] = std::stoi(assignments.at(i));
+    DB_TD("Execution thread %d assiged to core %d from env", i - 1, placements[i]);
   }
+  placements[0] = std::stoi(assignments.at(0));
+  DB_TD("Scheduling thread assiged to core %d from env", placements[0]);
   return placements;
 }
 
@@ -126,7 +129,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
                         int32_t ThreadLimit, void *HostPtr,
                         KernelArgsTy *KernelArgs, int64_t *DeviceId) 
 {
-  printf("add task to queue\n");
+  DB_TD("create new task from HostPtr (%d)", HostPtr);
   // create internal task data structure
   td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
   task->host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
@@ -136,6 +139,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->thread_limit = ThreadLimit;
   task->local_proc = td_comm_rank;
   task->uid = __td_tasks_generated.fetch_add(1);
+  DB_TD("add task (%d%d) to queue from HostPtr (%d)", task->local_proc, task->uid, HostPtr);
 
   td_pthread_conditional_wrapper_t cond_var = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
   td_task_conditional_map[task->uid] = &cond_var;
@@ -165,7 +169,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
 
 
   //yields until the current task has finished.
-  td_yield(task->uid);
+  td_yield(task);
   // make sure the current thread sleeps here until the task is executed.
   // Run a dedicated device thread which consumes the task for its assigned device. 
   //(think about multiple threads per device, at least for GPUs to overlap com/comp)
@@ -197,6 +201,7 @@ int initTargetDART(void* main_ptr) {
       // MPI_Init(NULL, NULL);
       MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
       __td_did_initialize_mpi = true;
+      DB_TD("Internal MPI initialization");
   }
   MPI_Query_thread(&provided);
   if(provided != MPI_THREAD_MULTIPLE) {
@@ -212,6 +217,7 @@ int initTargetDART(void* main_ptr) {
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
   MPI_Comm_size(targetdart_comm, &td_comm_size);
   MPI_Comm_rank(targetdart_comm, &td_comm_rank);
+  DB_TD("MPI environment setup finished");
 
   //Initialize the data structures for scheduling
   td_init_task_queues();
@@ -241,6 +247,7 @@ int initTargetDART(void* main_ptr) {
     }
   }
 
+  DB_TD("Initialization completed");
   return TARGETDART_SUCCESS;
 }
 
@@ -254,8 +261,10 @@ int finalizeTargetDART() {
   //finalize MPI
   if (__td_did_initialize_mpi) {
     MPI_Finalize();
-    printf("MPI_finalize\n");
+    DB_TD("local MPI finalized");
   }
+
+    DB_TD("targetDART finalized");
   return TARGETDART_SUCCESS;
 }
 
@@ -269,7 +278,7 @@ int32_t set_image_base_address(int idx_image, intptr_t base_address) {
         _image_base_addresses.resize(idx_image+1);
     }
     // set base address for image (last device wins)
-    DBP("set_image_base_address (enter) Setting base_address: " DPxMOD " for img: %d\n", DPxPTR((void*)base_address), idx_image);
+    DB_TD("set_image_base_address (enter) Setting base_address: " DPxMOD " for img: %d", DPxPTR((void*)base_address), idx_image);
     _image_base_addresses[idx_image] = base_address;
     return TARGETDART_SUCCESS;
 }

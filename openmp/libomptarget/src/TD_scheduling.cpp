@@ -79,7 +79,7 @@ tdrc td_init_task_queues() {
         __td_local_task_queues->push_back(queue);
     }
     td_queue_classes = new std::vector<std::vector<TD_Task_Queue*>*>({__td_local_task_queues, __td_remote_task_queues, __td_replica_task_queues});
-
+    DB_TD("Task queues initialized");
     return TARGETDART_SUCCESS;
 }
 
@@ -91,7 +91,7 @@ tdrc __td_greedy_assignment(td_task_t* task, td_queue_class queue, int deviceID=
     if (task->affinity == TD_FIXED) {
         return td_queue_classes->at(queue)->at(deviceID + TD_NUM_AFFINITIES)->offer_task(task);
     }
-
+    DB_TD("Add task (%d%d) to queue with affinity %d", task->local_proc, task->uid, task->affinity);
     return td_queue_classes->at(queue)->at(task->affinity)->offer_task(task);
 }
 
@@ -163,6 +163,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_local_task_queues->at(TD_NUM_AFFINITIES + deviceID)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got task (%d%d) from device %d local queue", (*task)->local_proc, (*task)->uid, deviceID);
         return TARGETDART_SUCCESS;
     }
 
@@ -172,6 +173,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_local_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got task (%d%d) from local affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -181,7 +183,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_local_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
-        printf("got task: \n");
+        DB_TD("Got task (%d%d) from local any queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -191,6 +193,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_remote_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got task (%d%d) from remote affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -200,6 +203,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_remote_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got task (%d%d) remote local any queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -209,6 +213,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_replica_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got task (%d%d) from replica affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -218,6 +223,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_replica_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got task (%d%d) from replica any queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -233,6 +239,7 @@ tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t **task
     ret_code = __td_local_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got migratable task (%d%d) from local affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -242,6 +249,7 @@ tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t **task
     ret_code = __td_remote_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        DB_TD("Got migratable task (%d%d) from remaote affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 
@@ -280,6 +288,9 @@ void td_global_reschedule(td_device_affinity affinity) {
     td_global_sched_params_t params = td_global_cost_communicator(td_get_local_load(affinity));
     double target_load = ((double) params.total_cost) / td_comm_size;
 
+
+    DB_TD("Do global reschedule with local load %d and target load %d", td_get_local_load(affinity), target_load);
+
     double pre_transfer = 0;
     double post_transfer = 0;
 
@@ -289,6 +300,8 @@ void td_global_reschedule(td_device_affinity affinity) {
         pre_transfer = (target_load - predecessor_load) * td_comm_rank;
     }
 
+    DB_TD("Send a load of %d to predecessors", pre_transfer);
+
     //compute post_transfer
     if (td_comm_rank != td_comm_size - 1) {
         double successor_cost = ((double) params.total_cost) - params.local_cost - params.prefix_sum;
@@ -296,6 +309,8 @@ void td_global_reschedule(td_device_affinity affinity) {
         double successor_load = successor_cost/num_successors;
         post_transfer = (target_load - successor_load) * num_successors;
     }
+
+    DB_TD("Send a load of %d to successors", post_transfer);
 
     //calculate num tasks per direktion
     if (pre_transfer < 0) {
@@ -399,6 +414,7 @@ void td_iterative_schedule(td_device_affinity affinity) {
             //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
             tdrc ret_code = __td_get_next_migratable_task(affinity, &task);
             if (ret_code == TARGETDART_SUCCESS) {
+                DB_TD("Send task (%d%d) to process %d", task->local_proc, task->uid, partner_proc);
                 td_singal_task_send(partner_proc, true);
                 td_send_task(partner_proc, task);
             } else {
@@ -411,6 +427,7 @@ void td_iterative_schedule(td_device_affinity affinity) {
             if (ret_code == TARGETDART_SUCCESS) {                
                 td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
                 td_receive_task(partner_proc, task);
+                DB_TD("Received task (%d%d) from process %d", task->local_proc, task->uid, partner_proc);
                 td_add_to_load_remote(task);
             }
         }

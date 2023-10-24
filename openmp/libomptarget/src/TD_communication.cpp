@@ -25,6 +25,7 @@ int td_send_task(int dest, td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
+    DB_TD("Send task (%d%d) to process %d", task->local_proc, task->uid, dest);
 
     td_remote_task_map.insert({task->uid, task});
 
@@ -55,12 +56,16 @@ int td_send_task(int dest, td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
+    DB_TD("Send task (%d%d) to process %d finished", task->local_proc, task->uid, dest);
+
     return TARGETDART_SUCCESS;
 }
 
 int td_receive_task(int source, td_task_t *task) {
 
     //TODO: use MPI probe for complete receives
+
+    DB_TD("Receive new task from process %d", source);
 
     //Receive Task Data
     MPI_Recv(task, 1, TD_MPI_Task, source , SEND_TASK, targetdart_comm, MPI_STATUS_IGNORE);
@@ -111,6 +116,9 @@ int td_receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgBasePtrs = task->KernelArgs->ArgPtrs;
 
 
+    DB_TD("Received task (%d%d) from process %d, finished", task->local_proc, task->uid, source);
+
+
     return TARGETDART_SUCCESS;
 }
 
@@ -122,7 +130,7 @@ tdrc td_test_and_receive_tasks(td_task_t *task) {
 
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_TASK, targetdart_comm, &flag, &status);
     if (flag == true) {
-        printf("receive task result\n");
+        DB_TD("Task receive signaled");
         td_receive_task(status.MPI_SOURCE, task);
         return TARGETDART_SUCCESS;
     }
@@ -132,7 +140,7 @@ tdrc td_test_and_receive_tasks(td_task_t *task) {
 tdrc td_singal_task_send(int target, bool value) {
     int flag = value;
     MPI_Send(&flag, 1, MPI_INT, target, SIGNAL_TASK_SEND, targetdart_comm);
-
+    DB_TD("Signal task send to process %d. Will send task %d", target, value);
     return TARGETDART_SUCCESS;
 }
 
@@ -140,8 +148,10 @@ tdrc td_receive_signal_task_send(int source) {
     int flag;
     MPI_Recv(&flag, 1, MPI_INT, source, SIGNAL_TASK_SEND, targetdart_comm, MPI_STATUS_IGNORE);
     if (flag) {
+        DB_TD("Task send signaled by process %d", source);
         return TARGETDART_SUCCESS;
     }
+    DB_TD("Task send declined by process %d", source);
     return TARGETDART_FAILURE;
 }
 
@@ -149,7 +159,7 @@ tdrc td_send_task_result(td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-    printf("send task result\n");
+    DB_TD("Start result transfer of task (%d%d)", task->local_proc, task->uid);
     //Send Task uid
     MPI_Send(&task->uid, 1, MPI_LONG_LONG, task->local_proc, SEND_RESULT_UID, targetdart_comm);
 
@@ -168,11 +178,14 @@ tdrc td_send_task_result(td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
+    DB_TD("Start result transfer of task (%d%d) finished", task->local_proc, task->uid);
     return TARGETDART_SUCCESS;
 }
 
 tdrc td_receive_task_result(int source) {
 
+
+    DB_TD("Start result receival");
     //TODO: use MPI probe for complete receives
     long long uid;
     //Receive Task Data
@@ -193,9 +206,10 @@ tdrc td_receive_task_result(int source) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
     }
 
-    td_signal(task->uid);
+    td_signal(task);
 
 
+    DB_TD("Result transfer of task (%d%d) finished", task->local_proc, task->uid);
     return TARGETDART_SUCCESS;
 }
 
@@ -207,7 +221,7 @@ tdrc td_test_and_receive_results() {
 
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
-        printf("receive task result\n");
+        DB_TD("Result receival signaled");
         td_receive_task_result(status.MPI_SOURCE);
         return TARGETDART_SUCCESS;
     }

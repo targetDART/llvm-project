@@ -134,12 +134,12 @@ tdrc declare_task_type();
 /**
 * lets the current thread sleep until a signal for the task with uid task_uid sends a signal, indicating, that it finished
 */
-void td_yield(long long task_uid);
+void td_yield(td_task_t *task);
 
 /**
 * Sends a signal that the task with uid task_uid has finished execution, so OMP can resume its management
 */
-void td_signal(long long task_uid);
+void td_signal(td_task_t *task);
 
 #endif // _OMPTARGET_TD_COMMON_H
 

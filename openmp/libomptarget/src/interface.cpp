@@ -234,10 +234,10 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   
   //TargetDART: steal task for targetDART lib here
   if(DeviceId >= 1000 && DeviceId <= 1010) {
-    DB_TD("test print %d", 0);
+    DB_TD("Enter targetDART runtime for deviceId %d", DeviceId);
     return td_add_task(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
   }
-
+  DB_TD("Skip targetDART runtime for deviceId %d", DeviceId);
 
   if (checkDeviceAndCtors(DeviceId, Loc)) {
     DP("Not offloading to device %" PRId64 "\n", DeviceId);
