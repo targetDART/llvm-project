@@ -28,7 +28,7 @@ tdrc declare_KernelArgs_type() {
 
 tdrc declare_task_type() {
     const int nitems = 4;
-    int blocklengths[4] = {1,2,1,1};
+    int blocklengths[4] = {1,2,2,1};
     MPI_Datatype types[4] = {MPI_LONG, MPI_INT32_T, MPI_INT, MPI_LONG_LONG};
     MPI_Aint offsets[4];
     offsets[0] = (MPI_Aint) offsetof(td_task_t, host_base_ptr);

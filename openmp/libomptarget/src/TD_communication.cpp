@@ -304,7 +304,11 @@ bool td_test_finalization(std::atomic<bool> local_finalize) {
     int finalize = local_finalize.load();
 
     int result;
-    MPI_Allreduce(&finalize, &result, 1, MPI_INT, MPI_MIN, targetdart_comm);
+    if (finalize) {
+        MPI_Allreduce(&finalize, &result, 1, MPI_INT, MPI_MIN, targetdart_comm);
+    } else {
+        result = finalize;
+    }
     
     return result;
 }
