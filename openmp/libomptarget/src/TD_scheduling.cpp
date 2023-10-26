@@ -239,6 +239,7 @@ tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t **task
     ret_code = __td_local_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
+        num_offloaded_tasks.fetch_add(1);
         DB_TD("Got migratable task (%d%d) from local affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
@@ -414,11 +415,11 @@ void td_iterative_schedule(td_device_affinity affinity) {
             //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
             tdrc ret_code = __td_get_next_migratable_task(affinity, &task);
             if (ret_code == TARGETDART_SUCCESS) {
-                DB_TD("Send task (%d%d) to process %d", task->local_proc, task->uid, partner_proc);
-                td_singal_task_send(partner_proc, true);
+                DB_TD("Preparing send task (%d%d) to process %d", task->local_proc, task->uid, partner_proc);
+                td_signal_task_send(partner_proc, true);
                 td_send_task(partner_proc, task);
             } else {
-                td_singal_task_send(partner_proc, false);
+                td_signal_task_send(partner_proc, false);
             }
         }
     } else {

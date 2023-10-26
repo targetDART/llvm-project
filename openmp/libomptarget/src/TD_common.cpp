@@ -1,5 +1,6 @@
 #include "TargetDART.h"
 #include "omptarget.h"
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -10,6 +11,7 @@
 #include <unistd.h>
 #include "TD_common.h"
 
+std::atomic<long> num_offloaded_tasks;
 
 tdrc declare_KernelArgs_type() {
     const int nitems = 3;

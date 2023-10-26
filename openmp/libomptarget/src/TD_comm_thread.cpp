@@ -6,6 +6,7 @@
 #include "TD_scheduling.h"
 #include "TD_comm_thread.h"
 #include "TD_communication.h"
+#include <atomic>
 #include <cstdio>
 #include <iostream>
 #include <cstddef>
@@ -18,6 +19,7 @@ bool doRepartition = false;
 std::vector<pthread_t> *spawned_threads;
 
 std::vector<td_device_affinity>* affinity_assignment;
+pthread_barrier_t   barrier; 
 
 /**
 * Defines the routine performed by the dedicated scheduling thread.
@@ -25,17 +27,20 @@ std::vector<td_device_affinity>* affinity_assignment;
 [[nodiscard]] void *__td_schedule_thread_loop(void *ptr) {
     int iter = 0;
     while (!td_test_finalization(td_finalize->load()) && td_comm_size > 1) {
-        if (iter == ITER_TILL_REPARTITION || doRepartition) {
+        if (iter == 200000 || doRepartition) {
             iter = 0;
             //td_global_reschedule(TD_ANY);
             doRepartition = false;
+            DB_TD("ping");
         }
         iter++;        
         td_iterative_schedule(TD_ANY);
+
         td_test_and_receive_results();
     }
 
-    DB_TD("Scheduling thread finished");
+    DB_TD("Scheduling thread finished");    
+    pthread_barrier_wait (&barrier);
     pthread_exit(NULL);
 }
 
@@ -144,12 +149,15 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 * synchronizes all processes to ensure all tasks are finished.
 */
 tdrc td_finalize_threads() {
+    
+    pthread_barrier_init (&barrier, NULL, 2);
     DB_TD("begin finalization of targetDARTLib, wait for remaining work");
     #pragma omp taskwait
 
-    MPI_Barrier(targetdart_comm);
     DB_TD("Synchronized threads start joining %d managment threads", spawned_threads->size());
-    td_finalize->store(true);
+    td_finalize->store(true);    
+    
+    pthread_barrier_wait (&barrier);
 
 
     for (int i = 0; i < spawned_threads->size(); i++) {         

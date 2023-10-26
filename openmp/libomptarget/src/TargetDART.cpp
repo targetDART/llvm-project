@@ -212,6 +212,8 @@ int initTargetDART(void* main_ptr) {
   declare_KernelArgs_type();
   declare_task_type();
 
+  num_offloaded_tasks.store(0);
+
   // create separate communicator for targetdart
   //TODO: reduce to single communicator for coordination (Deadlock danger?)
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);

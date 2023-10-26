@@ -4,6 +4,7 @@
 
 //TODO: define communication interface for TargetDART
 
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <mutex>
@@ -126,6 +127,7 @@ extern std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_
 extern int td_comm_size;
 extern int td_comm_rank;
 extern std::unordered_map<long long, td_task_t*> td_remote_task_map;
+extern std::atomic<long> num_offloaded_tasks;
 
 tdrc declare_KernelArgs_type();
 

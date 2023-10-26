@@ -37,7 +37,7 @@ tdrc td_test_and_receive_tasks(td_task_t *task);
 /**
 * send the flag boolean value the the process of rank target
 */
-tdrc td_singal_task_send(int target, bool value);
+tdrc td_signal_task_send(int target, bool value);
 
 /**
 * receives the send signal and returns success if the flag is true

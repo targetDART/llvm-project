@@ -137,7 +137,7 @@ tdrc td_test_and_receive_tasks(td_task_t *task) {
     return TARGETDART_FAILURE;
 }
 
-tdrc td_singal_task_send(int target, bool value) {
+tdrc td_signal_task_send(int target, bool value) {
     int flag = value;
     MPI_Send(&flag, 1, MPI_INT, target, SIGNAL_TASK_SEND, targetdart_comm);
     DB_TD("Signal task send to process %d. Will send task %d", target, value);
@@ -206,6 +206,7 @@ tdrc td_receive_task_result(int source) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
     }
 
+    num_offloaded_tasks.fetch_sub(1);
     td_signal(task);
 
 
@@ -244,6 +245,9 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
     std::vector<COST_DATA_TYPE> cost_vector(td_comm_size, 0);
     cost_vector[td_comm_rank] = local_cost_param; 
 
+    MPI_Allgather(&local_cost_param, 1, COST_MPI_DATA_TYPE, &cost_vector[0], 1, COST_MPI_DATA_TYPE, targetdart_comm);
+
+    /*
     int iterations = std::ceil(std::log2(td_comm_size));
 
     //TODO: avoid redundant data elements, iff the size is not a power of 2
@@ -257,7 +261,6 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         //Calculate the number of elements send for each iteration, covering cornercases
         int send1, send2, recv1, recv2;
 
-        //TODO: fix the size calculation
         if (target < td_comm_rank) {
             send1 = td_comm_size - td_comm_rank;
             send2 = target;
@@ -275,40 +278,36 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
         }
 
         //send data 
-        MPI_Request rqsts[4];
-        MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
+        MPI_Request rqsts[4] = {MPI_REQUEST_NULL,MPI_REQUEST_NULL,MPI_REQUEST_NULL,MPI_REQUEST_NULL};
+        //MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
         if (send2 != 0) {
-            MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[2]);
+            //MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[2]);
         }
         //recv data
-        MPI_Irecv(&cost_vector[source], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[1]);
+        //MPI_Irecv(&cost_vector[source], recv1, COST_MPI_DATA_TYPE, source, 1, targetdart_comm, &rqsts[1]);
         if (recv2 != 0) {
-            MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, targetdart_comm, &rqsts[3]);
+            //MPI_Irecv(&cost_vector[0], recv2, COST_MPI_DATA_TYPE, source, 2, targetdart_comm, &rqsts[3]);
         }
 
-        MPI_Waitall(2, rqsts, MPI_STATUSES_IGNORE);
-        if (recv2 != 0) {
-            MPI_Wait(&rqsts[3], MPI_STATUS_IGNORE);
-        }
-        if (send2 != 0) {
-            MPI_Wait(&rqsts[2], MPI_STATUS_IGNORE);
-        }
+        MPI_Waitall(4, rqsts, MPI_STATUSES_IGNORE);
+        // if (recv2 != 0) {
+        //     MPI_Wait(&rqsts[3], MPI_STATUS_IGNORE);
+        // }
+        // if (send2 != 0) {
+        //     MPI_Wait(&rqsts[2], MPI_STATUS_IGNORE);
+        // }
 
-    }
+    }*/
 
     return cost_vector;
 }
 
 
 bool td_test_finalization(std::atomic<bool> local_finalize) {
-    int finalize = local_finalize.load();
+    int finalize = local_finalize.load() && (num_offloaded_tasks.load() == 0);
 
     int result;
-    if (finalize) {
-        MPI_Allreduce(&finalize, &result, 1, MPI_INT, MPI_MIN, targetdart_comm);
-    } else {
-        result = finalize;
-    }
+    MPI_Allreduce(&finalize, &result, 1, MPI_INT, MPI_MIN, targetdart_comm);
     
     return result;
 }
