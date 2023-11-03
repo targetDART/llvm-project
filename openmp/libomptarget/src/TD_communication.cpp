@@ -206,7 +206,6 @@ tdrc td_receive_task_result(int source) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
     }
 
-    num_offloaded_tasks.fetch_sub(1);
     td_signal(task);
 
 
@@ -303,11 +302,19 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
 }
 
 
-bool td_test_finalization(std::atomic<bool> local_finalize) {
-    int finalize = local_finalize.load() && (num_offloaded_tasks.load() == 0);
+bool td_test_finalization(int cost, bool finalize) {
 
-    int result;
-    MPI_Allreduce(&finalize, &result, 1, MPI_INT, MPI_MIN, targetdart_comm);
-    
-    return result;
+    int input_cost = cost;
+    int input_finalize = finalize;
+    int result_cost;
+    int result_finalize;
+
+    MPI_Allreduce(&input_cost, &result_cost, 1, COST_MPI_DATA_TYPE, MPI_SUM, targetdart_comm);
+    MPI_Allreduce(&input_finalize, &result_finalize, 1, COST_MPI_DATA_TYPE, MPI_MIN, targetdart_comm);
+
+    if( result_cost > 0 || !result_finalize) {
+        return false;
+    }
+
+    return true;
 }

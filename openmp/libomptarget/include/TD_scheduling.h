@@ -30,6 +30,10 @@ tdrc td_add_to_load_replica(td_task_t * task);
 // returns the total load on the current device for a given affinity
 COST_DATA_TYPE td_get_local_load(td_device_affinity affinity);
 
+
+// returns the total load on the node
+COST_DATA_TYPE td_get_total_load();
+
 /**
 * This implements the prefix sum based scheduling proposed here: https://ieeexplore.ieee.org/abstract/document/6270840/
 */
@@ -49,5 +53,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
 * This function initializes the internal queue structure
 */
 tdrc td_init_task_queues();
+
+
 
 #endif

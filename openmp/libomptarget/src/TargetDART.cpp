@@ -46,7 +46,8 @@ MPI_Comm targetdart_comm;
 int td_comm_size;
 int td_comm_rank;
 
-std::atomic<bool> *td_finalize;
+std::atomic<bool> *td_start_finalize;
+std::atomic<bool> *td_finalize_executor;
 
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
@@ -212,8 +213,6 @@ int initTargetDART(void* main_ptr) {
   declare_KernelArgs_type();
   declare_task_type();
 
-  num_offloaded_tasks.store(0);
-
   // create separate communicator for targetdart
   //TODO: reduce to single communicator for coordination (Deadlock danger?)
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
@@ -232,8 +231,8 @@ int initTargetDART(void* main_ptr) {
   // define the base address of the current process
   get_base_address(main_ptr);
 
-  td_finalize = new std::atomic<bool>(false);
-  //td_finalize->store(false);
+  td_start_finalize = new std::atomic<bool>(false);  
+  td_finalize_executor = new std::atomic<bool>(false);
 
   // initial placements
   // TODO: Implement callbacks for compile time parameters or Environment variables

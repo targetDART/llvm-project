@@ -239,7 +239,6 @@ tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t **task
     ret_code = __td_local_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
-        num_offloaded_tasks.fetch_add(1);
         DB_TD("Got migratable task (%d%d) from local affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
@@ -250,7 +249,7 @@ tdrc __td_get_next_migratable_task(td_device_affinity affinity, td_task_t **task
     ret_code = __td_remote_task_queues->at(affinity)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
-        DB_TD("Got migratable task (%d%d) from remaote affinity queue", (*task)->local_proc, (*task)->uid);
+        DB_TD("Got migratable task (%d%d) from remote affinity queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 

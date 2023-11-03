@@ -11,8 +11,6 @@
 #include <unistd.h>
 #include "TD_common.h"
 
-std::atomic<long> num_offloaded_tasks;
-
 tdrc declare_KernelArgs_type() {
     const int nitems = 3;
     int blocklengths[3] = {2,2,3};
@@ -57,7 +55,11 @@ void td_signal(td_task_t *task) {
     DB_TD("resume OMP hidden helper thread since task (%d%d) finished", task->local_proc, task->uid);
     td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map[task->uid];
 
+    DB_TD("segfault test for task (%d%d)", task->local_proc, task->uid);
+
     pthread_mutex_lock(&cond_var->thread_mutex);
+    DB_TD("segfault test for task (%d%d) finished", task->local_proc, task->uid);
+    
     pthread_cond_signal(&cond_var->conditional);
     pthread_mutex_unlock(&cond_var->thread_mutex);
 }

@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <tuple>
+#include <unistd.h>
 #include <vector>
 
 
@@ -26,7 +27,7 @@ pthread_barrier_t   barrier;
 */
 [[nodiscard]] void *__td_schedule_thread_loop(void *ptr) {
     int iter = 0;
-    while (!td_test_finalization(td_finalize->load()) && td_comm_size > 1) {
+    while (!td_test_finalization(td_get_total_load(), td_start_finalize->load()) && td_comm_size > 1) {
         if (iter == 200000 || doRepartition) {
             iter = 0;
             //td_global_reschedule(TD_ANY);
@@ -65,7 +66,7 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
 
     DB_TD("Starting executor thread for device %d", deviceID);
     td_device_affinity affinity = affinity_assignment->at(deviceID);
-    while (!td_finalize->load()) {
+    while (!td_finalize_executor->load()) {
         td_task_t *task;
         if (td_get_next_task(affinity, deviceID, &task) == TARGETDART_SUCCESS) {
             DB_TD("start execution of task (%d%d)", task->local_proc, task->uid);
@@ -152,16 +153,15 @@ tdrc td_finalize_threads() {
     
     pthread_barrier_init (&barrier, NULL, 2);
     DB_TD("begin finalization of targetDARTLib, wait for remaining work");
-    #pragma omp taskwait
+    td_start_finalize->store(true);  
+    pthread_barrier_wait (&barrier);
+    td_finalize_executor->store(true);
+
 
     DB_TD("Synchronized threads start joining %d managment threads", spawned_threads->size());
-    td_finalize->store(true);    
-    
-    pthread_barrier_wait (&barrier);
-
-
     for (int i = 0; i < spawned_threads->size(); i++) {         
         DB_TD("joining thread: %d", i);   
+        //TODO: This may Deadlock, look into this.
         pthread_join( spawned_threads->at(i), NULL);
         DB_TD("joined thread: %d", i);
     }
