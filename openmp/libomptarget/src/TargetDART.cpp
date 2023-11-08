@@ -51,10 +51,11 @@ std::atomic<bool> *td_finalize_executor;
 
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
+pthread_mutex_t mapmutex = PTHREAD_MUTEX_INITIALIZER;
 
 // array that holds image base addresses
 std::vector<intptr_t> _image_base_addresses;
-std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
+std::unordered_map<long long, td_pthread_conditional_wrapper_t*>* td_task_conditional_map;
 
 //removes spaces from text
 template<typename T>
@@ -142,11 +143,16 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->uid = __td_tasks_generated.fetch_add(1);
   DB_TD("add task (%d%d) to queue from HostPtr (%d)", task->local_proc, task->uid, HostPtr);
 
-  td_pthread_conditional_wrapper_t cond_var = {PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER};
-  td_task_conditional_map[task->uid] = &cond_var;
+  DB_TD("Current hardware thread %d", syscall(__NR_gettid));
+
+  td_pthread_conditional_wrapper_t *cond_var = new td_pthread_conditional_wrapper_t({PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER});
+  
+  pthread_mutex_lock(&mapmutex);
+  td_task_conditional_map->insert({task->uid, cond_var});
+  pthread_mutex_unlock(&mapmutex);
 
   //start yielding lock here to avoid rare deadlocks in which the task is finished, before td_yield() is called 
-  pthread_mutex_lock(&cond_var.thread_mutex);
+  pthread_mutex_lock(&cond_var->thread_mutex);
 
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
@@ -225,7 +231,7 @@ int initTargetDART(void* main_ptr) {
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
   // Initialize the map of remote and replicated tasks
   td_remote_task_map = std::unordered_map<long long, td_task_t*>();
-  td_task_conditional_map = std::unordered_map<long long, td_pthread_conditional_wrapper_t*>();
+  td_task_conditional_map = new std::unordered_map<long long, td_pthread_conditional_wrapper_t*>();
 
 
   // define the base address of the current process

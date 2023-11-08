@@ -27,6 +27,7 @@ pthread_barrier_t   barrier;
 */
 [[nodiscard]] void *__td_schedule_thread_loop(void *ptr) {
     int iter = 0;
+    DB_TD("Starting scheduler thread");
     while (!td_test_finalization(td_get_total_load(), td_start_finalize->load()) && td_comm_size > 1) {
         if (iter == 200000 || doRepartition) {
             iter = 0;
@@ -87,6 +88,7 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
             }
         } 
     }    
+
     DB_TD("executor thread for device %d finished", deviceID);
     pthread_exit(NULL);
 }
@@ -156,7 +158,6 @@ tdrc td_finalize_threads() {
     td_start_finalize->store(true);  
     pthread_barrier_wait (&barrier);
     td_finalize_executor->store(true);
-
 
     DB_TD("Synchronized threads start joining %d managment threads", spawned_threads->size());
     for (int i = 0; i < spawned_threads->size(); i++) {         

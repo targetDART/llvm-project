@@ -122,7 +122,7 @@ extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
 extern std::atomic<bool> *td_start_finalize;
 extern std::atomic<bool> *td_finalize_executor;
-extern std::unordered_map<long long, td_pthread_conditional_wrapper_t*> td_task_conditional_map;
+extern std::unordered_map<long long, td_pthread_conditional_wrapper_t*>* td_task_conditional_map;
 
 
 extern int td_comm_size;

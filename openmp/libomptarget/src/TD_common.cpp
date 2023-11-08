@@ -44,16 +44,18 @@ tdrc declare_task_type() {
 
 
 void td_yield(td_task_t *task) {
-    td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map[task->uid];
+    td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map->at(task->uid);
 
     DB_TD("yield OMP hidden helper thread until task (%d%d) is finished", task->local_proc, task->uid);
     pthread_cond_wait(&cond_var->conditional,&cond_var->thread_mutex);
     pthread_mutex_unlock(&cond_var->thread_mutex);
+
+    DB_TD("Helper yield for task (%d%d) finished", task->local_proc, task->uid);
 }
 
 void td_signal(td_task_t *task) {
     DB_TD("resume OMP hidden helper thread since task (%d%d) finished", task->local_proc, task->uid);
-    td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map[task->uid];
+    td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map->at(task->uid);
 
     DB_TD("segfault test for task (%d%d)", task->local_proc, task->uid);
 
@@ -62,4 +64,5 @@ void td_signal(td_task_t *task) {
     
     pthread_cond_signal(&cond_var->conditional);
     pthread_mutex_unlock(&cond_var->thread_mutex);
+    DB_TD("Continuation signal for task (%d%d) finished", task->local_proc, task->uid);
 }
