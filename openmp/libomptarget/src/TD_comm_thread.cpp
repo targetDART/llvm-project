@@ -129,8 +129,6 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
     spawned_threads = new std::vector<pthread_t>(omp_get_num_devices() + 2);
 
-    pthread_t scheduler;
-
     __td_init_and_pin_thread(__td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
 
     affinity_assignment = new std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
@@ -138,7 +136,6 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
     //initialize all executor threads
     for (int i = 0; i <= omp_get_num_devices(); i++) {
-        pthread_t executor;
         __td_init_and_pin_thread(__td_exec_thread_loop, exec_placements[i], &spawned_threads->at(i + 1), i);
 
     }
@@ -163,11 +160,11 @@ tdrc td_finalize_threads() {
     for (int i = 0; i < spawned_threads->size(); i++) {         
         DB_TD("joining thread: %d", i);   
         //TODO: This may Deadlock, look into this.
-        pthread_join( spawned_threads->at(i), NULL);
+        //pthread_join( spawned_threads->at(i), NULL);
         DB_TD("joined thread: %d", i);
     }
 
-    //deleted spawned_threads;
+    delete spawned_threads;
     DB_TD("finalized managment threads");
 
     return TARGETDART_SUCCESS;
