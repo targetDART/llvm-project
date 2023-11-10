@@ -5,7 +5,7 @@ stages:          # List of stages for jobs, and their order of execution
 
 
 .base:
-  tag: ["hpc"]
+  tags: ["hpc"]
   id_tokens:
     HPC_CI_TOKEN:
       aud: aixCIlenz
