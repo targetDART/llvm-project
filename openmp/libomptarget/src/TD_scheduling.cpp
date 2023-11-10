@@ -338,10 +338,6 @@ void td_global_reschedule(td_device_affinity affinity) {
     long post_remainder_load = ((long) post_transfer) % ((long) target_load);    
     __td_do_partial_global_reschedule(post_remainder_load, affinity, post_distance);
 
-    //TODO: Receive tasks
-    //TODO: Transform task migration to non-blocking to avoid serialization.
-
-
 }
 
 /**

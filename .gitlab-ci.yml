@@ -1,0 +1,20 @@
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - test
+  - deploy
+
+
+.base:
+  id_tokens:
+    HPC_CI_TOKEN:
+      aud: aixCIlenz
+
+
+build-job:       # This job runs in the build stage, which runs first.
+  extends: .base
+  stage: build
+  script:
+    - echo "Compiling the code..."
+    - ls
+    - echo "Compile complete."
+
