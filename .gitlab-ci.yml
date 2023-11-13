@@ -55,7 +55,7 @@ build-job:       # This job runs in the build stage, which runs first.
 compile-helloworld-job:
   extends: .exec
   stage: compile
-  depends: build
+  dependencies: [build-job]
   script:
     - tar -cvf targetDART.tar.gz
     - mkdir software/bin
