@@ -78,9 +78,9 @@ static void __td_dbg_print(int rank, const char* format, Args... args) {
 
 #ifndef DB_TD
 #ifdef TARGETDART_DEBUG
-#define DBP( ... )  __td_dbg_print(td_comm_rank, __VA_ARGS__) 
+#define DB_TD( ... )  __td_dbg_print(td_comm_rank, __VA_ARGS__) 
 #else
-#define DB_TD( ... ) __td_dbg_print(td_comm_rank, __VA_ARGS__)
+#define DB_TD( ... ) {}
 #endif
 #endif
 

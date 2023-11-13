@@ -249,7 +249,7 @@ int initTargetDART(void* main_ptr) {
   // Init devices during installation
   for (long i = 0; i < omp_get_num_devices(); i++) {
     if (checkDeviceAndCtors(i, nullptr)) {
-      DP("Not offloading to device %" PRId64 "\n", DeviceId);
+      DB_TD("Not offloading to device %" PRId64 "\n", i);
       return TARGETDART_FAILURE;
     }
   }

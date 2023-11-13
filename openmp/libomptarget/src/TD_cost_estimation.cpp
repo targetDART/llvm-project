@@ -42,7 +42,7 @@ tdrc td_set_task_cost(intptr_t hostptr, td_device_affinity device, COST_DATA_TYP
 td_state_stamp_t td_start_timer(){
     td_state_stamp_t current_state;
     //TODO: handle performance counter
-    current_state.current_time = omp_get_wtime();
+    //current_state.current_time = omp_get_wtime();
     return current_state;
 }
 
@@ -50,7 +50,7 @@ td_state_stamp_t td_start_timer(){
 td_state_stamp_t td_stop_timer(){
     td_state_stamp_t current_state;
     //TODO: handle performance counter
-    current_state.current_time = omp_get_wtime();
+    //current_state.current_time = omp_get_wtime();
     return current_state;
 }
 
