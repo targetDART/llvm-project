@@ -127,6 +127,8 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
 */
 tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
+    pthread_barrier_init (&barrier, NULL, 2);
+
     spawned_threads = new std::vector<pthread_t>(omp_get_num_devices() + 2);
 
     __td_init_and_pin_thread(__td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
@@ -150,7 +152,6 @@ tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 */
 tdrc td_finalize_threads() {
     
-    pthread_barrier_init (&barrier, NULL, 2);
     DB_TD("begin finalization of targetDARTLib, wait for remaining work");
     td_start_finalize->store(true);  
     pthread_barrier_wait (&barrier);

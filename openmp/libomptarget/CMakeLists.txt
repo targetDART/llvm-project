@@ -70,6 +70,10 @@ if(LIBOMPTARGET_ENABLE_DEBUG)
   add_definitions(-DOMPTARGET_DEBUG)
   add_definitions(-DTARGETDART_DEBUG)
 endif()
+if(TARGETDART_DEBUG)  
+  add_definitions(-DTARGETDART_DEBUG)
+endif()
+
 
 # OMPT support for libomptarget
 # Follow host OMPT support and check if host support has been requested.
