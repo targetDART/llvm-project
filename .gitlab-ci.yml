@@ -1,6 +1,7 @@
 stages:          # List of stages for jobs, and their order of execution
   - build
   - compile
+  - run
   - deploy
 
 
@@ -69,3 +70,16 @@ compile-helloworld-job:
   artifacts:
     paths:
       - 00notquitehelloworld.exe
+
+run-helloworld-job:
+  extends: .exec
+  stage: compile
+  dependencies: [compile-helloworld-job]
+  variables:
+    SLURM_PARAM_CORES: "-c 48"
+    SLURM_PARAM_TIME:  "-t 2:00:00"
+    SLURM_PARAM_ACCOUNT: "-A rwth1270"
+    SLURM_PARAM_NODES: "-n 2"
+    SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
+  script:
+    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun --gres=gpu:volta:2 -c 48 -n 2 main.exe
