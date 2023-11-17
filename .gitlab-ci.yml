@@ -62,7 +62,7 @@ compile-helloworld-job:
   stage: compile
   dependencies: [build-job]
   script:
-    - tar -zvf targetDART.tar.gz
+    - tar -xzf targetDART.tar.gz
     - mkdir software/bin
     - echo '#!/bin/bash\n\nclang++ -L$WORK/software/llvm/16/lib -I$WORK/software/llvm/16/lib/clang/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
     - clangwrap apps/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
