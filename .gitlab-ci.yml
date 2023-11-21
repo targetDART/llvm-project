@@ -32,7 +32,9 @@ build-job:       # This job runs in the build stage, which runs first.
   variables:
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_TIME:  "-t 2:00:00"
-    SLURM_PARAM_ACCOUNT: "-A rwth1270"
+    SLURM_PARAM_ACCOUNT: "-A rwth1447"
+    SLURM_DPARAM_TIME:  "-t 2:00:00"
+    SLURM_DPARAM_ACCOUNT: "-A rwth1447"
   script:
     - ls -la $TMP/..
     - export SOURCES=$PWD/llvm
@@ -85,7 +87,7 @@ run-helloworld-job:
     GIT_STRATEGY: none
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_TIME:  "-t 2:00:00"
-    SLURM_PARAM_ACCOUNT: "-A rwth1270"
+    SLURM_PARAM_ACCOUNT: "-A rwth1447"
     SLURM_PARAM_NODES: "-n 2"
     SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
   script:
