@@ -66,12 +66,13 @@ compile-helloworld-job:
   stage: compile
   dependencies: [build-job]
   variables:
-    GIT_SUBMODULE_STRATEGY: recursive
+    GIT_STRATEGY: none
   script:
     - tar -xzf targetDART.tar.gz
     - mkdir software/bin
     - echo '#!/bin/bash\n\nclang++ -L$WORK/software/llvm/16/lib -I$WORK/software/llvm/16/lib/clang/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
-    - clangwrap apps/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
+    - git clone git@github.com:targetDART/TargetDART_Applications.git
+    - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
   artifacts:
     paths:
       - 00notquitehelloworld.exe
