@@ -73,6 +73,6 @@ tdrc td_test_and_receive_results();
 /**
 * Returns true, iff all participating processes want to finalize
 */
-bool td_test_finalization(int local_cost, bool finalize);
+bool td_test_finalization(COST_DATA_TYPE local_cost, bool finalize);
 
 #endif // _OMPTARGET_TD_COMMUNICATION_H

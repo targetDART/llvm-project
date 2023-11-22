@@ -302,15 +302,15 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
 }
 
 
-bool td_test_finalization(int cost, bool finalize) {
+bool td_test_finalization(COST_DATA_TYPE cost, bool finalize) {
 
-    int input_cost = cost;
-    int input_finalize = finalize;
-    int result_cost;
-    int result_finalize;
+    COST_DATA_TYPE input_cost = cost;
+    bool input_finalize = finalize;
+    COST_DATA_TYPE result_cost;
+    bool result_finalize;
 
     MPI_Allreduce(&input_cost, &result_cost, 1, COST_MPI_DATA_TYPE, MPI_SUM, targetdart_comm);
-    MPI_Allreduce(&input_finalize, &result_finalize, 1, COST_MPI_DATA_TYPE, MPI_MIN, targetdart_comm);
+    MPI_Allreduce(&input_finalize, &result_finalize, 1, MPI_C_BOOL, MPI_LAND, targetdart_comm);
 
     if( result_cost > 0 || !result_finalize) {
         return false;
