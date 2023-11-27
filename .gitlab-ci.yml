@@ -78,7 +78,7 @@ compile-helloworld-job:
     - mkdir software/bin
     - mkdir software/lib
     - tar -xzf includes.tar.gz
-    - mv -r include software/.
+    - mv include software/.
     - cp libomptarget.so.16 software/lib/libomptarget.so.16
     - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
     - git clone git@github.com:targetDART/TargetDART_Applications.git
