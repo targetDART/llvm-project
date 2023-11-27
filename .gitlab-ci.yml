@@ -4,10 +4,9 @@ stages:          # List of stages for jobs, and their order of execution
   - run
   - deploy
 
-default: 
-  variables: 
-    SLURM_PARAM_ACCOUNT: "-A rwth1447"
-    SLURM_DPARAM_ACCOUNT: "-A rwth1447"
+variables: 
+  SLURM_PARAM_ACCOUNT: "-A rwth1447"
+  SLURM_DPARAM_ACCOUNT: "-A rwth1447"
 
 .base:
   tags: ["hpc"]
