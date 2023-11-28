@@ -77,14 +77,13 @@ compile-helloworld-job:
   variables:
     GIT_STRATEGY: none
   script:
-    - mkdir software
-    - mkdir software/bin
+    - mkdir -p software/bin
     - mkdir software/lib
     - tar -xzf includes.tar.gz
     - mv include software/.
     - cp libomptarget.so.16 software/lib/libomptarget.so.16
     - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
-    - git clone git@github.com:targetDART/TargetDART_Applications.git
+    - git clone https://github.com/targetDART/TargetDART_Applications.git
     - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
   artifacts:
     paths:
@@ -99,7 +98,7 @@ run-helloworld-job:
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     SLURM_PARAM_ACCOUNT: "-A rwth1447"
-    SLURM_PARAM_NODES: "-n 2"
+    SLURM_PARAM_NODES: "-n 1"
     SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
   script:
-    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun --gres=gpu:volta:2 -c 48 -n 2 00notquitehelloworld.exe
+    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun --gres=gpu:volta:2 -c 48 -n 1 00notquitehelloworld.exe
