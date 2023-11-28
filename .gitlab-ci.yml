@@ -79,7 +79,7 @@ compile-helloworld-job:
     GIT_STRATEGY: none
   script:
     - mkdir -p software/bin
-    - mkdir software/lib
+    - mkdir -p software/lib
     - tar -xzf includes.tar.gz
     - mv include software/.
     - cp libomptarget.so.16 software/lib/libomptarget.so.16
