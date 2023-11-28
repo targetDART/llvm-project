@@ -73,7 +73,7 @@ static void __td_dbg_print_help(int print_prefix, const char * prefix, int rank,
 
 template <typename... Args>
 static void __td_dbg_print(int rank, const char* format, Args... args) {
-    __td_dbg_print_help(1, "targeDARTLib", rank, format, args...);
+    __td_dbg_print_help(1, "targetDARTLib", rank, format, args...);
 }
 
 #ifndef DB_TD
