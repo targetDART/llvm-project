@@ -59,7 +59,10 @@ build-job:       # This job runs in the build stage, which runs first.
     - ninja -j48 install
     - cd -
     - cp $TMP/software/llvm/16/lib/libomptarget.so.16 .
-    - tar -cvzf includes.tar.gz $TMP/software/llvm/16/lib/clang/16/include 
+    - cd $TMP/software/llvm/16/lib/clang/16/
+    - tar -cvzf includes.tar.gz include 
+    - cd -
+    - mv  $TMP/software/llvm/16/lib/clang/16/includes.tar.gz .
     - rm -rf $TMP/build-llvm
     - rm -rf $TMP/software
   artifacts:
