@@ -78,10 +78,10 @@ compile-helloworld-job:
   variables:
     GIT_STRATEGY: none
   script:
-    - mkdir -p software/bin
-    - mkdir -p software/lib
+    - rm -rf software
+    - mkdir -p software/bin software/lib software/include
     - tar -xzf includes.tar.gz
-    - mv include software/.
+    - mv include/* software/include/
     - cp libomptarget.so.16 software/lib/libomptarget.so.16
     - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
     - git clone https://github.com/targetDART/TargetDART_Applications.git
