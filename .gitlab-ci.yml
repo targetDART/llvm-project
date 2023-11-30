@@ -64,7 +64,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - tar -cvzf includes.tar.gz include 
     - cd -
     - mv  $TMP/software/llvm/16/lib/clang/16/includes.tar.gz .
-    - mv $TMP/software/lib/clang++ .
+    - mv $TMP/software/llvm/16/bin/clang++ .
     - rm -rf $TMP/build-llvm
     - rm -rf $TMP/software
   artifacts:
@@ -84,9 +84,9 @@ compile-helloworld-job:
     - mkdir -p software/bin software/lib software/include
     - tar -xzf includes.tar.gz
     - mv include/* software/include/
-    - mv clang++ software/lib/
+    - mv clang++ software/bin/
     - cp libomptarget.so.16 software/lib/libomptarget.so.16
-    - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
+    - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - chmod +x software/bin/clangwrap
     - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
