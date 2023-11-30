@@ -86,7 +86,7 @@ compile-helloworld-job:
     - mv include/* software/include/
     - mv clang++ software/bin/
     - cp libomptarget.so.16 software/lib/libomptarget.so.16
-    - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
+    - echo '#!/bin/bash\n\nsoftware/bin/clang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - chmod +x software/bin/clangwrap
     - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
