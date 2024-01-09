@@ -24,9 +24,8 @@ variables:
     - ml purge
     - ml GCCcore binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils CUDA gompi
     - export PATH=$PATH:$PWD/software/bin
-    - export PATH=$PATH:$PWD/software/llvm/16/bin
-    - export LIBRARY_PATH=$PWD/software/llvm/16/lib:$LIBRARY_PATH
-    - export LD_LIBRARY_PATH=$PWD/software/llvm/16/lib:$LD_LIBRARY_PATH
+    - export LIBRARY_PATH=$PWD/software/lib:$LIBRARY_PATH
+    - export LD_LIBRARY_PATH=$PWD/software/lib:$LD_LIBRARY_PATH
     - export PSM2_CUDA=1
 
 
@@ -64,6 +63,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - cp -r $TMP/software/llvm/16/lib/clang/16/include software/.
     - mv $TMP/software/llvm/16/bin/clang++ software/bin
     - mv $TMP/software/llvm/16/bin/clang software/bin 
+    - mv $TMP/software/llvm/16/bin/clang-16 software/bin
     - tar -cvzf software.tar.gz software 
     - rm -rf $TMP/build-llvm
     - rm -rf $TMP/software
