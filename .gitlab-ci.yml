@@ -59,21 +59,17 @@ build-job:       # This job runs in the build stage, which runs first.
        fi
     - ninja -j48 install
     - cd -
-    - cp $TMP/software/llvm/16/lib/libomptarget.so.16 .
-    - cd $TMP/software/llvm/16/lib/clang/16/
-    - tar -cvzf includes.tar.gz include 
-    - cd -
-    - mv  $TMP/software/llvm/16/lib/clang/16/includes.tar.gz .
-    - mv $TMP/software/llvm/16/bin/clang++ .
-    - mv $TMP/software/llvm/16/bin/clang .
+    - mkdir -p software/bin software/lib software/include
+    - cp $TMP/software/llvm/16/lib/libomptarget.so.16 software/lib
+    - cp -r $TMP/software/llvm/16/lib/clang/16/include software/.
+    - mv $TMP/software/llvm/16/bin/clang++ software/bin
+    - mv $TMP/software/llvm/16/bin/clang software/bin 
+    - tar -cvzf software.tar.gz software 
     - rm -rf $TMP/build-llvm
     - rm -rf $TMP/software
   artifacts:
     paths:
-      - libomptarget.so.16
-      - includes.tar.gz
-      - clang++
-      - clang
+      - software.tar.gz
 
 compile-helloworld-job:
   extends: .exec
@@ -83,12 +79,7 @@ compile-helloworld-job:
     GIT_STRATEGY: none
   script:
     - rm -rf software
-    - mkdir -p software/bin software/lib software/include
-    - tar -xzf includes.tar.gz
-    - mv include/* software/include/
-    - mv clang++ software/bin/
-    - mv clang software/bin/
-    - cp libomptarget.so.16 software/lib/libomptarget.so.16
+    - tar -xzf software.tar.gz
     - echo '#!/bin/bash\n\nsoftware/bin/clang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - chmod +x software/bin/clangwrap
