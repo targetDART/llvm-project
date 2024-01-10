@@ -44,7 +44,6 @@ build-job:       # This job runs in the build stage, which runs first.
     SLURM_PARAM_EXCLUSIVE: "--exclusive"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     SLURM_DPARAM_TIME:  "-t 2:00:00"
-    SLURM_PARAM_OVERLAP:  "--overlap"
     GIT_DEPTH: "1"
     CI_MODE: "SingleSlurmJobAcrossStages"
     GIT_CLONE_PATH: "$DIR/clonedir"
@@ -86,6 +85,7 @@ compile-helloworld-job:
   dependencies: [build-job]
   variables:
     GIT_STRATEGY: none
+    SLURM_PARAM_OVERLAP:  "--overlap"
   script:
     - rm -rf software
     - tar -xzf software.tar.gz
