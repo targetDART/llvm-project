@@ -46,7 +46,6 @@ build-job:       # This job runs in the build stage, which runs first.
     SLURM_DPARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
     CI_MODE: "SingleSlurmJobAcrossStages"
-    GIT_CLONE_PATH: "$DIR/clonedir"
   script:
     - ls -la $DIR/
     - export SOURCES=$PWD/llvm
