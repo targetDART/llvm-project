@@ -60,6 +60,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - cd -
     - mkdir -p software/bin software/lib software/include
     - cp $TMP/software/llvm/16/lib/libomptarget.so.16 software/lib
+    - cp $TMP/software/llvm/16/lib/*.bc software/lib
     - cp -r $TMP/software/llvm/16/lib/clang/16/include software/.
     - mv $TMP/software/llvm/16/bin/clang++ software/bin
     - mv $TMP/software/llvm/16/bin/clang software/bin 
