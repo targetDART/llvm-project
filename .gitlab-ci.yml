@@ -8,6 +8,7 @@ variables:
   SLURM_PARAM_ACCOUNT: "-A rwth1447"
   SLURM_DPARAM_ACCOUNT: "-A rwth1447"
   SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
+  DIR: "/dev/shm"
 
 .base:
   tags: ["hpc"]
@@ -34,14 +35,15 @@ build-job:       # This job runs in the build stage, which runs first.
   stage: build
   variables:
     SLURM_PARAM_CORES: "-c 48"
+    SLURM_PARAM_EXCLUSIVE: "--exclusive"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     SLURM_DPARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
   script:
-    - ls -la $TMP/..
+    - ls -la $DIR/..
     - export SOURCES=$PWD/llvm
     - mkdir -p $TMP/build-llvm
-    - cd $TMP/build-llvm
+    - cd $DIR/build-llvm
     - | 
       if [[ ! -f "CMakeCache.txt" ]]; then
         cmake -G Ninja $SOURCES \
@@ -49,25 +51,24 @@ build-job:       # This job runs in the build stage, which runs first.
            -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;openmp;lldb;' \
            -DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi' \
            -DGCC_INSTALL_PREFIX=$GCCcore_ROOT \
-           -DCMAKE_INSTALL_PREFIX=$TMP/software/llvm/16 \
+           -DCMAKE_INSTALL_PREFIX=$DIR/software/llvm/16 \
            -DLLVM_INSTALL_UTILS=ON \
            -DCMAKE_CXX_COMPILER='mpicxx' \
            -DCLANG_OPENMP_NVPTX_DEFAULT_ARCH=sm_60 \
-           -DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=35,60,70 \
-           -DCMAKE_CXX_FLAGS='-g'
+           -DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=35,60,70
        fi
     - ninja -j48 install
     - cd -
     - mkdir -p software/bin software/lib software/include
-    - cp $TMP/software/llvm/16/lib/libomptarget.so.16 software/lib
-    - cp $TMP/software/llvm/16/lib/*.bc software/lib
-    - cp -r $TMP/software/llvm/16/lib/clang/16/include software/.
-    - mv $TMP/software/llvm/16/bin/clang++ software/bin
-    - mv $TMP/software/llvm/16/bin/clang software/bin 
-    - mv $TMP/software/llvm/16/bin/clang-16 software/bin
+    - cp $DIR/software/llvm/16/lib/libomptarget.so.16 software/lib
+    - cp $DIR/software/llvm/16/lib/*.bc software/lib
+    - cp -r $DIR/software/llvm/16/lib/clang/16/include software/.
+    - mv $DIR/software/llvm/16/bin/clang++ software/bin
+    - mv $DIR/software/llvm/16/bin/clang software/bin 
+    - mv $DIR/software/llvm/16/bin/clang-16 software/bin
     - tar -cvzf software.tar.gz software 
-    - rm -rf $TMP/build-llvm
-    - rm -rf $TMP/software
+    - rm -rf $DIR/build-llvm
+    - rm -rf $DIR/software
   artifacts:
     paths:
       - software.tar.gz
