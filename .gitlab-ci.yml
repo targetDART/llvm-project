@@ -71,7 +71,6 @@ build-job:       # This job runs in the build stage, which runs first.
     - ls -la software/bin
     - clangwrap -v
     - tar -cvzf software.tar.gz software 
-    - rm -rf $DIR/clonedir
   artifacts:
     paths:
       - software.tar.gz
@@ -84,6 +83,7 @@ compile-helloworld-job:
     GIT_STRATEGY: none
     SLURM_PARAM_OVERLAP:  "--overlap"
   script:
+    - ls
     - rm -rf software
     - tar -xzf software.tar.gz
     - git clone https://github.com/targetDART/TargetDART_Applications.git
