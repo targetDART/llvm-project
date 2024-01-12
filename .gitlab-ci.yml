@@ -4,6 +4,7 @@ stages:          # List of stages for jobs, and their order of execution
   - clean
   - run
   - deploy
+  
 
 variables: 
   SLURM_PARAM_ACCOUNT: "-A rwth1447"
