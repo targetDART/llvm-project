@@ -1,13 +1,16 @@
 stages:          # List of stages for jobs, and their order of execution
   - build
   - compile
+  - clean
   - run
   - deploy
+  
 
 variables: 
   SLURM_PARAM_ACCOUNT: "-A rwth1447"
   SLURM_DPARAM_ACCOUNT: "-A rwth1447"
   SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
+  DIR: "/dev/shm"
 
 .base:
   tags: ["hpc"]
@@ -17,17 +20,18 @@ variables:
   before_script:
     - ml purge
     - ml GCCcore binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils CUDA Ninja gompi
+    - export PATH=$PATH:$DIR/software/bin
+    - export LIBRARY_PATH=$DIR/software/lib:$LIBRARY_PATH
+    - export LD_LIBRARY_PATH=$DIR/software/lib:$LD_LIBRARY_PATH
+    - export PSM2_CUDA=1
 
 .exec:
   extends: .base
-  before_script:
-    - ml purge
-    - ml GCCcore binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils CUDA gompi
-    - export PATH=$PATH:$PWD/software/bin
-    - export PATH=$PATH:$PWD/software/llvm/16/bin
-    - export LIBRARY_PATH=$PWD/software/llvm/16/lib:$LIBRARY_PATH
-    - export LD_LIBRARY_PATH=$PWD/software/llvm/16/lib:$LD_LIBRARY_PATH
-    - export PSM2_CUDA=1
+
+.compile:
+  extends: .exec
+  variables:
+    CI_MODE: "SingleSlurmJobAcrossStages"    
 
 
 build-job:       # This job runs in the build stage, which runs first.
@@ -35,14 +39,17 @@ build-job:       # This job runs in the build stage, which runs first.
   stage: build
   variables:
     SLURM_PARAM_CORES: "-c 48"
+    SLURM_PARAM_EXCLUSIVE: "--exclusive"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     SLURM_DPARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
+    CI_MODE: "SingleSlurmJobAcrossStages"
   script:
-    - ls -la $TMP/..
+    - echo $DIR
+    - ls -la $DIR/
     - export SOURCES=$PWD/llvm
-    - mkdir -p $TMP/build-llvm
-    - cd $TMP/build-llvm
+    - mkdir -p $DIR/build-llvm
+    - cd $DIR/build-llvm
     - | 
       if [[ ! -f "CMakeCache.txt" ]]; then
         cmake -G Ninja $SOURCES \
@@ -50,50 +57,54 @@ build-job:       # This job runs in the build stage, which runs first.
            -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;openmp;lldb;' \
            -DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi' \
            -DGCC_INSTALL_PREFIX=$GCCcore_ROOT \
-           -DCMAKE_INSTALL_PREFIX=$TMP/software/llvm/16 \
+           -DCMAKE_INSTALL_PREFIX=$DIR/software/llvm/16 \
            -DLLVM_INSTALL_UTILS=ON \
            -DCMAKE_CXX_COMPILER='mpicxx' \
            -DCLANG_OPENMP_NVPTX_DEFAULT_ARCH=sm_60 \
-           -DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=35,60,70 \
-           -DCMAKE_CXX_FLAGS='-g'
+           -DLIBOMPTARGET_NVPTX_COMPUTE_CAPABILITIES=35,60,70
        fi
     - ninja -j48 install
     - cd -
-    - cp $TMP/software/llvm/16/lib/libomptarget.so.16 .
-    - cd $TMP/software/llvm/16/lib/clang/16/
-    - tar -cvzf includes.tar.gz include 
-    - cd -
-    - mv  $TMP/software/llvm/16/lib/clang/16/includes.tar.gz .
-    - rm -rf $TMP/build-llvm
-    - rm -rf $TMP/software
-  artifacts:
-    paths:
-      - libomptarget.so.16
-      - includes.tar.gz
+    - mkdir -p software/bin software/lib
+    - cp $DIR/software/llvm/16/lib/libomptarget.so.16 software/lib
+    - echo '#!/bin/bash\n\n$DIR/software/llvm/16/bin/clang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
+    - chmod +x software/bin/clangwrap
+    - ls -la software/bin
+    - clangwrap -v
+    - tar -cvzf $TMP/software.tar.gz software 
 
 compile-helloworld-job:
-  extends: .exec
+  extends: .compile
   stage: compile
   dependencies: [build-job]
   variables:
     GIT_STRATEGY: none
+    SLURM_PARAM_OVERLAP:  "--overlap"
   script:
-    - mkdir -p software/bin
-    - mkdir software/lib
-    - tar -xzf includes.tar.gz
-    - mv include software/.
-    - cp libomptarget.so.16 software/lib/libomptarget.so.16
-    - echo '#!/bin/bash\n\nclang++ -L$PWD/software/lib/libomptarget.so.16 -I$PWD/software/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target -march=sm_70 $@' > software/bin/clangwrap
     - git clone https://github.com/targetDART/TargetDART_Applications.git
+    - clangwrap -v
     - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
+    - rm -rf $DIR/build-llvm
+    - rm -rf $DIR/software
   artifacts:
     paths:
       - 00notquitehelloworld.exe
 
+clean-up:
+  variables:
+    GIT_STRATEGY: none
+    END_SINGLE_SLURM_JOB: "1"
+    CI_MODE: "SingleSlurmJobAcrossStages" 
+  stage: clean
+  script:
+    - rm -rf $DIR/build-llvm
+    - rm -rf $DIR/software
+    
+
 run-helloworld-job:
   extends: .exec
   stage: run
-  dependencies: [compile-helloworld-job]
+  dependencies: [compile-helloworld-job, build-job]
   variables:
     GIT_STRATEGY: none
     SLURM_PARAM_CORES: "-c 48"
