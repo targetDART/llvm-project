@@ -44,7 +44,8 @@ tdrc declare_task_type() {
 
 
 void td_yield(td_task_t *task) {
-    td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map->at(task->uid);
+    //TODO: potentially empty or not defined look into setup
+    td_pthread_conditional_wrapper_t *cond_var = conditional_map.get_conditional(task->uid);
 
     DB_TD("yield OMP hidden helper thread until task (%d%d) is finished", task->local_proc, task->uid);
     pthread_cond_wait(&cond_var->conditional,&cond_var->thread_mutex);
@@ -55,7 +56,7 @@ void td_yield(td_task_t *task) {
 
 void td_signal(td_task_t *task) {
     DB_TD("resume OMP hidden helper thread since task (%d%d) finished", task->local_proc, task->uid);
-    td_pthread_conditional_wrapper_t *cond_var = td_task_conditional_map->at(task->uid);
+    td_pthread_conditional_wrapper_t *cond_var = conditional_map.get_conditional(task->uid);
 
     DB_TD("segfault test for task (%d%d)", task->local_proc, task->uid);
 
@@ -65,4 +66,35 @@ void td_signal(td_task_t *task) {
     pthread_cond_signal(&cond_var->conditional);
     pthread_mutex_unlock(&cond_var->thread_mutex);
     DB_TD("Continuation signal for task (%d%d) finished", task->local_proc, task->uid);
+}
+
+TD_Conditional_Map::TD_Conditional_Map() {
+    conditional_map = new std::unordered_map<td_uid_t, td_pthread_conditional_wrapper_t*>();
+    mapmutex = PTHREAD_MUTEX_INITIALIZER;
+}
+
+TD_Conditional_Map::~TD_Conditional_Map() {
+    //cleanup contents 
+    for (auto& entry : *conditional_map) {
+        delete entry.second;
+    }
+    delete conditional_map;
+}
+
+// Thread safe map access
+void TD_Conditional_Map::add_conditional(td_uid_t tid){
+    td_pthread_conditional_wrapper_t *cond_var = new td_pthread_conditional_wrapper_t({PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER});
+    pthread_mutex_lock(&mapmutex);
+    conditional_map[0][tid] = cond_var;
+    pthread_mutex_unlock(&mapmutex);
+}
+
+// Thread safe map access
+td_pthread_conditional_wrapper_t* TD_Conditional_Map::get_conditional(td_uid_t tid){
+    td_pthread_conditional_wrapper_t* res;
+    pthread_mutex_lock(&mapmutex);
+    res = conditional_map[0][tid];
+    pthread_mutex_unlock(&mapmutex);
+
+    return res;
 }

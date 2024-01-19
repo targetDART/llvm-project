@@ -30,6 +30,7 @@ add_llvm_library(omptarget
   TD_scheduling.cpp
   TD_cost_estimation.cpp
   TD_comm_thread.cpp
+  TD_CrashHandling.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LIBOMPTARGET_INCLUDE_DIR}

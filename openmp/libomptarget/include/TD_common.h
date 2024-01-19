@@ -5,6 +5,7 @@
 //TODO: define communication interface for TargetDART
 
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <mutex>
@@ -94,6 +95,7 @@ enum td_queue_class {TD_LOCAL=0, TD_REMOTE=1, TD_REPLICA=2};
 #define TD_AFFINITIES {TD_ANY, TD_GPU, TD_CPU, TD_VECTOR, TD_FPGA}
 #define TD_NUM_AFFINITIES 5
 
+typedef size_t td_uid_t;
 
 typedef struct td_task_t{
     intptr_t            host_base_ptr;
@@ -103,7 +105,7 @@ typedef struct td_task_t{
     ident_t*            Loc;
     int                 local_proc;
     td_device_affinity  affinity;
-    long long           uid;
+    td_uid_t            uid;
     int                 return_code;
 } td_task_t;
 
@@ -122,7 +124,6 @@ extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
 extern std::atomic<bool> *td_start_finalize;
 extern std::atomic<bool> *td_finalize_executor;
-extern std::unordered_map<long long, td_pthread_conditional_wrapper_t*>* td_task_conditional_map;
 
 
 extern int td_comm_size;
@@ -142,6 +143,22 @@ void td_yield(td_task_t *task);
 * Sends a signal that the task with uid task_uid has finished execution, so OMP can resume its management
 */
 void td_signal(td_task_t *task);
+
+//implements a threadsafe map wrapper for the management of pthread conditionals.
+class TD_Conditional_Map {
+    private:
+    std::unordered_map<td_uid_t, td_pthread_conditional_wrapper_t*>* conditional_map;
+    pthread_mutex_t mapmutex;
+
+    public:
+    TD_Conditional_Map();
+    ~TD_Conditional_Map();
+    void add_conditional(td_uid_t tid);
+    td_pthread_conditional_wrapper_t* get_conditional(td_uid_t tid);
+
+};
+
+extern TD_Conditional_Map conditional_map;
 
 #endif // _OMPTARGET_TD_COMMON_H
 

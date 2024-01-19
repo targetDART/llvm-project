@@ -24,6 +24,7 @@
 #include "TD_cost_estimation.h"
 #include "TD_scheduling.h"
 #include "TD_comm_thread.h"
+#include "TD_CrashHandling.h"
 
 
 // TODO: implement interface
@@ -51,11 +52,10 @@ std::atomic<bool> *td_finalize_executor;
 
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
-pthread_mutex_t mapmutex = PTHREAD_MUTEX_INITIALIZER;
 
 // array that holds image base addresses
 std::vector<intptr_t> _image_base_addresses;
-std::unordered_map<long long, td_pthread_conditional_wrapper_t*>* td_task_conditional_map;
+TD_Conditional_Map conditional_map;;
 
 //removes spaces from text
 template<typename T>
@@ -147,9 +147,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
 
   td_pthread_conditional_wrapper_t *cond_var = new td_pthread_conditional_wrapper_t({PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER});
   
-  pthread_mutex_lock(&mapmutex);
-  td_task_conditional_map->insert({task->uid, cond_var});
-  pthread_mutex_unlock(&mapmutex);
+  conditional_map.add_conditional(task->uid);
 
   //start yielding lock here to avoid rare deadlocks in which the task is finished, before td_yield() is called 
   pthread_mutex_lock(&cond_var->thread_mutex);
@@ -231,7 +229,10 @@ int initTargetDART(void* main_ptr) {
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
   // Initialize the map of remote and replicated tasks
   td_remote_task_map = std::unordered_map<long long, td_task_t*>();
-  td_task_conditional_map = new std::unordered_map<long long, td_pthread_conditional_wrapper_t*>();
+  conditional_map = TD_Conditional_Map();
+
+  //init crash handler
+  initHandler();
 
 
   // define the base address of the current process
