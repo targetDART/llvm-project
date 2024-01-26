@@ -3,9 +3,12 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include "private.h"
 #include <link.h>
+#include <mutex>
+#include <pthread.h>
 #include <queue>
 #include <dlfcn.h>
 #include <unistd.h>
@@ -44,33 +47,41 @@ tdrc declare_task_type() {
 
 
 void td_yield(td_task_t *task) {
-    //TODO: potentially empty or not defined look into setup
-    td_pthread_conditional_wrapper_t *cond_var = conditional_map.get_conditional(task->uid);
+    td_conditional_wrapper_t *cond_var = conditional_map->get_conditional(task->uid);
+    //Lock the function from this point onwards
+    {
+        std::unique_lock<std::mutex> lock(cond_var->thread_mutex);
 
-    DB_TD("yield OMP hidden helper thread until task (%d%d) is finished", task->local_proc, task->uid);
-    pthread_cond_wait(&cond_var->conditional,&cond_var->thread_mutex);
-    pthread_mutex_unlock(&cond_var->thread_mutex);
+        DB_TD("yield OMP hidden helper thread until task (%d%d) is finished", task->local_proc, task->uid);
+        //wait until signal and ready to avoid spurrious waiting
+        cond_var->conditional.wait(lock, [cond_var](){return cond_var->ready;});
+    }
 
     DB_TD("Helper yield for task (%d%d) finished", task->local_proc, task->uid);
 }
 
 void td_signal(td_task_t *task) {
     DB_TD("resume OMP hidden helper thread since task (%d%d) finished", task->local_proc, task->uid);
-    td_pthread_conditional_wrapper_t *cond_var = conditional_map.get_conditional(task->uid);
+    td_conditional_wrapper_t *cond_var = conditional_map->get_conditional(task->uid);
 
     DB_TD("segfault test for task (%d%d)", task->local_proc, task->uid);
 
-    pthread_mutex_lock(&cond_var->thread_mutex);
-    DB_TD("segfault test for task (%d%d) finished", task->local_proc, task->uid);
+    //Lock the function from this point onwards
+    {
+        std::lock_guard<std::mutex> lock(cond_var->thread_mutex);
+
+        DB_TD("segfault test for task (%d%d) finished", task->local_proc, task->uid);
+
+        cond_var->ready = true;
     
-    pthread_cond_signal(&cond_var->conditional);
-    pthread_mutex_unlock(&cond_var->thread_mutex);
+        cond_var->conditional.notify_one();
+    }
     DB_TD("Continuation signal for task (%d%d) finished", task->local_proc, task->uid);
 }
 
 TD_Conditional_Map::TD_Conditional_Map() {
-    conditional_map = new std::unordered_map<td_uid_t, td_pthread_conditional_wrapper_t*>();
-    mapmutex = PTHREAD_MUTEX_INITIALIZER;
+    conditional_map = new std::unordered_map<td_uid_t, td_conditional_wrapper_t*>();
+    DB_TD("Initialized Conditional Map");
 }
 
 TD_Conditional_Map::~TD_Conditional_Map() {
@@ -82,19 +93,24 @@ TD_Conditional_Map::~TD_Conditional_Map() {
 }
 
 // Thread safe map access
-void TD_Conditional_Map::add_conditional(td_uid_t tid){
-    td_pthread_conditional_wrapper_t *cond_var = new td_pthread_conditional_wrapper_t({PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER});
-    pthread_mutex_lock(&mapmutex);
+td_conditional_wrapper_t* TD_Conditional_Map::add_conditional(td_uid_t tid){
+    td_conditional_wrapper_t *cond_var = new td_conditional_wrapper_t();
+    DB_TD("Entering mutex for conditional creation for task (%d%d)", td_comm_rank, tid);
+    mapmutex.lock();
+    DB_TD("Entered mutex for conditional creation for task (%d%d)", td_comm_rank, tid);
     conditional_map[0][tid] = cond_var;
-    pthread_mutex_unlock(&mapmutex);
+    mapmutex.unlock();
+    return cond_var;
 }
 
 // Thread safe map access
-td_pthread_conditional_wrapper_t* TD_Conditional_Map::get_conditional(td_uid_t tid){
-    td_pthread_conditional_wrapper_t* res;
-    pthread_mutex_lock(&mapmutex);
+td_conditional_wrapper_t* TD_Conditional_Map::get_conditional(td_uid_t tid){
+    td_conditional_wrapper_t* res;
+    DB_TD("Entering mutex for conditional read for task (%d%d)", td_comm_rank, tid);
+    mapmutex.lock();
+    DB_TD("Entered mutex for conditional read for task (%d%d)", td_comm_rank, tid);
     res = conditional_map[0][tid];
-    pthread_mutex_unlock(&mapmutex);
+    mapmutex.unlock();
 
     return res;
 }

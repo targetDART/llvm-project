@@ -8,24 +8,26 @@
 #include "TD_communication.h"
 #include <atomic>
 #include <cstdio>
+#include <functional>
 #include <iostream>
 #include <cstddef>
 #include <cstdlib>
+#include <pthread.h>
+#include <thread>
 #include <tuple>
 #include <unistd.h>
 #include <vector>
 
 
 bool doRepartition = false;
-std::vector<pthread_t> *spawned_threads;
+std::vector<std::thread> spawned_threads;
 
-std::vector<td_device_affinity>* affinity_assignment;
-pthread_barrier_t   barrier; 
+std::vector<td_device_affinity> affinity_assignment;
 
 /**
 * Defines the routine performed by the dedicated scheduling thread.
 */
-[[nodiscard]] void *__td_schedule_thread_loop(void *ptr) {
+[[nodiscard]] void __td_schedule_thread_loop(int deviceID) {
     int iter = 0;
     DB_TD("Starting scheduler thread");
     while (!td_test_finalization(td_get_total_load(), td_start_finalize->load()) && td_comm_size > 1) {
@@ -41,10 +43,13 @@ pthread_barrier_t   barrier;
         td_test_and_receive_results();
     }
 
+
+    td_finalize_executor->store(true);
     DB_TD("Scheduling thread finished");    
-    pthread_barrier_wait (&barrier);
-    pthread_exit(NULL);
 }
+
+//Declares the scheduling as a callable parameter
+std::function<void(int)> scheduler_func(__td_schedule_thread_loop);
 
 
 void td_trigger_global_repartitioning(td_device_affinity affinity) {
@@ -62,11 +67,10 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
 * The parameter ptr defines the target device this thread is assigned to. 
 * The device id defines which affinities are relevant and which queues are accessible.
 */
-[[nodiscard]] void *__td_exec_thread_loop(void *ptr) {
-    int deviceID = ((long) ptr);
+[[nodiscard]] void __td_exec_thread_loop(int deviceID) {
 
     DB_TD("Starting executor thread for device %d", deviceID);
-    td_device_affinity affinity = affinity_assignment->at(deviceID);
+    td_device_affinity affinity = affinity_assignment.at(deviceID);
     while (!td_finalize_executor->load()) {
         td_task_t *task;
         if (td_get_next_task(affinity, deviceID, &task) == TARGETDART_SUCCESS) {
@@ -90,11 +94,14 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
     }    
 
     DB_TD("executor thread for device %d finished", deviceID);
-    pthread_exit(NULL);
 }
 
-//wrap the thread initialization and pinning
-void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread, int id) {
+
+//Declares the execution as a callable parameter
+std::function<void(int)> exec_func(__td_exec_thread_loop);
+
+// pins 
+void __td_pin_and_workload(std::thread* thread, int core, std::function<void(int)> *work, int deviceID) {
     cpu_set_t cpuset;// = CPU_ALLOC(N);
 
     int s;
@@ -102,23 +109,16 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
     CPU_ZERO(&cpuset);
     CPU_SET(core, &cpuset);
 
-    //initialize atribute
-    pthread_attr_t pthread_attr;
-    s = pthread_attr_init(&pthread_attr);
-    if (s != 0) 
-        handle_error_en(s, "pthread_attr_init");
-    
-    //assign attribute to cpuset
-    s = pthread_attr_setaffinity_np(&pthread_attr, sizeof(cpu_set_t), &cpuset);
-    if (s != 0) 
-        handle_error_en(s, "pthread_attr_setaffinity_np");
-            
-    s = pthread_create(thread, &pthread_attr,  func, (void*) id);
-    pthread_attr_destroy(&pthread_attr);
+    // pin current thread to core
+    // WARNING: Only works on Unix systems
+    s = pthread_setaffinity_np(thread->native_handle(), sizeof(cpu_set_t), &cpuset);
     if (s != 0) 
         handle_error_en(s, "Failed to initialize thread");
 
+    //Do work
+    work[0](deviceID);
 }
+
 
 /*
 * initializes the scheduling and executor threads.
@@ -127,19 +127,16 @@ void __td_init_and_pin_thread(void *(*func)(void *), int core, pthread_t *thread
 */
 tdrc td_init_threads(int scheduler_placement, int *exec_placements) {
 
-    pthread_barrier_init (&barrier, NULL, 2);
+    spawned_threads = std::vector<std::thread>(omp_get_num_devices() + 2);
 
-    spawned_threads = new std::vector<pthread_t>(omp_get_num_devices() + 2);
+    spawned_threads[0] = std::thread(__td_pin_and_workload, &spawned_threads[0], scheduler_placement, &scheduler_func, -1);
 
-    __td_init_and_pin_thread(__td_schedule_thread_loop, scheduler_placement, &spawned_threads->at(0), 0);
-
-    affinity_assignment = new std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
-    affinity_assignment->at(omp_get_num_devices()) = TD_CPU;
+    affinity_assignment = std::vector<td_device_affinity>(omp_get_num_devices() + 1, TD_GPU);
+    affinity_assignment.at(omp_get_num_devices()) = TD_CPU;
 
     //initialize all executor threads
     for (int i = 0; i <= omp_get_num_devices(); i++) {
-        __td_init_and_pin_thread(__td_exec_thread_loop, exec_placements[i], &spawned_threads->at(i + 1), i);
-
+        spawned_threads[i+1] = std::thread(__td_pin_and_workload, &spawned_threads[i+1], scheduler_placement, &exec_func, i);
     }
 
     //delete affinity_assignment;
@@ -154,18 +151,14 @@ tdrc td_finalize_threads() {
     
     DB_TD("begin finalization of targetDARTLib, wait for remaining work");
     td_start_finalize->store(true);  
-    pthread_barrier_wait (&barrier);
-    td_finalize_executor->store(true);
 
-    DB_TD("Synchronized threads start joining %d managment threads", spawned_threads->size());
-    for (int i = 0; i < spawned_threads->size(); i++) {         
+    DB_TD("Synchronized threads start joining %d managment threads", spawned_threads.size());
+    for (int i = 0; i < spawned_threads.size(); i++) {         
         DB_TD("joining thread: %d", i);   
-        //TODO: This may Deadlock, look into this.
-        //pthread_join( spawned_threads->at(i), NULL);
+        spawned_threads.at(i).join();
         DB_TD("joined thread: %d", i);
     }
 
-    delete spawned_threads;
     DB_TD("finalized managment threads");
 
     return TARGETDART_SUCCESS;

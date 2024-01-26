@@ -11,6 +11,7 @@
 #include "private.h"
 #include "mpi.h"
 #include <link.h>
+#include <mutex>
 #include <pthread.h>
 #include <queue>
 #include <dlfcn.h>
@@ -24,7 +25,6 @@
 #include "TD_cost_estimation.h"
 #include "TD_scheduling.h"
 #include "TD_comm_thread.h"
-#include "TD_CrashHandling.h"
 
 
 // TODO: implement interface
@@ -55,7 +55,7 @@ MPI_Datatype TD_MPI_Task;
 
 // array that holds image base addresses
 std::vector<intptr_t> _image_base_addresses;
-TD_Conditional_Map conditional_map;;
+TD_Conditional_Map* conditional_map;
 
 //removes spaces from text
 template<typename T>
@@ -145,12 +145,11 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
 
   DB_TD("Current hardware thread %d", syscall(__NR_gettid));
 
-  td_pthread_conditional_wrapper_t *cond_var = new td_pthread_conditional_wrapper_t({PTHREAD_MUTEX_INITIALIZER, PTHREAD_COND_INITIALIZER});
-  
-  conditional_map.add_conditional(task->uid);
+  td_conditional_wrapper_t* cond_var = conditional_map->add_conditional(task->uid);
 
+  
   //start yielding lock here to avoid rare deadlocks in which the task is finished, before td_yield() is called 
-  pthread_mutex_lock(&cond_var->thread_mutex);
+  //std::unique_lock<std::mutex> lock(cond_var->thread_mutex);
 
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
@@ -229,10 +228,7 @@ int initTargetDART(void* main_ptr) {
   std::unordered_map<intptr_t,std::vector<double>> td_cost;
   // Initialize the map of remote and replicated tasks
   td_remote_task_map = std::unordered_map<long long, td_task_t*>();
-  conditional_map = TD_Conditional_Map();
-
-  //init crash handler
-  initHandler();
+  conditional_map = new TD_Conditional_Map();
 
 
   // define the base address of the current process
@@ -265,6 +261,8 @@ int initTargetDART(void* main_ptr) {
 int finalizeTargetDART() {
   //synchronize all threads and processes
   td_finalize_threads();
+
+  delete conditional_map;
 
   //finalize MPI
   if (__td_did_initialize_mpi) {

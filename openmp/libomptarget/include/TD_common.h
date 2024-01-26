@@ -5,6 +5,7 @@
 //TODO: define communication interface for TargetDART
 
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -115,10 +116,11 @@ typedef struct td_global_sched_params_t{
     COST_DATA_TYPE        local_cost;
 } td_global_sched_params_t;
 
-typedef struct td_pthread_conditional_wrapper_t {
-    pthread_mutex_t thread_mutex;
-    pthread_cond_t  conditional;
-} td_pthread_conditional_wrapper_t;
+typedef struct td_conditional_wrapper_t {
+    std::mutex              thread_mutex;
+    std::condition_variable conditional;
+    bool                    ready = false;
+} td_conditional_wrapper_t;
 
 extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
@@ -147,18 +149,18 @@ void td_signal(td_task_t *task);
 //implements a threadsafe map wrapper for the management of pthread conditionals.
 class TD_Conditional_Map {
     private:
-    std::unordered_map<td_uid_t, td_pthread_conditional_wrapper_t*>* conditional_map;
-    pthread_mutex_t mapmutex;
+    std::unordered_map<td_uid_t, td_conditional_wrapper_t*>* conditional_map;
+    std::mutex mapmutex;
 
     public:
     TD_Conditional_Map();
     ~TD_Conditional_Map();
-    void add_conditional(td_uid_t tid);
-    td_pthread_conditional_wrapper_t* get_conditional(td_uid_t tid);
+    td_conditional_wrapper_t* add_conditional(td_uid_t tid);
+    td_conditional_wrapper_t* get_conditional(td_uid_t tid);
 
 };
 
-extern TD_Conditional_Map conditional_map;
+extern TD_Conditional_Map* conditional_map;
 
 #endif // _OMPTARGET_TD_COMMON_H
 
