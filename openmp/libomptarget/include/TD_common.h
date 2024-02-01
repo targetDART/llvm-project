@@ -124,8 +124,7 @@ typedef struct td_conditional_wrapper_t {
 
 extern MPI_Datatype TD_Kernel_Args;
 extern MPI_Datatype TD_MPI_Task;
-extern std::atomic<bool> *td_start_finalize;
-extern std::atomic<bool> *td_finalize_executor;
+
 
 
 extern int td_comm_size;

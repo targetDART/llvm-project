@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <iostream>
 #include "private.h"
 #include "mpi.h"
@@ -90,7 +91,10 @@ int td_receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        task->KernelArgs->ArgPtrs[i] = new int8_t[task->KernelArgs->ArgSizes[i]];
+        //TODO: look into datatype and allocation
+        task->KernelArgs->ArgPtrs[i] = malloc(task->KernelArgs->ArgSizes[i]);
+
+        DB_TD("Allocated memory for task (%d%d) at 0x%016x with size %d bytes", task->local_proc, task->uid, task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i]);  
         int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
         if (IsMapTo != 0)
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);

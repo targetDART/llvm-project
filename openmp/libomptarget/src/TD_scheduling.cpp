@@ -203,7 +203,7 @@ tdrc td_get_next_task(td_device_affinity affinity, int deviceID, td_task_t **tas
     ret_code = __td_remote_task_queues->at(TD_ANY)->get_task(task);
 
     if (ret_code == TARGETDART_SUCCESS) {
-        DB_TD("Got task (%d%d) remote local any queue", (*task)->local_proc, (*task)->uid);
+        DB_TD("Got task (%d%d) remote any queue", (*task)->local_proc, (*task)->uid);
         return TARGETDART_SUCCESS;
     }
 

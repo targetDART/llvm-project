@@ -2,6 +2,7 @@
 #include "omp.h"
 #include "omptarget.h"
 #include "device.h"
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -46,9 +47,6 @@ MPI_Comm targetdart_comm;
 
 int td_comm_size;
 int td_comm_rank;
-
-std::atomic<bool> *td_start_finalize;
-std::atomic<bool> *td_finalize_executor;
 
 MPI_Datatype TD_Kernel_Args;
 MPI_Datatype TD_MPI_Task;
@@ -112,16 +110,24 @@ std::vector<std::string> split(std::string base) {
 /**
 * Reads the environment variable TD_MANAGEMENT
 */
-int* __td_get_thread_placement_from_env() {
-  std::string management = std::getenv("TD_MANAGEMENT");
-  std::vector<std::string> assignments = split(management);
-  int *placements = (int*) std::malloc(assignments.size() * sizeof(int));
-  for (int i = 1; i < assignments.size(); i++) {
-    placements[i] = std::stoi(assignments.at(i));
-    DB_TD("Execution thread %d assiged to core %d from env", i - 1, placements[i]);
+std::vector<int>* __td_get_thread_placement_from_env() {
+  std::vector<int> *placements = new std::vector<int>(omp_get_num_devices() + 2, -1);
+
+  if (std::getenv("TD_MANAGEMENT") == NULL) {
+    return placements;
   }
-  placements[0] = std::stoi(assignments.at(0));
-  DB_TD("Scheduling thread assiged to core %d from env", placements[0]);
+
+  std::string management = std::getenv("TD_MANAGEMENT");
+
+  std::vector<std::string> assignments = split(management);
+
+  placements->at(0) = std::stoi(assignments.at(0));
+  DB_TD("Scheduling thread assiged to core %d from env", (*placements)[0]);
+
+  for (int i = 1; i < std::min( assignments.size(), placements->size()); i++) {
+    placements->at(i) = std::stoi(assignments.at(i));
+    DB_TD("Execution thread %d assiged to core %d from env", i - 1, (*placements)[i]);
+  }
   return placements;
 }
 
@@ -131,7 +137,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
                         int32_t ThreadLimit, void *HostPtr,
                         KernelArgsTy *KernelArgs, int64_t *DeviceId) 
 {
-  DB_TD("create new task from HostPtr (%d)", HostPtr);
+  DB_TD("create new task from HostPtr (0x%020x)", HostPtr);
   // create internal task data structure
   td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
   task->host_base_ptr = apply_image_base_address((intptr_t) HostPtr, false);
@@ -141,7 +147,7 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->thread_limit = ThreadLimit;
   task->local_proc = td_comm_rank;
   task->uid = __td_tasks_generated.fetch_add(1);
-  DB_TD("add task (%d%d) to queue from HostPtr (%d)", task->local_proc, task->uid, HostPtr);
+  DB_TD("add task (%d%d) to queue from HostPtr (0x%020x)", task->local_proc, task->uid, HostPtr);
 
   DB_TD("Current hardware thread %d", syscall(__NR_gettid));
 
@@ -234,13 +240,10 @@ int initTargetDART(void* main_ptr) {
   // define the base address of the current process
   get_base_address(main_ptr);
 
-  td_start_finalize = new std::atomic<bool>(false);  
-  td_finalize_executor = new std::atomic<bool>(false);
-
   // initial placements
   // TODO: Implement callbacks for compile time parameters or Environment variables
-  int *placements = __td_get_thread_placement_from_env();
-  td_init_threads(placements[0], placements + 1);
+  std::vector<int> *placements = __td_get_thread_placement_from_env();
+  td_init_threads(placements);
   //free(placements);
 
   // Init devices during installation

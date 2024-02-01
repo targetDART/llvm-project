@@ -15,7 +15,7 @@ void td_trigger_global_repartitioning(td_device_affinity affinity);
 * The threads are pinned to the cores defined in the parameters.
 * the number of exec placements must be equal to the omp_get_num_devices() + 1.
 */
-tdrc td_init_threads(int scheduler_placement, int *exec_placements);
+tdrc td_init_threads(std::vector<int> *assignments);
 
 /**
 * synchronizes all processes to ensure all tasks are finished.

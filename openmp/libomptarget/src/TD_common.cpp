@@ -16,12 +16,12 @@
 
 tdrc declare_KernelArgs_type() {
     const int nitems = 3;
-    int blocklengths[3] = {2,2,3};
+    int blocklengths[3] = {2,2,7};
     MPI_Datatype types[3] = {MPI_UINT32_T, MPI_UINT64_T,MPI_UINT32_T};
     MPI_Aint offsets[3];
-    offsets[0] = (MPI_Aint) offsetof(KernelArgsTy, Version);
-    offsets[1] = (MPI_Aint) offsetof(KernelArgsTy, Tripcount);
-    offsets[2] = (MPI_Aint) offsetof(KernelArgsTy, NumTeams);
+    offsets[0] = (MPI_Aint) offsetof(KernelArgsTy, Version); // also NumArgs
+    offsets[1] = (MPI_Aint) offsetof(KernelArgsTy, Tripcount); //also flags
+    offsets[2] = (MPI_Aint) offsetof(KernelArgsTy, NumTeams); //also ThreadLimit and DynCGroupMem
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &TD_Kernel_Args);
     MPI_Type_commit(&TD_Kernel_Args);
