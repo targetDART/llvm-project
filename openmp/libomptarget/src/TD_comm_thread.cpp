@@ -36,7 +36,7 @@ std::vector<td_device_affinity> affinity_assignment;
     int iter = 0;
     DB_TD("Starting scheduler thread");
     while (!td_test_finalization(td_get_total_load(), td_start_finalize->load()) && td_comm_size > 1) {
-        if (iter == 200000 || doRepartition) {
+        if (iter == 800000 || doRepartition) {
             iter = 0;
             //td_global_reschedule(TD_ANY);
             doRepartition = false;
