@@ -68,6 +68,10 @@ VERS1.0 {
     __tgt_interop_use;
     __tgt_interop_destroy;
     ompt_libomptarget_connect;
+    initTargetDART;
+    finalizeTargetDART;
+    td_advance;
+    td_phase_progress;
   local:
     *;
 };

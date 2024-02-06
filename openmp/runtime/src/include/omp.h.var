@@ -101,6 +101,22 @@
     extern void   __KAI_KMPC_CONVENTION  omp_destroy_nest_lock (omp_nest_lock_t *);
     extern int    __KAI_KMPC_CONVENTION  omp_test_nest_lock    (omp_nest_lock_t *);
 
+    /* targetDART definitions start */
+
+    extern int    __KAI_KMPC_CONVENTION  initTargetDART   (void*);
+    extern int    __KAI_KMPC_CONVENTION  finalizeTargetDART   (void);
+    extern void   __KAI_KMPC_CONVENTION  td_advance    (uint64_t);
+    extern void   __KAI_KMPC_CONVENTION  td_phase_progress    (uint64_t);
+
+    #define DEVICE_BASE 1000
+    #define TARGETDART_ANY DEVICE_BASE + 0
+    #define TARGETDART_CPU DEVICE_BASE + 1
+    #define TARGETDART_GPU DEVICE_BASE + 2
+    #define TARGETDART_FPGA DEVICE_BASE + 3
+    #define TARGETDART_VEC DEVICE_BASE + 4
+    #define TARGETDART_DEVICE(n) DEVICE_BASE + 5 + n
+    /* targetDART definitions end */
+
     /* OpenMP 5.0  Synchronization hints*/
     typedef enum omp_sync_hint_t {
         omp_sync_hint_none           = 0,

@@ -20,6 +20,7 @@
 #include "Shared/Profile.h"
 
 #include "Utils/ExponentialBackoff.h"
+#include "targetDART/TargetDART.h"
 
 #include <cassert>
 #include <cstdint>
@@ -241,6 +242,13 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   DP("Entering target region for device %" PRId64 " with entry point " DPxMOD
      "\n",
      DeviceId, DPxPTR(HostPtr));
+
+  //TargetDART: steal task for targetDART lib here
+  if(DeviceId >= 1000 && DeviceId <= 1010) {
+    DB_TD("Enter targetDART runtime for deviceId %d", DeviceId);
+    return td_add_task(Loc, NumTeams, ThreadLimit, HostPtr, KernelArgs, &DeviceId);
+  }
+  DB_TD("Skip targetDART runtime for deviceId %d", DeviceId);
 
   if (checkDeviceAndCtors(DeviceId, Loc)) {
     DP("Not offloading to device %" PRId64 "\n", DeviceId);
