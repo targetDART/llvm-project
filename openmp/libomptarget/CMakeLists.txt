@@ -73,6 +73,10 @@ else()
 endif()
 if(LIBOMPTARGET_ENABLE_DEBUG)
   add_definitions(-DOMPTARGET_DEBUG)
+  add_definitions(-DTARGETDART_DEBUG)
+endif()
+if(TARGETDART_DEBUG)  
+  add_definitions(-DTARGETDART_DEBUG)
 endif()
 
 # No exceptions and no RTTI, except if requested.

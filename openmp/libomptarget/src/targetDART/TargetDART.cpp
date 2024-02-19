@@ -7,7 +7,10 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <stdio.h>
 #include <iostream>
+#include <fcntl.h>
+#include "unistd.h"
 #include "private.h"
 #include "mpi.h"
 #include <link.h>
@@ -149,6 +152,8 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   task->uid = __td_tasks_generated.fetch_add(1);
   DB_TD("add task (%d%d) to queue from HostPtr (0x%020x)", task->local_proc, task->uid, HostPtr);
 
+  DB_TD("add task (%d%d) to queue from BasePtr (0x%020x)", task->local_proc, task->uid, task->host_base_ptr);
+
   DB_TD("Current hardware thread %d", syscall(__NR_gettid));
 
   td_conditional_wrapper_t* cond_var = conditional_map->add_conditional(task->uid);
@@ -218,12 +223,13 @@ int initTargetDART(void* main_ptr) {
     //TODO: Fehler meldung
   }
 
+  //TODO: add redirect to split mpioutput
+
   //decare KernelArgs,task as MPI Type
   declare_KernelArgs_type();
   declare_task_type();
 
   // create separate communicator for targetdart
-  //TODO: reduce to single communicator for coordination (Deadlock danger?)
   err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
   MPI_Comm_size(targetdart_comm, &td_comm_size);
   MPI_Comm_rank(targetdart_comm, &td_comm_rank);

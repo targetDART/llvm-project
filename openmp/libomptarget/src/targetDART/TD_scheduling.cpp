@@ -18,10 +18,10 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <vector>
-#include "TD_scheduling.h"
-#include "TD_cost_estimation.h"
-#include "TD_queue.h"
-#include "TD_communication.h"
+#include "targetDART/TD_scheduling.h"
+#include "targetDART/TD_cost_estimation.h"
+#include "targetDART/TD_queue.h"
+#include "targetDART/TD_communication.h"
 
 std::vector<td_progression_t> td_global_progression;
 

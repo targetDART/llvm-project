@@ -28,6 +28,13 @@ add_llvm_library(omptarget
   OpenMP/InteropAPI.cpp
   OpenMP/OMPT/Callback.cpp
 
+  targetDART/TargetDART.cpp
+  targetDART/TD_communication.cpp
+  targetDART/TD_common.cpp
+  targetDART/TD_queue.cpp
+  targetDART/TD_scheduling.cpp
+  targetDART/TD_cost_estimation.cpp
+  targetDART/TD_comm_thread.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${LIBOMPTARGET_INCLUDE_DIR}

@@ -12,6 +12,7 @@
 #include <link.h>
 #include <queue>
 #include <dlfcn.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #include <vector>
 #include "targetDART/TargetDART.h"
@@ -90,11 +91,14 @@ int td_receive_task(int source, td_task_t *task) {
 
     //Receive all parameter values
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
+    task->KernelArgs->ArgBasePtrs = new void*[task->KernelArgs->NumArgs];
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         //TODO: look into datatype and allocation
-        task->KernelArgs->ArgPtrs[i] = malloc(task->KernelArgs->ArgSizes[i]);
+        task->KernelArgs->ArgPtrs[i] = std::malloc(task->KernelArgs->ArgSizes[i]);
+        task->KernelArgs->ArgBasePtrs[i] = task->KernelArgs->ArgPtrs[i];
 
+        
         DB_TD("Allocated memory for task (%d%d) at 0x%016x with size %d bytes", task->local_proc, task->uid, task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i]);  
         int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
         if (IsMapTo != 0)
