@@ -71,7 +71,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - echo '#!/bin/bash\n\n$INSTALL_DIR/software/llvm/16/bin/clang++ -L$INSTALL_DIR/software/llvm/16/lib/libomptarget.so.16 -I$INSTALL_DIR/softwarellvm/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
     - chmod +x software/bin/clangwrap
     - ls -la software/bin
-    - clangwrap -v
+    - software/bin/clangwrap -v
   artifacts:
     paths:
       - ./*
@@ -85,8 +85,8 @@ compile-helloworld-job:
     SLURM_PARAM_OVERLAP:  "--overlap"
   script:
     - git clone https://github.com/targetDART/TargetDART_Applications.git
-    - clangwrap -v
-    - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
+    - software/bin/clangwrap -v
+    - software/bin/clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
   artifacts:
     paths:
       - 00notquitehelloworld.exe
