@@ -72,7 +72,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - tar -cvzf $TMP/software.tar.gz software 
   artifacts:
     paths:
-      - *
+      - ./*
 
 compile-helloworld-job:
   extends: .compile
