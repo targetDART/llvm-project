@@ -9,6 +9,7 @@ stages:          # List of stages for jobs, and their order of execution
 variables: 
   SLURM_PARAM_ACCOUNT: "-A rwth1270"
   SLURM_DPARAM_ACCOUNT: "-A rwth1270"
+  SLURM_DPARAM_TIME:  "-t 2:00:00"
   DIR: "/dev/shm"
 
 .base:
@@ -42,13 +43,12 @@ build-job:       # This job runs in the build stage, which runs first.
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_EXCLUSIVE: "--exclusive"
     SLURM_PARAM_TIME:  "-t 2:00:00"
-    SLURM_DPARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
   script:
     - echo $DIR
     - ls -la $DIR/
     - export SOURCES=$PWD/llvm
-    - export INSTALL_DIR=$WORK
+    - export INSTALL_DIR=$PWD
     - mkdir -p $DIR/build-llvm
     - cd $DIR/build-llvm
     - | 
@@ -82,7 +82,6 @@ compile-helloworld-job:
   dependencies: [build-job]
   variables:
     GIT_STRATEGY: none
-    SLURM_PARAM_OVERLAP:  "--overlap"
   script:
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - software/bin/clangwrap -v
@@ -94,8 +93,6 @@ compile-helloworld-job:
 clean-up:
   variables:
     GIT_STRATEGY: none
-    END_SINGLE_SLURM_JOB: "1"
-    CI_MODE: "SingleSlurmJobAcrossStages" 
   stage: clean
   script:
     - rm -rf $DIR/build-llvm
