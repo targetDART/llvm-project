@@ -19,7 +19,7 @@ variables:
   before_script:
     - ml purge
     - ml GCCcore binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils CUDA Ninja intel GCC
-    - export PATH=$PATH:$DIR/software/bin
+    - export PATH=$PATH:$PWD/software/bin
     - export LIBRARY_PATH=$DIR/software/lib:$LIBRARY_PATH
     - export LD_LIBRARY_PATH=$DIR/software/lib:$LD_LIBRARY_PATH
     - export PSM2_CUDA=1
