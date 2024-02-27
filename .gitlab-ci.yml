@@ -1,7 +1,6 @@
 stages:          # List of stages for jobs, and their order of execution
   - build
   - compile
-  - clean
   - run
   - deploy
   
@@ -10,7 +9,8 @@ variables:
   SLURM_PARAM_ACCOUNT: "-A rwth1270"
   SLURM_DPARAM_ACCOUNT: "-A rwth1270"
   SLURM_DPARAM_TIME:  "-t 2:00:00"
-  DIR: "/dev/shm"
+  SLURM_PARAM_EXCLUSIVE: "--exclusive"
+  GIT_CLONE_DIR: "/dev/shm"
 
 .base:
   tags: ["hpc"]
@@ -21,8 +21,8 @@ variables:
     - ml purge
     - ml GCCcore binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils CUDA Ninja intel GCC
     - export PATH=$PATH:$PWD/software/bin
-    - export LIBRARY_PATH=$DIR/software/lib:$LIBRARY_PATH
-    - export LD_LIBRARY_PATH=$DIR/software/lib:$LD_LIBRARY_PATH
+    - export LIBRARY_PATH=$PWD/software/lib:$LIBRARY_PATH
+    - export LD_LIBRARY_PATH=$PWD/software/lib:$LD_LIBRARY_PATH
     - export PSM2_CUDA=1
     - export I_MPI_CXX=g++
     - export I_MPI_CC=gcc
@@ -44,21 +44,19 @@ build-job:       # This job runs in the build stage, which runs first.
     SLURM_PARAM_EXCLUSIVE: "--exclusive"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
-    INSTALL_DIR: "$PWD"
   script:
-    - echo $DIR
-    - ls -la $DIR/
+    - echo $PWD
+    - ls -la $PWD/
     - export SOURCES=$PWD/llvm
-    - echo $INSTALL_DIR
-    - mkdir -p $DIR/build-llvm
-    - cd $DIR/build-llvm
+    - mkdir -p $PWD/build-llvm
+    - cd $PWD/build-llvm
     - | 
       if [[ ! -f "CMakeCache.txt" ]]; then
         cmake -G Ninja $SOURCES \
             -DCMAKE_BUILD_TYPE=Release\
             -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;openmp;lldb;' \
             -DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind' \
-            -DCMAKE_INSTALL_PREFIX=$INSTALL_DIR/software/llvm/16 \
+            -DCMAKE_INSTALL_PREFIX=$PWD/software/llvm/16 \
             -DLLVM_INSTALL_UTILS=ON \
             -DCMAKE_CXX_COMPILER='mpicxx' \
             -DCMAKE_C_COMPILER='mpicc' \
@@ -69,7 +67,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - ninja -j48 install
     - cd -
     - mkdir -p software/bin
-    - echo '#!/bin/bash\n\n$INSTALL_DIR/software/llvm/16/bin/clang++ -L$INSTALL_DIR/software/llvm/16/lib/libomptarget.so.16 -I$INSTALL_DIR/softwarellvm/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
+    - echo '#!/bin/bash\n\n$PWD/software/llvm/16/bin/clang++ -L$PWD/software/llvm/16/lib/libomptarget.so.16 -I$PWD/softwarellvm/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
     - chmod +x software/bin/clangwrap
     - ls -la software/bin
     - software/bin/clangwrap -v
@@ -89,16 +87,7 @@ compile-helloworld-job:
     - software/bin/clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
   artifacts:
     paths:
-      - 00notquitehelloworld.exe
-
-clean-up:
-  variables:
-    GIT_STRATEGY: none
-  stage: clean
-  script:
-    - rm -rf $DIR/build-llvm
-    - rm -rf $DIR/software
-    
+      - 00notquitehelloworld.exe    
 
 run-helloworld-job:
   extends: .exec
