@@ -44,11 +44,12 @@ build-job:       # This job runs in the build stage, which runs first.
     SLURM_PARAM_EXCLUSIVE: "--exclusive"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
+    INSTALL_DIR: "$PWD"
   script:
     - echo $DIR
     - ls -la $DIR/
     - export SOURCES=$PWD/llvm
-    - export INSTALL_DIR=$PWD
+    - echo $INSTALL_DIR
     - mkdir -p $DIR/build-llvm
     - cd $DIR/build-llvm
     - | 
