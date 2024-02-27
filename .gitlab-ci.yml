@@ -67,13 +67,13 @@ build-job:       # This job runs in the build stage, which runs first.
     - ninja -j48 install
     - cd -
     - mkdir -p software/bin
-    - echo '#!/bin/bash\n\n$PWD/software/llvm/16/bin/clang++ -L$PWD/software/llvm/16/lib/libomptarget.so.16 -I$PWD/softwarellvm/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@' > software/bin/clangwrap
+    - echo "#!/bin/bash\n\n$PWD/software/llvm/16/bin/clang++ -L$PWD/software/llvm/16/lib/libomptarget.so.16 -I$PWD/softwarellvm/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@" > software/bin/clangwrap
     - chmod +x software/bin/clangwrap
     - ls -la software/bin
-    - software/bin/clangwrap -v
+    - clangwrap -v
   artifacts:
     paths:
-      - ./*
+      - ./software/*
 
 compile-helloworld-job:
   extends: .compile
@@ -83,8 +83,8 @@ compile-helloworld-job:
     GIT_STRATEGY: none
   script:
     - git clone https://github.com/targetDART/TargetDART_Applications.git
-    - software/bin/clangwrap -v
-    - software/bin/clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
+    - clangwrap -v
+    - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
   artifacts:
     paths:
       - 00notquitehelloworld.exe    
