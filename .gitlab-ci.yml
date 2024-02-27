@@ -10,7 +10,7 @@ variables:
   SLURM_DPARAM_ACCOUNT: "-A rwth1270"
   SLURM_DPARAM_TIME:  "-t 2:00:00"
   SLURM_PARAM_EXCLUSIVE: "--exclusive"
-  GIT_CLONE_DIR: "/dev/shm"
+  DIR: "/dev/shm"
 
 .base:
   tags: ["hpc"]
@@ -48,8 +48,8 @@ build-job:       # This job runs in the build stage, which runs first.
     - echo $PWD
     - ls -la $PWD/
     - export SOURCES=$PWD/llvm
-    - mkdir -p $PWD/build-llvm
-    - cd $PWD/build-llvm
+    - mkdir -p $DIR/build-llvm
+    - cd $DIR/build-llvm
     - | 
       if [[ ! -f "CMakeCache.txt" ]]; then
         cmake -G Ninja $SOURCES \
