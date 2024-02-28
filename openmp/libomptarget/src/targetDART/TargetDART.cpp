@@ -31,8 +31,6 @@
 #include "targetDART/TD_comm_thread.h"
 
 
-// TODO: implement interface
-
 // Mixed endianness is not supported
 
 static bool __td_initialized = false;

@@ -1,5 +1,3 @@
-//TODO: define communication interface for TargetDART
-
 #include <cstdint>
 #include <vector>
 #include "omptarget.h"
