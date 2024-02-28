@@ -70,10 +70,12 @@ build-job:       # This job runs in the build stage, which runs first.
     - echo "#!/bin/bash\n\n$PWD/software/llvm/16/bin/clang++ -L$PWD/software/llvm/16/lib/libomptarget.so.16 -I$PWD/softwarellvm/16/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70 $@" > software/bin/clangwrap
     - chmod +x software/bin/clangwrap
     - ls -la software/bin
+    - cat software/bin/clangwrap
     - clangwrap -v
   artifacts:
     paths:
       - ./software/*
+
 
 compile-helloworld-job:
   extends: .compile
