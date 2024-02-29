@@ -56,7 +56,7 @@ build-job:       # This job runs in the build stage, which runs first.
             -DCMAKE_BUILD_TYPE=Release\
             -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;openmp;lldb;' \
             -DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind' \
-            -DCMAKE_INSTALL_PREFIX=$PWD/software/llvm/16 \
+            -DCMAKE_INSTALL_PREFIX=$CI_PROJECT_DIR/software/llvm/16 \
             -DLLVM_INSTALL_UTILS=ON \
             -DCMAKE_CXX_COMPILER='mpicxx' \
             -DCMAKE_C_COMPILER='mpicc' \
