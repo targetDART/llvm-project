@@ -8,7 +8,10 @@
 #include "targetDART/TD_queue.h"
 #include "targetDART/TD_cost_estimation.h"
 
+std::mutex queue_mutex;
+
 [[nodiscard]] tdrc TD_Task_Queue::offer_task(td_task_t* task) {
+    std::unique_lock<std::mutex> lock(queue_mutex);
     uint64_t oldTail = tail.load(std::memory_order_relaxed);
     bool noSuccess = TARGETDART_SUCCESS;
     while(noSuccess) {
@@ -47,6 +50,7 @@
  * @return The first element of the queue which is removed from the queue.
  */
 [[nodiscard]] td_task_t* TD_Task_Queue::poll_task(std::function<bool(std::atomic<uint64_t>&, uint64_t)>* blockingFunction) {
+    std::unique_lock<std::mutex> lock(queue_mutex);
     while (size.load(MEM_ORDER) == 0) {
         if (blockingFunction != nullptr) {
             bool shutdown = (*blockingFunction)(size, 0);

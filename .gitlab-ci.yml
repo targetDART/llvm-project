@@ -21,8 +21,8 @@ variables:
     - ml purge
     - ml GCCcore binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils CUDA Ninja intel GCC
     - export PATH=$PATH:$PWD/software/bin
-    - export LIBRARY_PATH=$PWD/software/lib:$LIBRARY_PATH
-    - export LD_LIBRARY_PATH=$PWD/software/lib:$LD_LIBRARY_PATH
+    - export LIBRARY_PATH=$PWD/software/llvm/16/lib:$LIBRARY_PATH
+    - export LD_LIBRARY_PATH=$PWD/software/llvm/16/lib:$LD_LIBRARY_PATH
     - export PSM2_CUDA=1
     - export I_MPI_CXX=g++
     - export I_MPI_CC=gcc
