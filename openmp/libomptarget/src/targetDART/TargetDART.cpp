@@ -11,7 +11,6 @@
 #include <iostream>
 #include <fcntl.h>
 #include "unistd.h"
-#include "private.h"
 #include "mpi.h"
 #include <link.h>
 #include <mutex>
@@ -29,6 +28,7 @@
 #include "targetDART/TD_cost_estimation.h"
 #include "targetDART/TD_scheduling.h"
 #include "targetDART/TD_comm_thread.h"
+#include "../private.h"
 
 
 // Mixed endianness is not supported

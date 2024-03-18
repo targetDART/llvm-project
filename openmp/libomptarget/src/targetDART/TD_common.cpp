@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
-#include "private.h"
 #include <link.h>
 #include <mutex>
 #include <pthread.h>

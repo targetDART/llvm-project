@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <functional>
 #include <iostream>
-#include "private.h"
 #include "mpi.h"
 #include "float.h"
 #include <link.h>

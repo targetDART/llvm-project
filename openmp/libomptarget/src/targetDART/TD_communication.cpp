@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
-#include "private.h"
 #include "mpi.h"
 #include <link.h>
 #include <queue>
