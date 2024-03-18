@@ -165,6 +165,7 @@ void DAGTypeLegalizer::PromoteIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::FP_TO_FP16:
     Res = PromoteIntRes_FP_TO_FP16_BF16(N);
     break;
+  case ISD::STRICT_FP_TO_BF16:
   case ISD::STRICT_FP_TO_FP16:
     Res = PromoteIntRes_STRICT_FP_TO_FP16_BF16(N);
     break;
@@ -1354,10 +1355,13 @@ SDValue DAGTypeLegalizer::PromoteIntRes_ZExtIntBinOp(SDNode *N) {
 }
 
 SDValue DAGTypeLegalizer::PromoteIntRes_UMINUMAX(SDNode *N) {
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+
   // It doesn't matter if we sign extend or zero extend in the inputs. So do
-  // whatever is best for the target.
-  SDValue LHS = SExtOrZExtPromotedInteger(N->getOperand(0));
-  SDValue RHS = SExtOrZExtPromotedInteger(N->getOperand(1));
+  // whatever is best for the target and the promoted operands.
+  SExtOrZExtPromotedOperands(LHS, RHS);
+
   return DAG.getNode(N->getOpcode(), SDLoc(N),
                      LHS.getValueType(), LHS, RHS);
 }
@@ -1922,25 +1926,10 @@ bool DAGTypeLegalizer::PromoteIntegerOperand(SDNode *N, unsigned OpNo) {
   return false;
 }
 
-/// PromoteSetCCOperands - Promote the operands of a comparison.  This code is
-/// shared among BR_CC, SELECT_CC, and SETCC handlers.
-void DAGTypeLegalizer::PromoteSetCCOperands(SDValue &LHS, SDValue &RHS,
-                                            ISD::CondCode CCCode) {
-  // We have to insert explicit sign or zero extends. Note that we could
-  // insert sign extends for ALL conditions. For those operations where either
-  // zero or sign extension would be valid, we ask the target which extension
-  // it would prefer.
-
-  // Signed comparisons always require sign extension.
-  if (ISD::isSignedIntSetCC(CCCode)) {
-    LHS = SExtPromotedInteger(LHS);
-    RHS = SExtPromotedInteger(RHS);
-    return;
-  }
-
-  assert((ISD::isUnsignedIntSetCC(CCCode) || ISD::isIntEqualitySetCC(CCCode)) &&
-         "Unknown integer comparison!");
-
+// These operands can be either sign extended or zero extended as long as we
+// treat them the same. If an extension is free, choose that. Otherwise, follow
+// target preference.
+void DAGTypeLegalizer::SExtOrZExtPromotedOperands(SDValue &LHS, SDValue &RHS) {
   SDValue OpL = GetPromotedInteger(LHS);
   SDValue OpR = GetPromotedInteger(RHS);
 
@@ -1982,6 +1971,28 @@ void DAGTypeLegalizer::PromoteSetCCOperands(SDValue &LHS, SDValue &RHS,
   // Otherwise, use zext_inreg.
   LHS = ZExtPromotedInteger(LHS);
   RHS = ZExtPromotedInteger(RHS);
+}
+
+/// PromoteSetCCOperands - Promote the operands of a comparison.  This code is
+/// shared among BR_CC, SELECT_CC, and SETCC handlers.
+void DAGTypeLegalizer::PromoteSetCCOperands(SDValue &LHS, SDValue &RHS,
+                                            ISD::CondCode CCCode) {
+  // We have to insert explicit sign or zero extends. Note that we could
+  // insert sign extends for ALL conditions. For those operations where either
+  // zero or sign extension would be valid, we ask the target which extension
+  // it would prefer.
+
+  // Signed comparisons always require sign extension.
+  if (ISD::isSignedIntSetCC(CCCode)) {
+    LHS = SExtPromotedInteger(LHS);
+    RHS = SExtPromotedInteger(RHS);
+    return;
+  }
+
+  assert((ISD::isUnsignedIntSetCC(CCCode) || ISD::isIntEqualitySetCC(CCCode)) &&
+         "Unknown integer comparison!");
+
+  SExtOrZExtPromotedOperands(LHS, RHS);
 }
 
 SDValue DAGTypeLegalizer::PromoteIntOp_ANY_EXTEND(SDNode *N) {
@@ -4516,6 +4527,7 @@ void DAGTypeLegalizer::ExpandIntRes_ShiftThroughStack(SDNode *N, SDValue &Lo,
 void DAGTypeLegalizer::ExpandIntRes_Shift(SDNode *N,
                                           SDValue &Lo, SDValue &Hi) {
   EVT VT = N->getValueType(0);
+  unsigned Opc = N->getOpcode();
   SDLoc dl(N);
 
   // If we can emit an efficient shift operation, do so now.  Check to see if
@@ -4530,12 +4542,12 @@ void DAGTypeLegalizer::ExpandIntRes_Shift(SDNode *N,
 
   // If this target supports shift_PARTS, use it.  First, map to the _PARTS opc.
   unsigned PartsOpc;
-  if (N->getOpcode() == ISD::SHL) {
+  if (Opc == ISD::SHL) {
     PartsOpc = ISD::SHL_PARTS;
-  } else if (N->getOpcode() == ISD::SRL) {
+  } else if (Opc == ISD::SRL) {
     PartsOpc = ISD::SRL_PARTS;
   } else {
-    assert(N->getOpcode() == ISD::SRA && "Unknown shift!");
+    assert(Opc == ISD::SRA && "Unknown shift!");
     PartsOpc = ISD::SRA_PARTS;
   }
 
@@ -4588,7 +4600,7 @@ void DAGTypeLegalizer::ExpandIntRes_Shift(SDNode *N,
   // Otherwise, emit a libcall.
   RTLIB::Libcall LC = RTLIB::UNKNOWN_LIBCALL;
   bool isSigned;
-  if (N->getOpcode() == ISD::SHL) {
+  if (Opc == ISD::SHL) {
     isSigned = false; /*sign irrelevant*/
     if (VT == MVT::i16)
       LC = RTLIB::SHL_I16;
@@ -4598,7 +4610,7 @@ void DAGTypeLegalizer::ExpandIntRes_Shift(SDNode *N,
       LC = RTLIB::SHL_I64;
     else if (VT == MVT::i128)
       LC = RTLIB::SHL_I128;
-  } else if (N->getOpcode() == ISD::SRL) {
+  } else if (Opc == ISD::SRL) {
     isSigned = false;
     if (VT == MVT::i16)
       LC = RTLIB::SRL_I16;
@@ -4609,7 +4621,7 @@ void DAGTypeLegalizer::ExpandIntRes_Shift(SDNode *N,
     else if (VT == MVT::i128)
       LC = RTLIB::SRL_I128;
   } else {
-    assert(N->getOpcode() == ISD::SRA && "Unknown shift!");
+    assert(Opc == ISD::SRA && "Unknown shift!");
     isSigned = true;
     if (VT == MVT::i16)
       LC = RTLIB::SRA_I16;
