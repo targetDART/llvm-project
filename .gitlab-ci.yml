@@ -21,7 +21,7 @@ variables:
   before_script:
     - ml purge
     - ml gompi CUDA binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils Ninja Python Clang
-    - export PATH=$PWD/software/llvm/bin:$PATH
+    - export PATH=$PWD/software/bin:$PWD/software/llvm/bin:$PATH
     - export LIBRARY_PATH=$PWD/software/llvm/lib:$PWD/software/llvm/lib/x86_64-unknown-linux-gnu:$LIBRARY_PATH
     - export LD_LIBRARY_PATH=$PWD/software/llvm/lib:$PWD/software/llvm/lib/x86_64-unknown-linux-gnu:$LD_LIBRARY_PATH
     - export PSM2_CUDA=1
@@ -82,7 +82,7 @@ build-clang-job:       # This job runs in the build stage, which runs first.
     paths:
       - ./software/*
 
-build-omp-job:       # This job runs in the build stage, which runs first.
+build-omp-job:       
   extends: .base
   stage: build-omp
   dependencies: [build-clang-job]
