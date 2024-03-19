@@ -75,7 +75,7 @@ build-job:       # This job runs in the build stage, which runs first.
     - ls -la $PWD/
     - export SOURCES=$PWD/openmp
     - mkdir -p $DIR/build-omp
-    - cd $DIR/build-llvm
+    - cd $DIR/build-omp
     - | 
       if [[ ! -f "CMakeCache.txt" ]]; then
         cmake -G Ninja $SOURCES \
