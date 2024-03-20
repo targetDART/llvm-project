@@ -1,5 +1,6 @@
 stages:          # List of stages for jobs, and their order of execution
-  - build
+  - build-clang
+  - build-omp
   - compile
   - run
   - deploy
@@ -39,15 +40,16 @@ variables:
   extends: .base
 
 
-build-job:       # This job runs in the build stage, which runs first.
+build-clang-job:       # This job runs in the build stage, which runs first.
   extends: .base
-  stage: build
+  stage: build-clang
   variables:
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_TIME:  "-t 2:00:00"
     GIT_DEPTH: "1"
   script:
-    - ml Clang
+    - module use ~pj416018/.modules
+    - module load clang/17-release
     - echo $PWD
     - ls -la $PWD/
     - export SOURCES=$PWD/llvm
@@ -68,8 +70,19 @@ build-job:       # This job runs in the build stage, which runs first.
             -DCMAKE_CXX_FLAGS='-std=c++20' 
       fi
     - ninja -j48 install
-    - cd -    
-    - ml unload Clang
+  artifacts:
+    paths:
+      - ./software/*
+
+build-omp-job:       # This job runs in the build stage, which runs first.
+  extends: .base
+  stage: build-omp
+  dependencies: [build-clang-job]
+  variables:
+    SLURM_PARAM_CORES: "-c 48"
+    SLURM_PARAM_TIME:  "-t 2:00:00"
+    GIT_DEPTH: "1"
+  script:
     - echo $PWD
     - ls -la $PWD/
     - export SOURCES=$PWD/openmp
@@ -100,11 +113,10 @@ build-job:       # This job runs in the build stage, which runs first.
     paths:
       - ./software/*
 
-
 compile-helloworld-job:
   extends: .compile
   stage: compile
-  dependencies: [build-job]
+  dependencies: [build-clang-job, build-omp-job]
   variables:
     GIT_STRATEGY: none
   script:
@@ -118,7 +130,7 @@ compile-helloworld-job:
 run-helloworld-job:
   extends: .exec
   stage: run
-  dependencies: [compile-helloworld-job, build-job]
+  dependencies: [compile-helloworld-job, build-clang-job, build-omp-job]
   variables:
     GIT_STRATEGY: none
     SLURM_PARAM_CORES: "-c 48"
