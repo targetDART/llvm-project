@@ -34,6 +34,11 @@ variables:
 .exec:
   extends: .base
   variables:
+    GIT_STRATEGY: none
+    SLURM_PARAM_CORES: "-c 48"
+    SLURM_PARAM_TIME:  "-t 2:00:00"
+    SLURM_PARAM_ACCOUNT: "-A rwth1270"
+    SLURM_PARAM_NODES: "-n 2"
     SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
 
 .compile:
@@ -113,7 +118,7 @@ build-omp-job:       # This job runs in the build stage, which runs first.
     paths:
       - ./software/*
 
-compile-helloworld-job:
+compile-job:
   extends: .compile
   stage: compile
   dependencies: [build-clang-job, build-omp-job]
@@ -122,21 +127,20 @@ compile-helloworld-job:
   script:
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - clangwrap -v
-    - clangwrap TargetDART_Applications/simple_examples/00notquitehelloworld.cpp -o 00notquitehelloworld.exe  
+    - clangwrap TargetDART_Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
   artifacts:
     paths:
       - 00notquitehelloworld.exe    
+  parallel:
+    matrix:
+      - TEST_CASE["00notquitehelloworld"]
 
-run-helloworld-job:
+run-job:
   extends: .exec
   stage: run
   dependencies: [compile-helloworld-job, build-clang-job, build-omp-job]
-  variables:
-    GIT_STRATEGY: none
-    SLURM_PARAM_CORES: "-c 48"
-    SLURM_PARAM_TIME:  "-t 2:00:00"
-    SLURM_PARAM_ACCOUNT: "-A rwth1270"
-    SLURM_PARAM_NODES: "-n 2"
-    SLURM_PARAM_GPUS: "--gres=gpu:volta:2"
   script:
-    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun $SLURM_PARAM_GPUS $SLURM_PARAM_CORES $SLURM_PARAM_NODES 00notquitehelloworld.exe
+    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun $SLURM_PARAM_GPUS $SLURM_PARAM_CORES $SLURM_PARAM_NODES $TEST_CASE.exe
+  parallel:
+    matrix:
+      - TEST_CASE["00notquitehelloworld"]
