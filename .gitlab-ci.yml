@@ -133,14 +133,14 @@ compile-job:
       - 00notquitehelloworld.exe    
   parallel:
     matrix:
-      - TEST_CASE["00notquitehelloworld"]
+      - TEST_CASE: ["00notquitehelloworld", "01MxM_load_count", "02MxM_load_count_nested", "03MxM_load_count_dependencies", "04MxM_load_count_parallel", "05MxM_load_count_advance", "06MxM_load_count_phase_progress", "07MxM_load_imbalance"]
 
 run-job:
   extends: .exec
   stage: run
-  dependencies: [compile-helloworld-job, build-clang-job, build-omp-job]
+  dependencies: [compile-job, build-clang-job, build-omp-job]
   script:
-    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun $SLURM_PARAM_GPUS $SLURM_PARAM_CORES $SLURM_PARAM_NODES $TEST_CASE.exe
+    - TD_MANAGEMENT=0,1,2,3 OMP_PLACES="4:44" srun $SLURM_PARAM_GPUS $SLURM_PARAM_CORES $SLURM_PARAM_NODES $TEST_CASE.exe 20 20 20 20 20 20 20 20 20 20 20 20 20 20
   parallel:
     matrix:
-      - TEST_CASE["00notquitehelloworld"]
+      - TEST_CASE: ["00notquitehelloworld", "01MxM_load_count", "02MxM_load_count_nested", "03MxM_load_count_dependencies", "04MxM_load_count_parallel", "05MxM_load_count_advance", "06MxM_load_count_phase_progress", "07MxM_load_imbalance"]
