@@ -125,6 +125,8 @@ compile-job:
   variables:
     GIT_STRATEGY: none
   script:
+    - ls
+    - rm -rf TargetDART_Applications
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - clangwrap -v
     - clangwrap TargetDART_Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
