@@ -12,6 +12,7 @@ variables:
   SLURM_DPARAM_TIME:  "-t 2:00:00"
   SLURM_PARAM_EXCLUSIVE: "--exclusive"
   DIR: "/dev/shm"
+  GIT_DEPTH: "1"
 
 .base:
   tags: ["hpc"]
@@ -24,6 +25,7 @@ variables:
     - export PATH=$PWD/software/bin:$PWD/software/llvm/bin:$PATH
     - export LIBRARY_PATH=$PWD/software/llvm/lib:$PWD/software/llvm/lib/x86_64-unknown-linux-gnu:$LIBRARY_PATH
     - export LD_LIBRARY_PATH=$PWD/software/llvm/lib:$PWD/software/llvm/lib/x86_64-unknown-linux-gnu:$LD_LIBRARY_PATH
+    - export CPATH=$PWD/software/llvm/include:$CPATH
     - export PSM2_CUDA=1
     - export CC=clang
     - export CXX=clang++
@@ -51,7 +53,6 @@ build-clang-job:       # This job runs in the build stage, which runs first.
   variables:
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_TIME:  "-t 2:00:00"
-    GIT_DEPTH: "1"
   script:
     - module use ~pj416018/.modules
     - module load clang/17-release
@@ -86,7 +87,6 @@ build-omp-job:       # This job runs in the build stage, which runs first.
   variables:
     SLURM_PARAM_CORES: "-c 48"
     SLURM_PARAM_TIME:  "-t 2:00:00"
-    GIT_DEPTH: "1"
   script:
     - echo $PWD
     - ls -la $PWD/
@@ -109,7 +109,7 @@ build-omp-job:       # This job runs in the build stage, which runs first.
     - ninja -j48 install
     - cd -
     - mkdir -p software/bin
-    - echo -e '#!/bin/bash\n\n' "$PWD/software/llvm/bin/clang++ -L$PWD/software/llvm/lib/libomptarget.so.16 -I$PWD/software/llvm/include/ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70" '$@' > software/bin/clangwrap
+    - echo -e '#!/bin/bash\n\n' "clang++ -fopenmp -fopenmp-targets=nvptx64-nvidia-cuda -Xopenmp-target=nvptx64-nvidia-cuda -march=sm_70" '$@' > software/bin/clangwrap
     - chmod +x software/bin/clangwrap
     - ls -la software/bin
     - cat software/bin/clangwrap
@@ -122,17 +122,14 @@ compile-job:
   extends: .compile
   stage: compile
   dependencies: [build-clang-job, build-omp-job]
-  variables:
-    GIT_STRATEGY: none
   script:
     - ls
-    - rm -rf TargetDART_Applications
     - git clone https://github.com/targetDART/TargetDART_Applications.git
     - clangwrap -v
-    - clangwrap TargetDART_Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
+    - OMPI_CXX=clangwrap mpicxx TargetDART_Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
   artifacts:
     paths:
-      - 00notquitehelloworld.exe    
+      - $TEST_CASE.exe   
   parallel:
     matrix:
       - TEST_CASE: ["00notquitehelloworld", "01MxM_load_count", "02MxM_load_count_nested", "03MxM_load_count_dependencies", "04MxM_load_count_parallel", "05MxM_load_count_advance", "06MxM_load_count_phase_progress", "07MxM_load_imbalance"]
