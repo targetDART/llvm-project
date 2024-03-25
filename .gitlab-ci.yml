@@ -124,12 +124,11 @@ compile-job:
   dependencies: [build-clang-job, build-omp-job]
   script:
     - ls
-    - git clone https://github.com/targetDART/TargetDART_Applications.git
     - clangwrap -v
     - OMPI_CXX=clangwrap mpicxx TargetDART_Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
   artifacts:
     paths:
-      - $TEST_CASE.exe   
+      - "*.exe"   
   parallel:
     matrix:
       - TEST_CASE: ["00notquitehelloworld", "01MxM_load_count", "02MxM_load_count_nested", "03MxM_load_count_dependencies", "04MxM_load_count_parallel", "05MxM_load_count_advance", "06MxM_load_count_phase_progress", "07MxM_load_imbalance"]
