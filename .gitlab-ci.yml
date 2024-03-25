@@ -13,6 +13,7 @@ variables:
   SLURM_PARAM_EXCLUSIVE: "--exclusive"
   DIR: "/dev/shm"
   GIT_DEPTH: "1"
+  GIT_SUBMODULE_STRATEGY: recursive
 
 .base:
   tags: ["hpc"]
