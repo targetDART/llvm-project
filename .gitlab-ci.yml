@@ -126,7 +126,7 @@ compile-job:
   script:
     - ls
     - clangwrap -v
-    - OMPI_CXX=clangwrap mpicxx apps/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
+    - OMPI_CXX=clangwrap mpicxx Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
   artifacts:
     paths:
       - "*.exe"   
