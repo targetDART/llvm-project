@@ -21,3 +21,5 @@ tdrc td_init_threads(std::vector<int> *assignments);
 * synchronizes all processes to ensure all tasks are finished.
 */
 tdrc td_finalize_threads();
+
+int __td_invoke_task(int DeviceId, td_task_t* task);

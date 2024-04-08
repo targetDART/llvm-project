@@ -19,10 +19,6 @@
 #include "targetDART/TD_communication.h"
 
  
-
-
-// TODO: implement communication interface for TargetDART
-
 int td_send_task(int dest, td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
@@ -39,6 +35,13 @@ int td_send_task(int dest, td_task_t *task) {
     MPI_Send(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
     //Send Argument types for each kernel
     MPI_Send(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
+
+    //Send the Base Pointer offsets for all arguments
+    int64_t diff[task->KernelArgs->NumArgs];
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+        diff[i] = ((int64_t) task->KernelArgs->ArgBasePtrs[i]) - ((int64_t) task->KernelArgs->ArgPtrs[i]);
+    }
+    MPI_Send(diff, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_BASE_PTRS, targetdart_comm);
 
     //Send all parameter values
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
@@ -88,14 +91,18 @@ int td_receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgMappers = new void*[task->KernelArgs->NumArgs];
     task->KernelArgs->ArgNames = new void*[task->KernelArgs->NumArgs];
 
+    //Receive the Base Pointer offsets for all arguments
+    int64_t diff[task->KernelArgs->NumArgs];
+    MPI_Recv(diff, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_BASE_PTRS, targetdart_comm,MPI_STATUS_IGNORE);
+    
     //Receive all parameter values
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
     task->KernelArgs->ArgBasePtrs = new void*[task->KernelArgs->NumArgs];
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         //TODO: look into datatype and allocation
-        task->KernelArgs->ArgPtrs[i] = std::malloc(task->KernelArgs->ArgSizes[i]);
-        task->KernelArgs->ArgBasePtrs[i] = task->KernelArgs->ArgPtrs[i];
+        task->KernelArgs->ArgBasePtrs[i] = std::malloc(task->KernelArgs->ArgSizes[i] + diff[i]);
+        task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
 
         
         DB_TD("Allocated memory for task (%d%d) at 0x%016x with size %d bytes", task->local_proc, task->uid, task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i]);  
@@ -186,7 +193,7 @@ tdrc td_send_task_result(td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
-    DB_TD("Start result transfer of task (%d%d) finished", task->local_proc, task->uid);
+    DB_TD("Result transfer of task (%d%d) finished", task->local_proc, task->uid);
     return TARGETDART_SUCCESS;
 }
 

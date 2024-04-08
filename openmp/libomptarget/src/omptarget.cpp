@@ -35,6 +35,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 
 using llvm::SmallVector;

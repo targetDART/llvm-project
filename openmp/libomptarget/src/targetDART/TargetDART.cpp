@@ -160,6 +160,18 @@ int td_add_task( ident_t *Loc, int32_t NumTeams,
   //start yielding lock here to avoid rare deadlocks in which the task is finished, before td_yield() is called 
   //std::unique_lock<std::mutex> lock(cond_var->thread_mutex);
 
+  //debug
+  // if (td_comm_rank == 0) {
+  //   td_send_task(1, task);
+  //   td_receive_task_result(1);
+  //   return task->return_code;
+  // } else {
+  //   td_receive_task(0, task);
+  //   __td_invoke_task(0, task);
+  //   td_send_task_result(task);
+  //   return task->return_code;
+  // }
+
   //initial assignment
   if (*DeviceId >= SPECIFIC_DEVICE_RANGE_START) {
     task->affinity = TD_FIXED;
@@ -220,8 +232,6 @@ int initTargetDART(void* main_ptr) {
   if(provided != MPI_THREAD_MULTIPLE) {
     //TODO: Fehler meldung
   }
-
-  //TODO: add redirect to split mpioutput
 
   //decare KernelArgs,task as MPI Type
   declare_KernelArgs_type();

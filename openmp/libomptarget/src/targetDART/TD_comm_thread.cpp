@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <pthread.h>
+#include <queue>
 #include <thread>
 #include <tuple>
 #include <unistd.h>
