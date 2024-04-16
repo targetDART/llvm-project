@@ -230,7 +230,8 @@ int initTargetDART(void* main_ptr) {
   }
   MPI_Query_thread(&provided);
   if(provided != MPI_THREAD_MULTIPLE) {
-    //TODO: Fehler meldung
+    std::cerr << "Your MPI does not support MPI_THREAD_MULTIPLE, which is required by targetDART. Guess I'll die." << std::endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
   }
 
   //decare KernelArgs,task as MPI Type

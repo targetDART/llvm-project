@@ -44,7 +44,7 @@ std::vector<td_device_affinity> affinity_assignment;
             DB_TD("ping");
         }
         iter++;        
-        td_iterative_schedule(TD_GPU);
+        td_iterative_schedule(TD_ANY);
 
         td_test_and_receive_results();
     }
@@ -84,10 +84,10 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
             //execute the task on your own device
             int return_code = __td_invoke_task(deviceID, task);
             task->return_code = return_code;
-            if (return_code == TARGETDART_FAILURE) {         
+            /* if (return_code == TARGETDART_FAILURE) {         
                 //handle_error_en(-1, "Task execution failed.");
                 //exit(-1);
-            }
+            } */
             //finalize after the task finished
             if (task->local_proc != td_comm_rank) {
                 DB_TD("finished remote execution of task (%d%d)", task->local_proc, task->uid);
@@ -170,14 +170,14 @@ tdrc td_finalize_threads() {
     td_start_finalize->store(true);  
     td_finalize_executor->store(true);
 
-    DB_TD("Synchronized threads start joining %d managment threads", spawned_threads.size());
+    DB_TD("Synchronized threads start joining %d management threads", spawned_threads.size());
     for (int i = 0; i < spawned_threads.size(); i++) {         
         DB_TD("joining thread: %d", i);   
         spawned_threads.at(i).join();
         DB_TD("joined thread: %d", i);
     }
 
-    DB_TD("finalized managment threads");
+    DB_TD("finalized management threads");
 
     return TARGETDART_SUCCESS;
 }
