@@ -1,6 +1,7 @@
 #include "omptarget.h"
 #include "device.h"
 #include <atomic>
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -86,6 +87,11 @@ int td_receive_task(int source, td_task_t *task) {
     //Receive Argument types for each kernel
     task->KernelArgs->ArgTypes = new int64_t[task->KernelArgs->NumArgs];
     MPI_Recv(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
+
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {    
+        DB_TD("Argument type of arg %d: " DPxMOD, i, DPxPTR(task->KernelArgs->ArgTypes[i]));
+        assert(!(OMP_TGT_MAPTYPE_LITERAL & task->KernelArgs->ArgTypes[i]) && "Parameters should not be mapped implicitly as literals to avoid remote GPU errors. Use map clause on literals as well. (map(to:var))");
+    }
 
     //Declare Mappers and Names
     task->KernelArgs->ArgMappers = new void*[task->KernelArgs->NumArgs];

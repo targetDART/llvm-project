@@ -254,6 +254,9 @@ int initTargetDART(void* main_ptr) {
   // define the base address of the current process
   get_base_address(main_ptr);
 
+  //debug
+  //return TARGETDART_SUCCESS;
+
   // initial placements
   // TODO: Implement callbacks for compile time parameters or Environment variables
   std::vector<int> *placements = __td_get_thread_placement_from_env();
