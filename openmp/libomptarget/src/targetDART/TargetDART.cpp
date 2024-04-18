@@ -115,6 +115,10 @@ std::vector<int>* __td_get_thread_placement_from_env() {
   std::vector<int> *placements = new std::vector<int>(omp_get_num_devices() + 2, -1);
 
   if (std::getenv("TD_MANAGEMENT") == NULL) {
+    for (int i = 0; i < placements->size(); i++) {
+      placements->at(i) = i;
+    }
+    DB_TD("Management threads assigned cores 0-%d, use OMP_PLACES=%d:num_threads", placements->size()-1, placements->size());
     return placements;
   }
 
