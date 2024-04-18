@@ -77,8 +77,14 @@ int __td_invoke_task(int DeviceId, td_task_t* task) {
 
     DB_TD("Starting executor thread for device %d", deviceID);
     td_device_affinity affinity = affinity_assignment.at(deviceID);
+    int iter = 0;
     while (!td_finalize_executor->load() || !td_scheduler_done->load()) {
         td_task_t *task;
+        iter++;
+        if (iter == 8000000) {
+            iter = 0;
+            DB_TD("ping from executor of device %d", deviceID);
+        }
         if (td_get_next_task(affinity, deviceID, &task) == TARGETDART_SUCCESS) {
             DB_TD("start execution of task (%d%d)", task->local_proc, task->uid);
             //execute the task on your own device
