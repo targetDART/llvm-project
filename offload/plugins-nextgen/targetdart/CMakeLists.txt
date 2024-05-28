@@ -15,28 +15,25 @@ find_package(MPI QUIET)
 
 
 if(NOT(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(ppc64le)$" AND CMAKE_SYSTEM_NAME MATCHES "Linux"))
-  libomptarget_say("Not building MPI offloading plugin: only support MPI in Linux x86_64 or ppc64le hosts.")
-  return()
-elseif(NOT MPI_CXX_FOUND)
-  libomptarget_say("Not building MPI offloading plugin: MPI not found in system.")
+  message("Not building MPI offloading plugin: only support MPI in Linux x86_64 or ppc64le hosts.")
   return()
 endif()
 
-libomptarget_say("Building targetDART NextGen scheduling plugin.")
+message("Building targetDART NextGen scheduling plugin.")
 
 # Create the library and add the default arguments.
-add_target_library(omptarget.rtl.targetDART TARGETDART)
+add_target_library(omptarget.rtl.targetdart TARGETDART)
 
-target_sources(omptarget.rtl.targetDART PRIVATE
+target_sources(omptarget.rtl.targetdart PRIVATE
   src/rtl.cpp
 )
 
-target_link_libraries(omptarget.rtl.targetDART PRIVATE
+target_link_libraries(omptarget.rtl.targetdart PRIVATE
   MPI::MPI_CXX
 )
 
 # Add include directories
-target_include_directories(omptarget.rtl.targetDART PRIVATE
+target_include_directories(omptarget.rtl.targetdart PRIVATE
                            ${LIBOMPTARGET_INCLUDE_DIR})
 
 # Configure testing for the MPI plugin.
