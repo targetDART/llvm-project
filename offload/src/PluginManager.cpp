@@ -176,11 +176,11 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
   int priorDevices = 0;
   // Initialize all the plugins that have associated images.
   for (auto &Plugin : Plugins) {
-    if (Plugin->is_initialized())
-      continue;
-
     // Extract the exectuable image and extra information if availible.
     for (int32_t i = 0; i < Desc->NumDeviceImages; ++i) {
+      if (Plugin->is_initialized())
+        continue;
+
       if (!Plugin->is_valid_binary(&Desc->DeviceImages[i],
                                    /*Initialized=*/false))
         continue;
