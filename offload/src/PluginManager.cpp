@@ -174,6 +174,8 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
     }
   }
 
+  DP("number of images %d\n", Desc->NumDeviceImages);
+
   // Extract the exectuable image and extra information if availible.
   for (int32_t i = 0; i < Desc->NumDeviceImages; ++i)
     PM->addDeviceImage(*Desc, Desc->DeviceImages[i]);

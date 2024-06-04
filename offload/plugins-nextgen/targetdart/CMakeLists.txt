@@ -13,9 +13,8 @@
 # Looking for MPI...
 find_package(MPI QUIET)
 
-
 if(NOT(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(ppc64le)$" AND CMAKE_SYSTEM_NAME MATCHES "Linux"))
-  message("Not building MPI offloading plugin: only support MPI in Linux x86_64 or ppc64le hosts.")
+  message("Not building targetDART scheduling plugin: only support MPI in Linux x86_64 or ppc64le hosts.")
   return()
 endif()
 
@@ -28,9 +27,8 @@ target_sources(omptarget.rtl.targetdart PRIVATE
   src/rtl.cpp
 )
 
-target_link_libraries(omptarget.rtl.targetdart PRIVATE
-  MPI::MPI_CXX
-)
+target_link_libraries(omptarget.rtl.targetdart PRIVATE MPI::MPI_CXX)
+
 
 # Add include directories
 target_include_directories(omptarget.rtl.targetdart PRIVATE

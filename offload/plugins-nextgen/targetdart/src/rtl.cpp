@@ -10,12 +10,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/SmallVector.h"
 #include <iostream>
-#include "PluginInterface.h"
-#include "omptarget.h"
-#include "Utils/ELF.h"
 
+#include "PluginInterface.h"
+#include "Shared/Environment.h"
+#include "omptarget.h"
+
+#include "Utils/ELF.h"
+#include "llvm/Support/DynamicLibrary.h"
 
 // TODO: Move somewhere else
 #ifndef TARGET_NAME
@@ -31,6 +33,8 @@ namespace omp {
 namespace target {
 namespace plugin {
 
+using llvm::sys::DynamicLibrary;
+
 /// Forward declarations for all specialized data structures.
 struct targetDARTKernelTy;
 struct targetDARTDeviceTy;
@@ -38,48 +42,41 @@ struct targetDARTPluginTy;
 struct targetDARTDeviceImageTy;
 struct targetDARTGlobalHandlerTy;
 
-/// Class implementing the MPI device images properties.
 struct targetDARTDeviceImageTy : public DeviceImageTy {
-  /// Create the MPI image with the id and the target image pointer.
+  /// Create the targetDART image with the id and the target image pointer.
   targetDARTDeviceImageTy(int32_t ImageId, GenericDeviceTy &Device,
-                   const __tgt_device_image *TgtImage)
-      : DeviceImageTy(ImageId, Device, TgtImage), DeviceImageAddrs(getSize()) {}
+                        const __tgt_device_image *TgtImage)
+      : DeviceImageTy(ImageId, Device, TgtImage), DynLib() {}
 
-  llvm::SmallVector<void *> DeviceImageAddrs;
+  /// Getter and setter for the dynamic library.
+  DynamicLibrary &getDynamicLibrary() { return DynLib; }
+  void setDynamicLibrary(const DynamicLibrary &Lib) { DynLib = Lib; }
+
+private:
+  /// The dynamic library that loaded the image.
+  DynamicLibrary DynLib;
 };
 
-class targetDARTGlobalHandlerTy final : public GenericGlobalHandlerTy {
+struct targetDARTGlobalHandlerTy final : public GenericGlobalHandlerTy {
 public:
   Error getGlobalMetadataFromDevice(GenericDeviceTy &GenericDevice,
                                     DeviceImageTy &Image,
                                     GlobalTy &DeviceGlobal) override {
-   const char *GlobalName = DeviceGlobal.getName().data();
     targetDARTDeviceImageTy &TDImage = static_cast<targetDARTDeviceImageTy &>(Image);
 
-    if (GlobalName == nullptr) {
-      return Plugin::error("Failed to get name for global %p", &DeviceGlobal);
-    }
+    const char *GlobalName = DeviceGlobal.getName().data();
 
-    void *EntryAddress = nullptr;
+    // Get dynamic library that has loaded the device image.
+    DynamicLibrary &DynLib = TDImage.getDynamicLibrary();
 
-    __tgt_offload_entry *Begin = TDImage.getTgtImage()->EntriesBegin;
-    __tgt_offload_entry *End = TDImage.getTgtImage()->EntriesEnd;
-
-    int I = 0;
-    for (auto &Entry = Begin; Entry < End; ++Entry) {
-      if (!strcmp(Entry->name, GlobalName)) {
-        EntryAddress = TDImage.DeviceImageAddrs[I];
-        break;
-      }
-      I++;
-    }
-
-    if (EntryAddress == nullptr) {
-      return Plugin::error("Failed to find global %s", GlobalName);
+    // Get the address of the symbol.
+    void *Addr = DynLib.getAddressOfSymbol(GlobalName);
+    if (Addr == nullptr) {
+      return Plugin::error("Failed to load global '%s'", GlobalName);
     }
 
     // Save the pointer to the symbol.
-    DeviceGlobal.setPtr(EntryAddress);
+    DeviceGlobal.setPtr(Addr);
 
     return Plugin::success();
   }
@@ -158,9 +155,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Initialize the device. After this call, the device should be already
   /// working and ready to accept queries or modifications.
   Error initImpl(GenericPluginTy &Plugin) override{
-    //TODO: Inititialize device specific queues
     std::cout << "init targetDART device" << std::endl;
-
     return Plugin::success();
   }
 
@@ -168,7 +163,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// device is no longer considered ready, so no queries or modifications are
   /// allowed.
   Error deinitImpl() override{
-    //TODO
     std::cout << "finalize targetDART device" << std::endl;
     return Plugin::success();
   }
@@ -179,21 +173,59 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     targetDARTDeviceImageTy *Image = Plugin.allocate<targetDARTDeviceImageTy>();
     new (Image) targetDARTDeviceImageTy(ImageId, *this, TgtImage);
 
-    std::cout << "load targetDART image" << std::endl;
+    // Create a temporary file.
+    char TmpFileName[] = "/tmp/tmpfile_XXXXXX";
+    int TmpFileFd = mkstemp(TmpFileName);
+    if (TmpFileFd == -1)
+      return Plugin::error("Failed to create tmpfile for loading target image");
+
+    // Open the temporary file.
+    FILE *TmpFile = fdopen(TmpFileFd, "wb");
+    if (!TmpFile)
+      return Plugin::error("Failed to open tmpfile %s for loading target image",
+                           TmpFileName);
+
+    // Write the image into the temporary file.
+    size_t Written = fwrite(Image->getStart(), Image->getSize(), 1, TmpFile);
+    if (Written != 1)
+      return Plugin::error("Failed to write target image to tmpfile %s",
+                           TmpFileName);
+
+    // Close the temporary file.
+    int Ret = fclose(TmpFile);
+    if (Ret)
+      return Plugin::error("Failed to close tmpfile %s with the target image",
+                           TmpFileName);
+
+    // Load the temporary file as a dynamic library.
+    std::string ErrMsg;
+    DynamicLibrary DynLib =
+        DynamicLibrary::getPermanentLibrary(TmpFileName, &ErrMsg);
+
+    // Check if the loaded library is valid.
+    if (!DynLib.isValid())
+      return Plugin::error("Failed to load target image: %s", ErrMsg.c_str());
+
+    // Save a reference of the image's dynamic library.
+    Image->setDynamicLibrary(DynLib);
 
     return Image;
   }
+  
+  /// This plugin should not setup the device environment or memory pool.
+  virtual bool shouldSetupDeviceEnvironment() const override { return false; };
+  virtual bool shouldSetupDeviceMemoryPool() const override { return false; };
 
   /// Synchronize the current thread with the pending operations on the
   /// __tgt_async_info structure.
   Error synchronizeImpl(__tgt_async_info &AsyncInfo) override{
-    //TODO
+    return Plugin::success();
   }
 
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override{
-    //TODO
+    return Plugin::success();
   }
 
   /// Get the total device memory size
@@ -207,23 +239,27 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// \p RSize contains the actual size which can be equal or larger than the
   /// requested size.
   Error memoryVAMap(void **Addr, void *VAddr, size_t *RSize)override {
-    //TODO
+    DP("targetDART devices cannot perform memory management\n");    
+    return Plugin::success();
   }
 
   /// De-allocates device memory and unmaps the virtual address \p VAddr
-  Error memoryVAUnMap(void *VAddr, size_t Size) override{
-    //TODO
+  Error memoryVAUnMap(void *VAddr, size_t Size) override{    
+    DP("targetDART devices cannot perform memory management\n");    
+    return Plugin::success();
   }
 
   /// Lock the host buffer \p HstPtr with \p Size bytes with the vendor-specific
   /// API and return the device accessible pointer.
-  Expected<void *> dataLockImpl(void *HstPtr, int64_t Size) override{
-    //TODO
+  Expected<void *> dataLockImpl(void *HstPtr, int64_t Size) override{     
+    DP("targetDART devices cannot perform memory management providing nullptr\n");    
+    return nullptr;
   }
 
   /// Unlock a previously locked host buffer starting at \p HstPtr.
-  Error dataUnlockImpl(void *HstPtr) override{
-    //TODO
+  Error dataUnlockImpl(void *HstPtr) override{ 
+    DP("targetDART devices cannot perform memory management\n");    
+    return Plugin::success();
   }
 
   /// Check whether the host buffer with address \p HstPtr is pinned by the
@@ -238,14 +274,14 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Submit data to the device (host to device transfer).
   Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
                                AsyncInfoWrapperTy &AsyncInfoWrapper) override{
-    DP("Data management not supported for targetDART devices");
+    std::memcpy(TgtPtr, HstPtr, Size);
     return Plugin::success();
   }
 
   /// Retrieve data from the device (device to host transfer).
   Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
                                  AsyncInfoWrapperTy &AsyncInfoWrapper) override{
-    DP("Data management not supported for targetDART devices");
+    std::memcpy(HstPtr, TgtPtr, Size);
     return Plugin::success();
   }
 
@@ -255,8 +291,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error dataExchangeImpl(const void *SrcPtr, GenericDeviceTy &DstDev,
                                  void *DstPtr, int64_t Size,
                                  AsyncInfoWrapperTy &AsyncInfoWrapper) override{
-    DP("Data management not supported for targetDART devices");
-    return Plugin::success();
+    DP("Data management not supported for targetDART devices, exchange\n");
+    return Plugin::error("Data management not supported for targetDART devices, exchange\n");
   }
 
   /// Initialize a __tgt_async_info structure. Related to interop features.
@@ -269,16 +305,28 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     return Plugin::error("initDeviceInfoImpl not supported");
   }
 
-    /// Allocate memory on the device or related to the device.
+  /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *, TargetAllocTy Kind) override {
-    REPORT("Offloading to abstract targetDART devices is not supported\n");
-    return nullptr;
+    if (Size == 0)
+      return nullptr;
+
+    void *MemAlloc = nullptr;
+    switch (Kind) {
+    case TARGET_ALLOC_DEFAULT:
+    case TARGET_ALLOC_DEVICE:
+    case TARGET_ALLOC_HOST:
+    case TARGET_ALLOC_SHARED:
+    case TARGET_ALLOC_DEVICE_NON_BLOCKING:
+      MemAlloc = std::malloc(Size);
+      break;
+    }
+    return MemAlloc;
   }
 
-  /// Deallocate memory on the device or related to the device.
+  /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
-    REPORT("Offloading to abstract targetDART devices is not supported\n");
-    return OFFLOAD_FAIL;
+    std::free(TgtPtr);
+    return OFFLOAD_SUCCESS;
   }
 
   /// Create an event.
@@ -311,12 +359,24 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Print information about the device.
   Error obtainInfoImpl(InfoQueueTy &Info) override{
-    //TODO
+    // TODO: Add more information about the device.
+    Info.add("targetDART plugin");
+    Info.add("targetDART OpenMP Device Number", DeviceId);
+
+    return Plugin::success();
   }
 
   /// Allocate and construct a kernel object.
   Expected<GenericKernelTy &> constructKernel(const char *Name) override{
-    //TODO
+    // Allocate and construct the kernel.
+    targetDARTKernelTy *TDKernel = Plugin.allocate<targetDARTKernelTy>();
+
+    if (!TDKernel)
+      return Plugin::error("Failed to allocate memory for targetDART kernel");
+
+    new (TDKernel) targetDARTKernelTy(Name);
+
+    return *TDKernel;
   }
 
   Error getDeviceStackSize(uint64_t &V)  override{
@@ -432,7 +492,23 @@ struct targetDARTPluginTy : public GenericPluginTy {
   Expected<bool> isELFCompatible(StringRef Image) const override{
     return true;
   }
+
+  int getRank() {
+    return rank;
+  }
+
+  private:
+  int rank = 1;
 };
+
+template <typename... ArgsTy>
+static Error Plugin::check(int32_t Code, const char *ErrMsg, ArgsTy... Args) {
+  if (Code == 0)
+    return Error::success();
+
+  return createStringError<ArgsTy..., const char *>(
+      inconvertibleErrorCode(), ErrMsg, Args..., std::to_string(Code).data());
+}
 
 extern "C" {
 llvm::omp::target::plugin::GenericPluginTy *createPlugin_targetdart() {
