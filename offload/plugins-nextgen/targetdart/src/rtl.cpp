@@ -34,6 +34,12 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/DynamicLibrary.h"
 
+#include "PluginInterface.h"
+#include "Shared/Environment.h"
+#include "omptarget.h"
+
+#include "Utils/ELF.h"
+#include "llvm/Support/DynamicLibrary.h"
 
 #ifndef TARGET_NAME
 #define TARGET_NAME TARGETDART
