@@ -37,6 +37,7 @@
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
+#include "PluginManager.h"
 
 #include "Utils/ELF.h"
 #include "llvm/Support/DynamicLibrary.h"
@@ -52,6 +53,8 @@ namespace llvm {
 namespace omp {
 namespace target {
 namespace plugin {
+
+
 
 using llvm::sys::DynamicLibrary;
 
