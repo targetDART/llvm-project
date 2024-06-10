@@ -108,6 +108,12 @@ DeviceTy::loadBinary(__tgt_device_image *Img) {
   return Binary;
 }
 
+bool DeviceTy::requiresDataManagement() {
+  bool doDataManagment = true;
+  doDataManagment = RTL->requiresDataManagement();
+  return doDataManagment;
+}
+
 void *DeviceTy::allocData(int64_t Size, void *HstPtr, int32_t Kind) {
   /// RAII to establish tool anchors before and after data allocation
   void *TargetPtr = nullptr;

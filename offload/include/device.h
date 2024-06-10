@@ -60,6 +60,9 @@ struct DeviceTy {
 
   llvm::Expected<__tgt_device_binary> loadBinary(__tgt_device_image *Img);
 
+  /// Returns True, iff the data management performed by the offloading should NOT be skippt
+  bool requiresDataManagement();
+
   // device memory allocation/deallocation routines
   /// Allocates \p Size bytes on the device, host or shared memory space
   /// (depending on \p Kind) and returns the address/nullptr when

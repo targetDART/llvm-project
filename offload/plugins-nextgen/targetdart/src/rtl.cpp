@@ -15,6 +15,7 @@
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
+#include "PluginManager.h"
 
 #include "Utils/ELF.h"
 #include "llvm/Support/DynamicLibrary.h"
@@ -27,11 +28,15 @@
 #define DEBUG_PREFIX "Target " GETNAME(TARGET_NAME) " RTL"
 #endif
 
+extern int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
+                  KernelArgsTy &KernelArgs, AsyncInfoTy &AsyncInfo);
 
 namespace llvm {
 namespace omp {
 namespace target {
 namespace plugin {
+
+
 
 using llvm::sys::DynamicLibrary;
 
@@ -107,7 +112,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
     // Save the function pointer.
     //Func = (void (*)())Global.getPtr();
-    std::cout << "Function Pointer" << Global.getPtr() << std::endl;
+    std::cout << "Function Pointer: " << Global.getPtr() << std::endl;
 
     // TODO: Check which settings are appropriate for the mpi plugin
     // for now we are using the Elf64 plugin configuration
@@ -124,6 +129,16 @@ struct targetDARTKernelTy: public GenericKernelTy {
   /// one used to initialize the kernel.
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
     //TODO
+    /* Execution
+    auto DeviceOrErr = PM->getDevice(DeviceId);
+    TargetAsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
+    AsyncInfoTy &AsyncInfo = TargetAsyncInfo;
+    int target(ident_t *Loc, DeviceOrErr, void *HostPtr, KernelArgs, AsyncInfo);
+
+    kernel launch should wait for TD execution.
+    */ 
+    DP("targetDART Kernel launch\n");
+    return Plugin::success();
   }
 
 protected:
@@ -133,7 +148,8 @@ protected:
                                        KernelArgsTy &KernelArgs,
                                        uint32_t NumThreads,
                                        uint64_t NumBlocks) const override {
-  //TODO
+  //TODO Extend for targetDART
+  return Plugin::success();
   }
 };
 
@@ -148,13 +164,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Set the context of the device if needed, before calling device-specific
   /// functions. Plugins may implement this function as a no-op if not needed.
-  Error setContext() override{
+  Error setContext() override {
     return Plugin::success();
   }
 
   /// Initialize the device. After this call, the device should be already
   /// working and ready to accept queries or modifications.
-  Error initImpl(GenericPluginTy &Plugin) override{
+  Error initImpl(GenericPluginTy &Plugin) override {
     std::cout << "init targetDART device" << std::endl;
     return Plugin::success();
   }
@@ -162,13 +178,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Deinitialize the device and free all its resources. After this call, the
   /// device is no longer considered ready, so no queries or modifications are
   /// allowed.
-  Error deinitImpl() override{
+  Error deinitImpl() override {
     std::cout << "finalize targetDART device" << std::endl;
     return Plugin::success();
   }
 
   /// Load the binary image into the device and return the target table.
-  Expected<DeviceImageTy *> loadBinaryImpl(const __tgt_device_image *TgtImage, int32_t ImageId)override {
+  Expected<DeviceImageTy *> loadBinaryImpl(const __tgt_device_image *TgtImage, int32_t ImageId) override {
     // Allocate and initialize the image object.
     targetDARTDeviceImageTy *Image = Plugin.allocate<targetDARTDeviceImageTy>();
     new (Image) targetDARTDeviceImageTy(ImageId, *this, TgtImage);
@@ -219,13 +235,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Synchronize the current thread with the pending operations on the
   /// __tgt_async_info structure.
   Error synchronizeImpl(__tgt_async_info &AsyncInfo) override{
-    return Plugin::success();
+    //TODO
   }
 
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override{
-    return Plugin::success();
+    //TODO
   }
 
   /// Get the total device memory size
@@ -265,38 +281,32 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Check whether the host buffer with address \p HstPtr is pinned by the
   /// underlying vendor-specific runtime (if any). Retrieve the host pointer,
   /// the device accessible pointer and the size of the original pinned buffer.
-  Expected<bool> isPinnedPtrImpl(void *HstPtr, void *&BaseHstPtr,
-                                         void *&BaseDevAccessiblePtr,
-                                         size_t &BaseSize) const override{
+  Expected<bool> isPinnedPtrImpl(void *HstPtr, void *&BaseHstPtr, void *&BaseDevAccessiblePtr, size_t &BaseSize) const override{
     return false;
   }
 
   /// Submit data to the device (host to device transfer).
-  Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
-                               AsyncInfoWrapperTy &AsyncInfoWrapper) override{
-    std::memcpy(TgtPtr, HstPtr, Size);
+  Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+    DP("targetDART submit Data, not supported\n");
     return Plugin::success();
   }
 
   /// Retrieve data from the device (device to host transfer).
-  Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
-                                 AsyncInfoWrapperTy &AsyncInfoWrapper) override{
-    std::memcpy(HstPtr, TgtPtr, Size);
+  Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override{    
+    DP("targetDART retrieve Data, not supported\n");
     return Plugin::success();
   }
 
   /// Exchange data between devices (device to device transfer). Calling this
   /// function is only valid if GenericPlugin::isDataExchangable() passing the
   /// two devices returns true.
-  Error dataExchangeImpl(const void *SrcPtr, GenericDeviceTy &DstDev,
-                                 void *DstPtr, int64_t Size,
-                                 AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+  Error dataExchangeImpl(const void *SrcPtr, GenericDeviceTy &DstDev, void *DstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override{
     DP("Data management not supported for targetDART devices, exchange\n");
     return Plugin::error("Data management not supported for targetDART devices, exchange\n");
   }
 
   /// Initialize a __tgt_async_info structure. Related to interop features.
-  Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+  Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     return Plugin::error("initAsyncInfoImpl not supported");
   }
 
@@ -307,54 +317,42 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *, TargetAllocTy Kind) override {
-    if (Size == 0)
-      return nullptr;
 
-    void *MemAlloc = nullptr;
-    switch (Kind) {
-    case TARGET_ALLOC_DEFAULT:
-    case TARGET_ALLOC_DEVICE:
-    case TARGET_ALLOC_HOST:
-    case TARGET_ALLOC_SHARED:
-    case TARGET_ALLOC_DEVICE_NON_BLOCKING:
-      MemAlloc = std::malloc(Size);
-      break;
-    }
-    return MemAlloc;
+    DP("targetDART alloc Data, not supported\n");
+    return nullptr;
   }
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
-    std::free(TgtPtr);
+    DP("targetDART free Data, not supported\n");
     return OFFLOAD_SUCCESS;
   }
 
   /// Create an event.
   Error createEventImpl(void **EventPtrStorage) override{
-    //TODO
+    *EventPtrStorage = nullptr;
+    return Plugin::success();
   }
 
   /// Destroy an event.
   Error destroyEventImpl(void *EventPtr) override{
-    //TODO
+    return Plugin::success();
   }
 
   /// Start the recording of the event.
-  Error recordEventImpl(void *EventPtr,
-                                AsyncInfoWrapperTy &AsyncInfoWrapper) override{
-    //TODO
+  Error recordEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+    return Plugin::success();
   }
 
   /// Wait for an event to finish. Notice this wait is asynchronous if the
   /// __tgt_async_info is not nullptr.
-  virtual Error waitEventImpl(void *EventPtr,
-                              AsyncInfoWrapperTy &AsyncInfoWrapper)override{
-    //TODO
+  virtual Error waitEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper)override{
+    return Plugin::success();
   }
 
   /// Synchronize the current thread with the event.
   Error syncEventImpl(void *EventPtr) override{
-    //TODO
+    return Plugin::success();
   }
 
   /// Print information about the device.
@@ -407,6 +405,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       1, // GV_Max_WG_Size
       1, // GV_Default_WG_Size
   };
+
+  //TODO: add queue per device
+  //TODO: add remote queue
+  //TODO: add replica queue
 };
 
 /// Class implementing common functionalities of offload plugins. Each plugin
@@ -424,6 +426,10 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// This class should not be copied.
   targetDARTPluginTy(const targetDARTPluginTy &) = delete;
   targetDARTPluginTy(targetDARTPluginTy &&) = delete;
+
+  bool requiresDataManagement() override {
+    return false;
+  }
 
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override{

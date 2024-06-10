@@ -1632,7 +1632,7 @@ int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
 
   int NumClangLaunchArgs = KernelArgs.NumArgs;
   int Ret = OFFLOAD_SUCCESS;
-  if (NumClangLaunchArgs) {
+  if (NumClangLaunchArgs && Device.requiresDataManagement()) {
     // Process data, such as data mapping, before launching the kernel
     Ret = processDataBefore(Loc, DeviceId, HostPtr, NumClangLaunchArgs,
                             KernelArgs.ArgBasePtrs, KernelArgs.ArgPtrs,
@@ -1684,7 +1684,7 @@ int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
     return OFFLOAD_FAIL;
   }
 
-  if (NumClangLaunchArgs) {
+  if (NumClangLaunchArgs && Device.requiresDataManagement()) {
     // Transfer data back and deallocate target memory for (first-)private
     // variables
     Ret = processDataAfter(Loc, DeviceId, HostPtr, NumClangLaunchArgs,

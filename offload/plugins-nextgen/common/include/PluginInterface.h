@@ -999,6 +999,11 @@ struct GenericPluginTy {
   /// Set the plugin-specific device identifier offset.
   void setDeviceIdStartIndex(int32_t Offset) { DeviceIdStartIndex = Offset; }
 
+  /// Returns True, iff the data management performed by the offloading should NOT be skippt
+  virtual bool requiresDataManagement() {
+    return true;
+  }
+
   /// Get the ELF code to recognize the binary image of this plugin.
   virtual uint16_t getMagicElfBits() const = 0;
 
