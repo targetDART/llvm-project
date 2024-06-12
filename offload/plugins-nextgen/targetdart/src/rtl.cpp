@@ -38,8 +38,12 @@
 #include "Shared/Environment.h"
 #include "omptarget.h"
 #include "PluginManager.h"
+#include "../../../src/private.h"
+
+
 
 #include "Utils/ELF.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/DynamicLibrary.h"
 
 #ifndef TARGET_NAME
@@ -53,8 +57,6 @@ namespace llvm {
 namespace omp {
 namespace target {
 namespace plugin {
-
-
 
 using llvm::sys::DynamicLibrary;
 

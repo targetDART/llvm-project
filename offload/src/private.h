@@ -23,6 +23,10 @@
 
 #include <cstdint>
 
+extern int targetKernelWrapper(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
+                               int32_t ThreadLimit, void *HostPtr,
+                               KernelArgsTy *KernelArgs);
+
 extern int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
                   KernelArgsTy &KernelArgs, AsyncInfoTy &AsyncInfo);
 
