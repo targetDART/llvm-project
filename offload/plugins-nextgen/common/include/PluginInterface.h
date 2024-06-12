@@ -298,6 +298,10 @@ struct GenericKernelTy {
     return false;
   }
 
+  virtual Error addHostInfo(ident_t *Loc, void *HostPtr) {
+    return Error::success();
+  }
+
 protected:
   /// Get the execution mode name of the kernel.
   const char *getExecutionModeName() const {

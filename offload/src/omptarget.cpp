@@ -1676,7 +1676,7 @@ int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
 #endif
 
     Ret = Device.launchKernel(TgtEntryPtr, TgtArgs.data(), TgtOffsets.data(),
-                              KernelArgs, AsyncInfo);
+                              KernelArgs, AsyncInfo, Loc, HostPtr);
   }
 
   if (Ret != OFFLOAD_SUCCESS) {
@@ -1758,7 +1758,7 @@ int target_replay(ident_t *Loc, DeviceTy &Device, void *HostPtr,
   KernelArgs.ThreadLimit[0] = ThreadLimit;
 
   int Ret = Device.launchKernel(TgtEntryPtr, TgtArgs, TgtOffsets, KernelArgs,
-                                AsyncInfo);
+                                AsyncInfo, Loc, HostPtr);
 
   if (Ret != OFFLOAD_SUCCESS) {
     REPORT("Executing target region abort target.\n");

@@ -259,6 +259,11 @@ template <typename TargetAsyncInfoTy>
 static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                int32_t ThreadLimit, void *HostPtr,
                                KernelArgsTy *KernelArgs) {
+
+  DP("Argument Type: 0x%" PRIx64 "\n", KernelArgs->ArgTypes[1]);
+  DP("Argument Number: %d\n", KernelArgs->NumArgs);
+  DP("Argument Version: %d\n", KernelArgs->Version);
+
   assert(PM && "Runtime not initialized");
   static_assert(std::is_convertible_v<TargetAsyncInfoTy, AsyncInfoTy>,
                 "Target AsyncInfoTy must be convertible to AsyncInfoTy.");
@@ -330,6 +335,12 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
     assert(Rc == OFFLOAD_SUCCESS && "__tgt_target_kernel unexpected failure!");
   }
   return OMP_TGT_SUCCESS;
+}
+
+int targetKernelWrapper(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
+                               int32_t ThreadLimit, void *HostPtr,
+                               KernelArgsTy *KernelArgs) {
+  return targetKernel<TaskAsyncInfoWrapperTy>(Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
 }
 
 /// Implements a kernel entry that executes the target region on the specified

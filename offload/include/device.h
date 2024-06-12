@@ -112,7 +112,7 @@ struct DeviceTy {
   // Launch the kernel identified by \p TgtEntryPtr with the given arguments.
   int32_t launchKernel(void *TgtEntryPtr, void **TgtVarsPtr,
                        ptrdiff_t *TgtOffsets, KernelArgsTy &KernelArgs,
-                       AsyncInfoTy &AsyncInfo);
+                       AsyncInfoTy &AsyncInfo, ident_t *Loc, void *HostPtr);
 
   /// Synchronize device/queue/event based on \p AsyncInfo and return
   /// OFFLOAD_SUCCESS/OFFLOAD_FAIL when succeeds/fails.

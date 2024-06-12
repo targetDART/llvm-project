@@ -221,7 +221,11 @@ int32_t DeviceTy::notifyDataUnmapped(void *HstPtr) {
 // Run region on device
 int32_t DeviceTy::launchKernel(void *TgtEntryPtr, void **TgtVarsPtr,
                                ptrdiff_t *TgtOffsets, KernelArgsTy &KernelArgs,
-                               AsyncInfoTy &AsyncInfo) {
+                               AsyncInfoTy &AsyncInfo, ident_t *Loc, void *HostPtr) {  
+  llvm::omp::target::plugin::GenericKernelTy &GenericKernel = *reinterpret_cast<llvm::omp::target::plugin::GenericKernelTy *>(TgtEntryPtr);
+  if (GenericKernel.addHostInfo(Loc, HostPtr)) {
+    DP("Adding Host Data to kernel failed.");
+  }
   return RTL->launch_kernel(RTLDeviceID, TgtEntryPtr, TgtVarsPtr, TgtOffsets,
                             &KernelArgs, AsyncInfo);
 }

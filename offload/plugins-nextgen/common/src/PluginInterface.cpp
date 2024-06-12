@@ -1412,8 +1412,7 @@ Error GenericDeviceTy::launchKernel(void *EntryPtr, void **ArgPtrs,
       *this,
       Plugin.getRecordReplay().isRecordingOrReplaying() ? nullptr : AsyncInfo);
 
-  GenericKernelTy &GenericKernel =
-      *reinterpret_cast<GenericKernelTy *>(EntryPtr);
+  GenericKernelTy &GenericKernel = *reinterpret_cast<GenericKernelTy *>(EntryPtr);
 
   auto Err = GenericKernel.launch(*this, ArgPtrs, ArgOffsets, KernelArgs,
                                   AsyncInfoWrapper);

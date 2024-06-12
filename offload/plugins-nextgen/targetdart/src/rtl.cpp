@@ -11,13 +11,17 @@
 //===----------------------------------------------------------------------===//
 
 #include <iostream>
-
+#include <ffi.h>
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
 #include "PluginManager.h"
+#include "../../../src/private.h"
+
+
 
 #include "Utils/ELF.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/DynamicLibrary.h"
 
 // TODO: Move somewhere else
@@ -28,15 +32,10 @@
 #define DEBUG_PREFIX "Target " GETNAME(TARGET_NAME) " RTL"
 #endif
 
-extern int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
-                  KernelArgsTy &KernelArgs, AsyncInfoTy &AsyncInfo);
-
 namespace llvm {
 namespace omp {
 namespace target {
 namespace plugin {
-
-
 
 using llvm::sys::DynamicLibrary;
 
@@ -111,7 +110,8 @@ struct targetDARTKernelTy: public GenericKernelTy {
       return Plugin::error("Invalid function for kernel %s", getName());
 
     // Save the function pointer.
-    //Func = (void (*)())Global.getPtr();
+    CPUFunc = (void (*)())Global.getPtr();
+    DP("Function for kernel %s\n", getName());
     std::cout << "Function Pointer: " << Global.getPtr() << std::endl;
 
     // TODO: Check which settings are appropriate for the mpi plugin
@@ -125,19 +125,32 @@ struct targetDARTKernelTy: public GenericKernelTy {
     return Plugin::success();
   }
 
+  Error addHostInfo(ident_t *HostLoc, void *HostEntryPtr) override {
+    HostPtr = HostEntryPtr;
+    Loc = HostLoc;
+    return Plugin::success();
+  }
+
   /// Launch the kernel on the specific device. The device must be the same
   /// one used to initialize the kernel.
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
     //TODO
-    /* Execution
-    auto DeviceOrErr = PM->getDevice(DeviceId);
-    TargetAsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
-    AsyncInfoTy &AsyncInfo = TargetAsyncInfo;
-    int target(ident_t *Loc, DeviceOrErr, void *HostPtr, KernelArgs, AsyncInfo);
+    /* 
+    Execution
+    */
 
-    kernel launch should wait for TD execution.
-    */ 
     DP("targetDART Kernel launch\n");
+    int64_t Device = 0;
+    int32_t NumTeams = 1;
+    int32_t ThreadLimit = 1;
+
+    KernelArgs.NumArgs--;
+
+    auto Ret = targetKernelWrapper(Loc, Device, NumTeams, ThreadLimit, HostPtr, &KernelArgs);
+    if(Ret) {
+      return Plugin::error("targetDART offloading failed");
+    }   
+    
     return Plugin::success();
   }
 
@@ -151,6 +164,13 @@ protected:
   //TODO Extend for targetDART
   return Plugin::success();
   }
+
+private: 
+
+  void (*CPUFunc)(void);
+  void *HostPtr;
+  ident_t *Loc;
+
 };
 
 /// Class implementing common functionalities of offload devices. Each plugin
@@ -171,7 +191,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Initialize the device. After this call, the device should be already
   /// working and ready to accept queries or modifications.
   Error initImpl(GenericPluginTy &Plugin) override {
-    std::cout << "init targetDART device" << std::endl;
+    //TODO: setup Queues
     return Plugin::success();
   }
 
@@ -179,7 +199,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// device is no longer considered ready, so no queries or modifications are
   /// allowed.
   Error deinitImpl() override {
-    std::cout << "finalize targetDART device" << std::endl;
+    //TODO: cleanup queues
     return Plugin::success();
   }
 
@@ -365,7 +385,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   }
 
   /// Allocate and construct a kernel object.
-  Expected<GenericKernelTy &> constructKernel(const char *Name) override{
+  Expected<GenericKernelTy &> constructKernel(const char *Name) override {
     // Allocate and construct the kernel.
     targetDARTKernelTy *TDKernel = Plugin.allocate<targetDARTKernelTy>();
 
@@ -464,8 +484,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   }
 
   /// Get the target triple of this plugin.
-  Triple::ArchType getTripleArch() const override{
-    std::cout << "get target Arch" << std::endl;
+  Triple::ArchType getTripleArch() const override {
     #if defined(__x86_64__)
       return llvm::Triple::x86_64;
     #elif defined(__s390x__)
