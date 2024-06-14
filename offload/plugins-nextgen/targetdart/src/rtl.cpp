@@ -180,7 +180,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Construct a device with its device id within the plugin, the number of
   /// devices in the plugin and the grid values for that kind of device.
   targetDARTDeviceTy(GenericPluginTy &Plugin, int32_t DeviceId, int32_t NumDevices)
-      : GenericDeviceTy(Plugin, DeviceId, NumDevices, targetDARTGridValues) {}
+      : GenericDeviceTy(Plugin, DeviceId, NumDevices, targetDARTGridValues) {
+        deviceID = DeviceId;
+      }
 
   /// Set the context of the device if needed, before calling device-specific
   /// functions. Plugins may implement this function as a no-op if not needed.
@@ -414,6 +416,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error setDeviceHeapSize(uint64_t V) override{
     return Plugin::success();
   }
+
+  int32_t deviceID;
 
   /// Grid values for the targetDART plugin.
   static constexpr GV targetDARTGridValues = {

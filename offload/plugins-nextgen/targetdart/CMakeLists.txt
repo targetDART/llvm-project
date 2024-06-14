@@ -26,6 +26,12 @@ add_target_library(omptarget.rtl.targetdart TARGETDART)
 target_sources(omptarget.rtl.targetdart PRIVATE
   src/rtl.cpp
 )
+target_sources(omptarget.rtl.targetdart PRIVATE
+  support_structures/src/queue.cpp
+)
+target_sources(omptarget.rtl.targetdart PRIVATE
+  support_structures/src/scheduling.cpp
+)
 
 target_link_libraries(omptarget.rtl.targetdart PRIVATE MPI::MPI_CXX)
 
