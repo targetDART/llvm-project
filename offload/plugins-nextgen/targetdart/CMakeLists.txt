@@ -30,7 +30,13 @@ target_sources(omptarget.rtl.targetdart PRIVATE
   support_structures/src/queue.cpp
 )
 target_sources(omptarget.rtl.targetdart PRIVATE
+  support_structures/src/task.cpp
+)
+target_sources(omptarget.rtl.targetdart PRIVATE
   support_structures/src/scheduling.cpp
+)
+target_sources(omptarget.rtl.targetdart PRIVATE
+  support_structures/src/communication.cpp
 )
 
 target_link_libraries(omptarget.rtl.targetdart PRIVATE MPI::MPI_CXX)
