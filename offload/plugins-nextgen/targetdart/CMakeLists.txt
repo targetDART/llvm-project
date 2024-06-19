@@ -38,6 +38,9 @@ target_sources(omptarget.rtl.targetdart PRIVATE
 target_sources(omptarget.rtl.targetdart PRIVATE
   support_structures/src/communication.cpp
 )
+target_sources(omptarget.rtl.targetdart PRIVATE
+  support_structures/src/threading.cpp
+)
 
 target_link_libraries(omptarget.rtl.targetdart PRIVATE MPI::MPI_CXX)
 

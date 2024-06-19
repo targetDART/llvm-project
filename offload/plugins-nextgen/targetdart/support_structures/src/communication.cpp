@@ -36,8 +36,8 @@ TD_Communicator::TD_Communicator(){
         std::cerr << "Could not duplicate targetDART communicator. Guess I'll die." << std::endl;
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    MPI_Comm_size(targetdart_comm, &comm_size);
-    MPI_Comm_rank(targetdart_comm, &comm_rank);
+    MPI_Comm_size(targetdart_comm, &size);
+    MPI_Comm_rank(targetdart_comm, &rank);
     DP("MPI environment setup finished");
 }
 
@@ -288,36 +288,36 @@ td_global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYP
 }
 
 std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
-    std::vector<COST_DATA_TYPE> cost_vector(comm_size, 0);
-    cost_vector[comm_rank] = local_cost_param; 
+    std::vector<COST_DATA_TYPE> cost_vector(size, 0);
+    cost_vector[rank] = local_cost_param; 
 
     MPI_Allgather(&local_cost_param, 1, COST_MPI_DATA_TYPE, &cost_vector[0], 1, COST_MPI_DATA_TYPE, targetdart_comm);
 
     /*
-    int iterations = std::ceil(std::log2(comm_size));
+    int iterations = std::ceil(std::log2(size));
 
     //TODO: avoid redundant data elements, iff the size is not a power of 2
     //TODO: utilize MPI_put
     for (int i = 0; i < iterations; i++) {
         int shift = std::pow(2,i);
-        int target = (comm_rank + shift) % comm_size;
+        int target = (rank + shift) % size;
         //inverted shift to calculate the source rank for receiving
-        int source = (comm_rank - shift + comm_size) % comm_size;
+        int source = (rank - shift + size) % size;
 
         //Calculate the number of elements send for each iteration, covering cornercases
         int send1, send2, recv1, recv2;
 
-        if (target < comm_rank) {
-            send1 = comm_size - comm_rank;
+        if (target < rank) {
+            send1 = size - rank;
             send2 = target;
         } else {
             send1 = shift;
             send2 = 0;
         }
 
-        if (source > comm_rank) {
-            recv1 = comm_size - source;
-            recv2 = comm_rank;
+        if (source > rank) {
+            recv1 = size - source;
+            recv2 = rank;
         } else {
             recv1 = shift;
             recv2 = 0;
@@ -325,7 +325,7 @@ std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST
 
         //send data 
         MPI_Request rqsts[4] = {MPI_REQUEST_NULL,MPI_REQUEST_NULL,MPI_REQUEST_NULL,MPI_REQUEST_NULL};
-        //MPI_Isend(&cost_vector[comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
+        //MPI_Isend(&cost_vector[rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
         if (send2 != 0) {
             //MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[2]);
         }

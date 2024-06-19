@@ -113,3 +113,7 @@ void TD_Scheduling_Manager::notify_task_completion(td_uid_t taskID, bool isRepli
     }
 }
 
+bool TD_Scheduling_Manager::is_empty() {
+    return active_tasks.load() == 0;
+}
+

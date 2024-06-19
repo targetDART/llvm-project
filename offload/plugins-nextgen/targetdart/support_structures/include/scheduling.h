@@ -74,7 +74,8 @@ public:
     // notify the completion of a local task
     void notify_task_completion(td_uid_t taskID, bool remote);
 
-    
+    // returns true, iff no tasks are remaining in any queue
+    bool is_empty();    
 
 };
 

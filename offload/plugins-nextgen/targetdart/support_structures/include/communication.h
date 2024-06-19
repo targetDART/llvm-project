@@ -23,8 +23,6 @@ private:
     // communicator for remote task requests
     MPI_Comm targetdart_comm;
 
-    int comm_size;
-    int comm_rank;
 
     // test if MPI was initialized by targedart
     bool did_initialize_mpi = false;
@@ -67,6 +65,9 @@ public:
     // initializes the communication and communcicator
     TD_Communicator();
     ~TD_Communicator();
+
+    int size;
+    int rank;
 
     // sends a task to another process
     tdrc send_task(int dest, td_task_t *task);
