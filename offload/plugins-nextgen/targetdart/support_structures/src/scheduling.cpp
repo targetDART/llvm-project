@@ -1,4 +1,5 @@
 #include "../include/scheduling.h"
+#include <cstdint>
 #include <vector>
 
 
@@ -30,16 +31,13 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count) {
     // Create affinity queues: GPUS + CPU + targetDART Scheduling devices {(local, migratable, replica, replicated, remote) * (CPU, GPU, ANY)}
     affinity_queues = new std::vector<TD_Task_Queue>(physical_device_count + 1 + 5 * 3);
 
-    active_tasks = {0};
+    active_tasks.store(0);
 
-    priorities= {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
+    priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
     
     finalized_replicated = new Set_Wrapper();
-    started_local_replica = new Set_Wrapper();
-
-    // Initialize the map of remote and replicated tasks
-    td_remote_task_map = std::unordered_map<long long, td_task_t*>();
+    started_local_replica = new Set_Wrapper();    
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -114,3 +112,4 @@ void TD_Scheduling_Manager::notify_task_completion(td_uid_t taskID, bool isRepli
         finalized_replicated->add_task(taskID);
     }
 }
+

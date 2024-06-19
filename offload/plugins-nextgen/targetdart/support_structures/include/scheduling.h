@@ -54,12 +54,6 @@ private:
     // defines the priorities of affinities
     std::vector<int32_t> priorities;
 
-    // array that holds image base addresses
-    std::vector<intptr_t> _image_base_addresses;
-
-    // stores all tasks that are migrated or replicated to simplify receiving results.
-    std::unordered_map<long long, td_task_t*> td_remote_task_map;
-
 public:
     TD_Scheduling_Manager(int32_t external_device_count);
     ~TD_Scheduling_Manager();
@@ -80,19 +74,7 @@ public:
     // notify the completion of a local task
     void notify_task_completion(td_uid_t taskID, bool remote);
 
-    /*
-    * Function set_image_base_address
-    * Sets base address of particular image index.
-    * This is necessary to determine the entry point for functions that represent a target construct
-    */
-    tdrc set_image_base_address(int idx_image, intptr_t base_address);
-
-    /*
-    * Function apply_image_base_address
-    * Adds the base address to the address if iBaseAddress == true
-    * Else it creates a base address
-    */
-    intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress);
+    
 
 };
 

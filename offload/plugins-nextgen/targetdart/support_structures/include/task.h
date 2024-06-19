@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 #include "omptarget.h"
 
 #include "PluginInterface.h"
@@ -41,14 +42,17 @@ enum sub_affinity{KMIGRATEABLE = TD_MIGRATABLE_OFFSET, LOCAL = TD_LOCAL_OFFSET, 
 enum device_affinity{CPU = TD_CPU_OFFSET, GPU = TD_OFFLOAD_OFFSET, ANY = TD_ANY_OFFSET};
 
 typedef struct td_uid_t{
-    int      id;
-    int      rank;
+    int64_t      id;
+    int64_t      rank;
+
+    bool operator == (const td_uid_t& t) const {
+        return id == t.id && rank == t.rank;
+    }
 } td_uid_t;
 
 typedef struct td_task_t{
     intptr_t            host_base_ptr;
     KernelArgsTy*       KernelArgs;
-    bool                isReplica;
     int32_t             num_teams;
     int32_t             thread_limit;
     ident_t*            Loc;
@@ -56,6 +60,43 @@ typedef struct td_task_t{
     sub_affinity        sub_affinity;
     td_uid_t            uid;
     int                 return_code;
+    bool                isReplica;
 } td_task_t;
+
+template <>
+struct std::hash<td_uid_t>
+{
+  std::size_t operator()(const td_uid_t& uid) const
+  {
+    using std::size_t;
+    using std::hash;
+    using std::string;
+
+    // Compute individual hash values for first,
+    // second and combine them using XOR
+    // and bit shifting:
+    return ((hash<int>()(uid.rank) ^ (hash<int>()(uid.id) << 1)) >> 1);
+  }
+};
+
+    // array that holds image base addresses
+    extern std::vector<intptr_t> *_image_base_addresses;
+
+    tdrc init_task_stuctures();
+    tdrc finalize_task_structes();
+
+    /*
+    * Function set_image_base_address
+    * Sets base address of particular image index.
+    * This is necessary to determine the entry point for functions that represent a target construct
+    */
+    tdrc set_image_base_address(int idx_image, intptr_t base_address);
+
+    /*
+    * Function apply_image_base_address
+    * Adds the base address to the address if iBaseAddress == true
+    * Else it creates a base address
+    */
+    intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress);
 
 #endif //_TARGETDART_TASK_H

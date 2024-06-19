@@ -2,13 +2,61 @@
 #include "../include/task.h"
 
 #include "Shared/Debug.h"
+#include "mpi.h"
 #include <cstdint>
+#include <iostream>
+#include <unordered_map>
+#include <vector>
 
-tdrc td_send_task(int dest, td_task_t *task) {
+TD_Communicator::TD_Communicator(){
+    // check whether MPI is initialized, otherwise do so
+    int mpi_initialized, err;
+    mpi_initialized = 0;
+    int provided;
+    err = MPI_Initialized(&mpi_initialized);
+    if(!mpi_initialized) {
+        // MPI_Init(NULL, NULL);
+        MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+        did_initialize_mpi = true;
+        DP("Internal MPI initialization");
+    }
+    MPI_Query_thread(&provided);
+    if(provided != MPI_THREAD_MULTIPLE) {
+        std::cerr << "Your MPI does not support MPI_THREAD_MULTIPLE, which is required by targetDART. Guess I'll die." << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    //decare KernelArgs,task as MPI Type
+    declare_KernelArgs_type();
+    declare_task_type();
+
+    // create separate communicator for targetdart
+    err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
+    if(err != MPI_SUCCESS) {
+        std::cerr << "Could not duplicate targetDART communicator. Guess I'll die." << std::endl;
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    MPI_Comm_size(targetdart_comm, &comm_size);
+    MPI_Comm_rank(targetdart_comm, &comm_rank);
+    DP("MPI environment setup finished");
+}
+
+TD_Communicator::~TD_Communicator(){
+    // TODO: finalize mpi and data structures
+    //finalize MPI
+    if (did_initialize_mpi) {
+        MPI_Finalize();
+        DP("local MPI finalized");
+    }
+}
+
+tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-    DP("Send task (%d%d) to process %d", task->uid.rank, task->uid.id, dest);
+    DP("Send task (%ld%ld) to process %d", task->uid.rank, task->uid.id, dest);
+
+    remote_task_map.insert({task->uid, task});
 
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
@@ -20,11 +68,11 @@ tdrc td_send_task(int dest, td_task_t *task) {
     MPI_Send(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
 
     //Send the Base Pointer offsets for all arguments
-    int64_t diff[task->KernelArgs->NumArgs];
-    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+    std::vector<int64_t> diff(task->KernelArgs->NumArgs);
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         diff[i] = ((int64_t) task->KernelArgs->ArgBasePtrs[i]) - ((int64_t) task->KernelArgs->ArgPtrs[i]);
     }
-    MPI_Send(diff, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_BASE_PTRS, targetdart_comm);
+    MPI_Send(diff.data(), task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_BASE_PTRS, targetdart_comm);
 
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
@@ -44,12 +92,12 @@ tdrc td_send_task(int dest, td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
-    DP("Send task (%d%d) to process %d finished", task->uid.rank, task->uid.id, dest);
+    DP("Send task (%ld%ld) to process %d finished", task->uid.rank, task->uid.id, dest);
 
     return TARGETDART_SUCCESS;
 }
 
-tdrc td_receive_task(int source, td_task_t *task) {
+tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
     //TODO: use MPI probe for complete receives
 
@@ -70,7 +118,7 @@ tdrc td_receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgTypes = new int64_t[task->KernelArgs->NumArgs];
     MPI_Recv(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
 
-    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {    
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {    
         DP("Argument type of arg %d: " DPxMOD, i, DPxPTR(task->KernelArgs->ArgTypes[i]));
         assert(!(OMP_TGT_MAPTYPE_LITERAL & task->KernelArgs->ArgTypes[i]) && "Parameters should not be mapped implicitly as literals to avoid remote GPU errors. Use map clause on literals as well. (map(to:var))");
     }
@@ -80,8 +128,8 @@ tdrc td_receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgNames = new void*[task->KernelArgs->NumArgs];
 
     //Receive the Base Pointer offsets for all arguments
-    int64_t diff[task->KernelArgs->NumArgs];
-    MPI_Recv(diff, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_BASE_PTRS, targetdart_comm,MPI_STATUS_IGNORE);
+    std::vector<int64_t> diff(task->KernelArgs->NumArgs);
+    MPI_Recv(diff.data(), task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_BASE_PTRS, targetdart_comm,MPI_STATUS_IGNORE);
     
     //Receive all parameter values
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
@@ -93,7 +141,7 @@ tdrc td_receive_task(int source, td_task_t *task) {
         task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
 
         
-        DP("Allocated memory for task (%d%d) at 0x%016x with size %d bytes", task->uid.rank, task->uid.id, task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i]);  
+        DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
         int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
         if (IsMapTo != 0)
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
@@ -119,13 +167,13 @@ tdrc td_receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgBasePtrs = task->KernelArgs->ArgPtrs;
 
 
-    DP("Received task (%d%d) from process %d, finished", task->uid.rank, task->uid.id, source);
+    DP("Received task (%ld%ld) from process %d, finished", task->uid.rank, task->uid.id, source);
 
 
     return TARGETDART_SUCCESS;
 }
 
-tdrc td_test_and_receive_tasks(td_task_t *task) {
+tdrc TD_Communicator::test_and_receive_tasks(td_task_t *task) {
 
     //test, if a task result can be received
     MPI_Status status;
@@ -134,20 +182,20 @@ tdrc td_test_and_receive_tasks(td_task_t *task) {
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_TASK, targetdart_comm, &flag, &status);
     if (flag == true) {
         DP("Task receive signaled");
-        td_receive_task(status.MPI_SOURCE, task);
+        receive_task(status.MPI_SOURCE, task);
         return TARGETDART_SUCCESS;
     }
     return TARGETDART_FAILURE;
 }
 
-tdrc td_signal_task_send(int target, bool value) {
+tdrc TD_Communicator::signal_task_send(int target, bool value) {
     int flag = value;
     MPI_Send(&flag, 1, MPI_INT, target, SIGNAL_TASK_SEND, targetdart_comm);
     DP("Signal task send to process %d. Will send task %d", target, value);
     return TARGETDART_SUCCESS;
 }
 
-tdrc td_receive_signal_task_send(int source) {
+tdrc TD_Communicator::receive_signal_task_send(int source) {
     int flag;
     MPI_Recv(&flag, 1, MPI_INT, source, SIGNAL_TASK_SEND, targetdart_comm, MPI_STATUS_IGNORE);
     if (flag) {
@@ -158,11 +206,11 @@ tdrc td_receive_signal_task_send(int source) {
     return TARGETDART_FAILURE;
 }
 
-tdrc td_send_task_result(td_task_t *task) {
+tdrc TD_Communicator::send_task_result(td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-    DP("Start result transfer of task (%d%d)", task->uid.rank, task->uid.id);
+    DP("Start result transfer of task (%ld%ld)", task->uid.rank, task->uid.id);
     //Send Task uid
     MPI_Send(&task->uid.id, 1, MPI_LONG_LONG, task->uid.rank, SEND_RESULT_UID, targetdart_comm);
 
@@ -181,21 +229,21 @@ tdrc td_send_task_result(td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
-    DP("Result transfer of task (%d%d) finished", task->uid.rank, task->uid.id);
+    DP("Result transfer of task (%ld%ld) finished", task->uid.rank, task->uid.id);
     return TARGETDART_SUCCESS;
 }
 
-tdrc td_receive_task_result(int source) {
+tdrc TD_Communicator::receive_task_result(int source) {
 
 
     DP("Start result receival");
     //TODO: use MPI probe for complete receives
-    long long uid;
+    int64_t uid;
     //Receive Task Data
-    MPI_Recv(&uid, 1, MPI_LONG_LONG, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    MPI_Recv(&uid, 1, MPI_INT64_T, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
 
-    td_task_t *task = td_remote_task_map[uid];
-    td_remote_task_map.erase(uid);
+    td_task_t *task = remote_task_map[{uid, source}];
+    remote_task_map.erase({uid, source});
 
     //Receive Task return code
     MPI_Recv(&task->return_code, 1, MPI_INT, source, SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
@@ -208,11 +256,11 @@ tdrc td_receive_task_result(int source) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
     }
 
-    DP("Result transfer of task (%d%d) finished", task->uid.rank, task->uid.id);
+    DP("Result transfer of task (%ld%ld) finished", task->uid.rank, task->uid.id);
     return TARGETDART_SUCCESS;
 }
 
-tdrc td_test_and_receive_results() {
+tdrc TD_Communicator::test_and_receive_results() {
 
     //test, if a task result can be received
     MPI_Status status;
@@ -221,13 +269,13 @@ tdrc td_test_and_receive_results() {
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
         DP("Result receival signaled");
-        td_receive_task_result(status.MPI_SOURCE);
+        receive_task_result(status.MPI_SOURCE);
         return TARGETDART_SUCCESS;
     }
     return TARGETDART_FAILURE;
 }
 
-td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_param) {
+td_global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYPE local_cost_param) {
     COST_DATA_TYPE reduce = 0;
     COST_DATA_TYPE exScan = 0;
     COST_DATA_TYPE local_cost = local_cost_param;
@@ -239,37 +287,37 @@ td_global_sched_params_t td_global_cost_communicator(COST_DATA_TYPE local_cost_p
     return {reduce, exScan, local_cost};
 }
 
-std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
-    std::vector<COST_DATA_TYPE> cost_vector(td_comm_size, 0);
-    cost_vector[td_comm_rank] = local_cost_param; 
+std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
+    std::vector<COST_DATA_TYPE> cost_vector(comm_size, 0);
+    cost_vector[comm_rank] = local_cost_param; 
 
     MPI_Allgather(&local_cost_param, 1, COST_MPI_DATA_TYPE, &cost_vector[0], 1, COST_MPI_DATA_TYPE, targetdart_comm);
 
     /*
-    int iterations = std::ceil(std::log2(td_comm_size));
+    int iterations = std::ceil(std::log2(comm_size));
 
     //TODO: avoid redundant data elements, iff the size is not a power of 2
     //TODO: utilize MPI_put
     for (int i = 0; i < iterations; i++) {
         int shift = std::pow(2,i);
-        int target = (td_comm_rank + shift) % td_comm_size;
+        int target = (comm_rank + shift) % comm_size;
         //inverted shift to calculate the source rank for receiving
-        int source = (td_comm_rank - shift + td_comm_size) % td_comm_size;
+        int source = (comm_rank - shift + comm_size) % comm_size;
 
         //Calculate the number of elements send for each iteration, covering cornercases
         int send1, send2, recv1, recv2;
 
-        if (target < td_comm_rank) {
-            send1 = td_comm_size - td_comm_rank;
+        if (target < comm_rank) {
+            send1 = comm_size - comm_rank;
             send2 = target;
         } else {
             send1 = shift;
             send2 = 0;
         }
 
-        if (source > td_comm_rank) {
-            recv1 = td_comm_size - source;
-            recv2 = td_comm_rank;
+        if (source > comm_rank) {
+            recv1 = comm_size - source;
+            recv2 = comm_rank;
         } else {
             recv1 = shift;
             recv2 = 0;
@@ -277,7 +325,7 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
 
         //send data 
         MPI_Request rqsts[4] = {MPI_REQUEST_NULL,MPI_REQUEST_NULL,MPI_REQUEST_NULL,MPI_REQUEST_NULL};
-        //MPI_Isend(&cost_vector[td_comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
+        //MPI_Isend(&cost_vector[comm_rank], send1, COST_MPI_DATA_TYPE, target, 1, targetdart_comm, &rqsts[0]);
         if (send2 != 0) {
             //MPI_Isend(&cost_vector[0], send2, COST_MPI_DATA_TYPE, target, 2, targetdart_comm, &rqsts[2]);
         }
@@ -301,7 +349,7 @@ std::vector<COST_DATA_TYPE> td_global_cost_vector_propagation(COST_DATA_TYPE loc
 }
 
 
-bool td_test_finalization(COST_DATA_TYPE cost, bool finalize) {
+bool TD_Communicator::test_finalization(COST_DATA_TYPE cost, bool finalize) {
 
     // TODO: reimplement
 }
