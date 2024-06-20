@@ -3,13 +3,20 @@
 
 #include "queue.h"
 #include "task.h"
+#include "communication.h"
 
-#include <__atomic/aliases.h>
+#include "PluginManager.h"
 #include <cstdint>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
-#include "PluginManager.h"
+
+#define SIMPLE_REACTIVITY_LOAD 1
+
+typedef struct td_sort_cost_tuple_t{
+    COST_DATA_TYPE        cost;
+    int                   id;
+} td_sort_cost_tuple_t;
 
 class Set_Wrapper {
 
@@ -54,8 +61,14 @@ private:
     // defines the priorities of affinities
     std::vector<int32_t> priorities;
 
+    // States if the repartitioning should be triggered
+    bool repartition;
+
+    // Reference to the communication manager
+    TD_Communicator *comm_man;
+
 public:
-    TD_Scheduling_Manager(int32_t external_device_count);
+    TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator);
     ~TD_Scheduling_Manager();
 
     // adds a tasks to the user defined queue
@@ -66,16 +79,25 @@ public:
     void add_replicated_task(td_task_t *task, int32_t DeviceID);
 
     // returns true, iff task is available ready for execution. Implements the priorities
-    bool get_task(int32_t PhysicalDeviceID, td_task_t **task);
+    tdrc get_task(int32_t PhysicalDeviceID, td_task_t **task);
 
     // returns true, iff task is available ready for execution. Only covers migratable tasks for the given device affinity
-    bool get_migrateable_task(device_affinity affinity, td_task_t **task);
+    tdrc get_migrateable_task(device_affinity affinity, td_task_t **task);
 
     // notify the completion of a local task
     void notify_task_completion(td_uid_t taskID, bool remote);
 
     // returns true, iff no tasks are remaining in any queue
     bool is_empty();    
+
+    // test if repartitioning is required 
+    bool do_repartition();
+
+    // reset the repartitioning state
+    void reset_repatition();
+
+    // implements an iterative scheduling algorithm 
+    void iterative_schedule(device_affinity affinity);
 
 };
 

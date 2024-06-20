@@ -19,6 +19,7 @@ public:
 
     td_task_t *getTask();
     void addTask(td_task_t *task);
+    size_t getSize();
 
 };
 

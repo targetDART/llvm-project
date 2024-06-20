@@ -134,10 +134,6 @@ struct targetDARTKernelTy: public GenericKernelTy {
   /// Launch the kernel on the specific device. The device must be the same
   /// one used to initialize the kernel.
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
-    //TODO
-    /* 
-    Execution
-    */
 
     DP("targetDART Kernel launch\n");
     int64_t Device = 0;
@@ -146,6 +142,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
     KernelArgs.NumArgs--;
 
+    // TODO: add task to queue
     auto Ret = targetKernelWrapper(Loc, Device, NumTeams, ThreadLimit, HostPtr, &KernelArgs);
     if(Ret) {
       return Plugin::error("targetDART offloading failed");

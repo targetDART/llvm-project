@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <sys/types.h>
 #include "../include/task.h"
+#include "../../../src/private.h"
 
 std::vector<intptr_t> *_image_base_addresses;
 
@@ -40,4 +41,13 @@ intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress) {
       return base_address + (*_image_base_addresses)[99];
     }
     return base_address - (*_image_base_addresses)[99];
+}
+
+tdrc invoke_task(td_task_t *task, int64_t Device) {
+    auto Ret = targetKernelWrapper(task->Loc, Device, task->KernelArgs->NumTeams[0], task->KernelArgs->ThreadLimit[0], (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
+    if(Ret) {
+      return TARGETDART_FAILURE;
+    }   
+    
+    return TARGETDART_SUCCESS;
 }

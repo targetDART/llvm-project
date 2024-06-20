@@ -1,4 +1,6 @@
 #include "../include/scheduling.h"
+#include "../include/communication.h"
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -25,8 +27,10 @@ bool Set_Wrapper::task_exists(td_uid_t uid) {
     return false;
 }
 
-TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count) {
+TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator) {
     physical_device_count = external_device_count;
+
+    comm_man = communicator;
 
     // Create affinity queues: GPUS + CPU + targetDART Scheduling devices {(local, migratable, replica, replicated, remote) * (CPU, GPU, ANY)}
     affinity_queues = new std::vector<TD_Task_Queue>(physical_device_count + 1 + 5 * 3);
@@ -37,7 +41,9 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count) {
 
     
     finalized_replicated = new Set_Wrapper();
-    started_local_replica = new Set_Wrapper();    
+    started_local_replica = new Set_Wrapper();  
+
+    repartition = false;  
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -61,11 +67,11 @@ void TD_Scheduling_Manager::add_replicated_task(td_task_t *task, int32_t DeviceI
     affinity_queues->at(DeviceID + TD_REPLICA_OFFSET).addTask(task);
 }
 
-bool TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task) {
+tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task) {
     // Prio 0: get fixed device tasks first
     *task = affinity_queues->at(PhysicalDeviceID).getTask();
     if (*task != nullptr) {
-        return true;
+        return TARGETDART_SUCCESS;
     }
 
     int affinity_prio[2];
@@ -90,19 +96,19 @@ bool TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
                     active_tasks.fetch_sub(1);
                     continue;
                 }
-                return true;
+                return TARGETDART_SUCCESS;
             }
         }
     }
-    return false;
+    return TARGETDART_FAILURE;
 }
 
-bool TD_Scheduling_Manager::get_migrateable_task(device_affinity affinity, td_task_t **task) {
+tdrc TD_Scheduling_Manager::get_migrateable_task(device_affinity affinity, td_task_t **task) {
     *task = affinity_queues->at(physical_device_count + affinity + TD_ANY_OFFSET).getTask();
     if (*task != nullptr) {
-        return true;
+        return TARGETDART_SUCCESS;
     }
-    return false;
+    return TARGETDART_FAILURE;
 }
 
 void TD_Scheduling_Manager::notify_task_completion(td_uid_t taskID, bool isReplica) {
@@ -117,3 +123,99 @@ bool TD_Scheduling_Manager::is_empty() {
     return active_tasks.load() == 0;
 }
 
+bool TD_Scheduling_Manager::do_repartition(){
+    return repartition;
+}
+
+void TD_Scheduling_Manager::reset_repatition() {
+    repartition = false;
+}
+
+/**
+* Returns 0 iff local_cost = remote_cost
+* Returns the desire load to transfer from local to remote, iff local_cost > remote_cost
+* Returns the desire load to transfer from remote to local as a negative value, iff local_cost < remote_cost
+*/
+COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE remote_cost) {
+    COST_DATA_TYPE result;
+    if (local_cost == remote_cost) {
+        result = 0;
+    } else if (local_cost > remote_cost) {
+        result = SIMPLE_REACTIVITY_LOAD;
+    } else {
+        result = -SIMPLE_REACTIVITY_LOAD;
+    }
+    return result;
+}
+
+void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
+    std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(affinity_queues->at(affinity).getSize());
+    std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
+
+    for (size_t i = 0; i < combined_vector.size(); i++) {
+        combined_vector[i].cost = cost_vector[i];
+        combined_vector[i].id = i;
+    }
+    std::sort(combined_vector.begin(), combined_vector.end(), [](td_sort_cost_tuple_t a, td_sort_cost_tuple_t b) 
+                                                                                {                                                                                
+                                                                                    return a.cost < b.cost;
+                                                                                });
+
+    size_t local_idx = NULL;
+    for (size_t i = 0; i < combined_vector.size(); i++) {
+        if (combined_vector.at(i).id == comm_man->rank) {
+            local_idx = i;
+            break;
+        }
+    }
+    
+    // implement Chameleon based victim selection
+    size_t partner_idx = NULL;
+    if (combined_vector.size() % 2 == 0) {
+        size_t half = combined_vector.size() / 2;
+        if (local_idx < half) {
+            partner_idx = combined_vector.size() + local_idx - half;
+        } else {
+            partner_idx = local_idx - half;
+        }
+    } else {
+        size_t half = combined_vector.size() / 2;
+        if (local_idx < half) {
+            partner_idx = combined_vector.size() + local_idx - half;
+        } else {
+            partner_idx = local_idx - half - 1;
+        }
+    }
+    partner_idx = combined_vector.size() - local_idx - 1;
+    int partner_proc = combined_vector.at(partner_idx).id;
+
+    COST_DATA_TYPE transfer_load = __compute_transfer_load(combined_vector.at(local_idx).cost, combined_vector.at(partner_idx).cost);
+    
+    
+    if (transfer_load == 0) {
+        return;
+    } else if (transfer_load > 0) {
+        for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
+            td_task_t *task;
+            //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
+            tdrc ret_code = get_migrateable_task(affinity, &task);
+            if (ret_code == TARGETDART_SUCCESS) {
+                DP("Preparing send task (%ld%ld) to process %d", task->uid.rank, task->uid.id, partner_proc);
+                comm_man->signal_task_send(partner_proc, true);
+                comm_man->send_task(partner_proc, task);
+            } else {
+                comm_man->signal_task_send(partner_proc, false);
+            }
+        }
+    } else {
+        for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
+            tdrc ret_code = comm_man->receive_signal_task_send(partner_proc);
+            if (ret_code == TARGETDART_SUCCESS) {                
+                td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
+                comm_man->receive_task(partner_proc, task);
+                DP("Received task (%ld%ld) from process %d", task->uid.rank, task->uid.id, partner_proc);
+                add_remote_task(task, physical_device_count + affinity);
+            }
+        }
+    } 
+}

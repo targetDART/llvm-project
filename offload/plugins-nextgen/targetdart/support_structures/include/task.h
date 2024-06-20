@@ -10,8 +10,10 @@
 #include "omptarget.h"
 
 #include "PluginInterface.h"
-
 #include "Shared/Environment.h"
+
+#define handle_error_en(en, msg) \
+           do { errno = en; DP("ERROR: %s : %s\n", msg, strerror(en)); exit(EXIT_FAILURE); } while (0)
 
 enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 
@@ -53,8 +55,6 @@ typedef struct td_uid_t{
 typedef struct td_task_t{
     intptr_t            host_base_ptr;
     KernelArgsTy*       KernelArgs;
-    int32_t             num_teams;
-    int32_t             thread_limit;
     ident_t*            Loc;
     device_affinity     main_affinity;
     sub_affinity        sub_affinity;
@@ -66,37 +66,42 @@ typedef struct td_task_t{
 template <>
 struct std::hash<td_uid_t>
 {
-  std::size_t operator()(const td_uid_t& uid) const
-  {
-    using std::size_t;
-    using std::hash;
-    using std::string;
+    std::size_t operator()(const td_uid_t& uid) const {
+        using std::size_t;
+        using std::hash;
+        using std::string;
 
-    // Compute individual hash values for first,
-    // second and combine them using XOR
-    // and bit shifting:
-    return ((hash<int>()(uid.rank) ^ (hash<int>()(uid.id) << 1)) >> 1);
-  }
+        // Compute individual hash values for first,
+        // second and combine them using XOR
+        // and bit shifting:
+        return ((hash<int>()(uid.rank) ^ (hash<int>()(uid.id) << 1)) >> 1);
+    }
 };
 
-    // array that holds image base addresses
-    extern std::vector<intptr_t> *_image_base_addresses;
+// array that holds image base addresses
+extern std::vector<intptr_t> *_image_base_addresses;
 
-    tdrc init_task_stuctures();
-    tdrc finalize_task_structes();
+tdrc init_task_stuctures();
+tdrc finalize_task_structes();
 
-    /*
-    * Function set_image_base_address
-    * Sets base address of particular image index.
-    * This is necessary to determine the entry point for functions that represent a target construct
-    */
-    tdrc set_image_base_address(int idx_image, intptr_t base_address);
+/*
+* Function set_image_base_address
+* Sets base address of particular image index.
+* This is necessary to determine the entry point for functions that represent a target construct
+*/
+tdrc set_image_base_address(int idx_image, intptr_t base_address);
 
-    /*
-    * Function apply_image_base_address
-    * Adds the base address to the address if iBaseAddress == true
-    * Else it creates a base address
-    */
-    intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress);
+/*
+* Function apply_image_base_address
+* Adds the base address to the address if iBaseAddress == true
+* Else it creates a base address
+*/
+intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress);
+
+/*
+* Executes the task on the given hardware device.
+* TODO: test how a direct execution of the plugin may affect the 
+*/
+tdrc invoke_task(td_task_t *task, int64_t Device);
 
 #endif //_TARGETDART_TASK_H
