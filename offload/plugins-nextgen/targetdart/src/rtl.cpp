@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cstdint>
 #include <iostream>
 #include <ffi.h>
 #include "PluginInterface.h"
@@ -19,12 +20,18 @@
 #include "../../../src/private.h"
 
 
+#include "../support_structures/include/task.h"
+#include "../support_structures/include/threading.h"
+#include "../support_structures/include/communication.h"
+#include "../support_structures/include/scheduling.h"
+
+
 
 #include "Utils/ELF.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/DynamicLibrary.h"
 
-// TODO: Move somewhere else
+
 #ifndef TARGET_NAME
 #define TARGET_NAME TARGETDART
 #endif
@@ -76,7 +83,7 @@ public:
     // Get the address of the symbol.
     void *Addr = DynLib.getAddressOfSymbol(GlobalName);
     if (Addr == nullptr) {
-      return Plugin::error("Failed to load global '%s'", GlobalName);
+      return Plugin::error("Failed to load global '%s'\n", GlobalName);
     }
 
     // Save the pointer to the symbol.
@@ -107,7 +114,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
     // Check that the function pointer is valid.
     if (!Global.getPtr())
-      return Plugin::error("Invalid function for kernel %s", getName());
+      return Plugin::error("Invalid function for kernel %s\n", getName());
 
     // Save the function pointer.
     CPUFunc = (void (*)())Global.getPtr();
@@ -136,17 +143,16 @@ struct targetDARTKernelTy: public GenericKernelTy {
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
 
     DP("targetDART Kernel launch\n");
-    int64_t Device = 0;
-    int32_t NumTeams = 1;
-    int32_t ThreadLimit = 1;
 
     KernelArgs.NumArgs--;
 
+
+
     // TODO: add task to queue
-    auto Ret = targetKernelWrapper(Loc, Device, NumTeams, ThreadLimit, HostPtr, &KernelArgs);
+    /* auto Ret = targetKernelWrapper(Loc, 0, 1, 1, HostPtr, &KernelArgs);
     if(Ret) {
-      return Plugin::error("targetDART offloading failed");
-    }   
+      return Plugin::error("targetDART offloading failed\n");
+    }   */ 
     
     return Plugin::success();
   }
@@ -212,24 +218,24 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     char TmpFileName[] = "/tmp/tmpfile_XXXXXX";
     int TmpFileFd = mkstemp(TmpFileName);
     if (TmpFileFd == -1)
-      return Plugin::error("Failed to create tmpfile for loading target image");
+      return Plugin::error("Failed to create tmpfile for loading target image\n");
 
     // Open the temporary file.
-    FILE *TmpFile = fdopen(TmpFileFd, "wb");
+    FILE *TmpFile = fdopen(TmpFileFd, "wb\n");
     if (!TmpFile)
-      return Plugin::error("Failed to open tmpfile %s for loading target image",
+      return Plugin::error("Failed to open tmpfile %s for loading target image\n",
                            TmpFileName);
 
     // Write the image into the temporary file.
     size_t Written = fwrite(Image->getStart(), Image->getSize(), 1, TmpFile);
     if (Written != 1)
-      return Plugin::error("Failed to write target image to tmpfile %s",
+      return Plugin::error("Failed to write target image to tmpfile %s\n",
                            TmpFileName);
 
     // Close the temporary file.
     int Ret = fclose(TmpFile);
     if (Ret)
-      return Plugin::error("Failed to close tmpfile %s with the target image",
+      return Plugin::error("Failed to close tmpfile %s with the target image\n",
                            TmpFileName);
 
     // Load the temporary file as a dynamic library.
@@ -239,7 +245,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
     // Check if the loaded library is valid.
     if (!DynLib.isValid())
-      return Plugin::error("Failed to load target image: %s", ErrMsg.c_str());
+      return Plugin::error("Failed to load target image: %s\n", ErrMsg.c_str());
 
     // Save a reference of the image's dynamic library.
     Image->setDynamicLibrary(DynLib);
@@ -260,7 +266,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override{
-    //TODO
+    //TODO: 
   }
 
   /// Get the total device memory size
@@ -326,12 +332,12 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Initialize a __tgt_async_info structure. Related to interop features.
   Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
-    return Plugin::error("initAsyncInfoImpl not supported");
+    return Plugin::error("initAsyncInfoImpl not supported\n");
   }
 
   /// Initialize a __tgt_device_info structure. Related to interop features.
   Error initDeviceInfoImpl(__tgt_device_info *DeviceInfo) override{
-    return Plugin::error("initDeviceInfoImpl not supported");
+    return Plugin::error("initDeviceInfoImpl not supported\n");
   }
 
   /// Allocate memory. Use std::malloc in all cases.
@@ -377,8 +383,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Print information about the device.
   Error obtainInfoImpl(InfoQueueTy &Info) override{
     // TODO: Add more information about the device.
-    Info.add("targetDART plugin");
-    Info.add("targetDART OpenMP Device Number", DeviceId);
+    Info.add("targetDART plugin\n");
+    Info.add("targetDART OpenMP Device Number\n", DeviceId);
 
     return Plugin::success();
   }
@@ -389,7 +395,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     targetDARTKernelTy *TDKernel = Plugin.allocate<targetDARTKernelTy>();
 
     if (!TDKernel)
-      return Plugin::error("Failed to allocate memory for targetDART kernel");
+      return Plugin::error("Failed to allocate memory for targetDART kernel\n");
 
     new (TDKernel) targetDARTKernelTy(Name);
 
@@ -454,15 +460,28 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override{
-    //TODO Initialize MPI Sessions and all necessary queues
-    std::cout << "init targetDART" << std::endl;
-    return 3;
+    DP("init targetDART\n");
+
+    DP("detected prior devices: %d\n", getDeviceIdStartIndex());
+
+    //TODO: get size from other plugins
+    int32_t external_devices = 4;
+
+    td_comm = new TD_Communicator();
+    td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
+    td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
+    return td_sched->public_device_count();
   }
 
   /// Deinitialize the plugin and release the resources.
   Error deinitImpl() override{
     //TODO cleanup
     std::cout << "finalize targetDART" << std::endl;
+
+    // TODO: fix me
+    //delete td_thread;
+    //delete td_sched;
+    delete td_comm;
     return Plugin::success();
   }
 
@@ -519,12 +538,14 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return true;
   }
 
-  int getRank() {
-    return rank;
-  }
-
   private:
-  int rank = 1;
+    TD_Communicator *td_comm;
+    TD_Scheduling_Manager *td_sched;
+    TD_Thread_Manager *td_thread;
+
+    int getPhysicalDevices() {
+      
+    }
 };
 
 template <typename... ArgsTy>

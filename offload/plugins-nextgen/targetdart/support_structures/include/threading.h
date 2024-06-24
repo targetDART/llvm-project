@@ -44,7 +44,7 @@ private:
     tdrc init_threads(std::vector<int> *assignments);
 
 public: 
-    TD_Thread_Manager(int32_t device_count);
+    TD_Thread_Manager(int32_t device_count, TD_Communicator *comm, TD_Scheduling_Manager *sched);
     ~TD_Thread_Manager();
 };
 

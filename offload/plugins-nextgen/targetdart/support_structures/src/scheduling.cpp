@@ -33,9 +33,11 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     comm_man = communicator;
 
     // Create affinity queues: GPUS + CPU + targetDART Scheduling devices {(local, migratable, replica, replicated, remote) * (CPU, GPU, ANY)}
-    affinity_queues = new std::vector<TD_Task_Queue>(physical_device_count + 1 + 5 * 3);
+    // two additional padding slots are required to ensure that GPU/ANY replicated, remote queues are accessed correctly.
+    affinity_queues = new std::vector<TD_Task_Queue>(physical_device_count + 1 + 5 * 3 + 2);
 
     active_tasks.store(0);
+    local_id_tracker.store(0);
 
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
@@ -47,9 +49,22 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
+    // TODO: fix me
     delete finalized_replicated;
     delete started_local_replica;
     delete affinity_queues;
+}
+
+td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc) {
+    td_task_t *task = (td_task_t*) malloc(sizeof(td_task_t));
+    task->host_base_ptr = apply_image_base_address(hostptr, false);
+    task->isReplica = false;
+    task->KernelArgs = KernelArgs;
+    task->Loc = Loc;
+
+    task->uid = {local_id_tracker.fetch_add(1), comm_man->rank};
+
+    return task;
 }
 
 void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
@@ -161,7 +176,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                                                                                     return a.cost < b.cost;
                                                                                 });
 
-    size_t local_idx = NULL;
+    size_t local_idx;
     for (size_t i = 0; i < combined_vector.size(); i++) {
         if (combined_vector.at(i).id == comm_man->rank) {
             local_idx = i;
@@ -170,7 +185,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     }
     
     // implement Chameleon based victim selection
-    size_t partner_idx = NULL;
+    size_t partner_idx;
     if (combined_vector.size() % 2 == 0) {
         size_t half = combined_vector.size() / 2;
         if (local_idx < half) {
@@ -200,7 +215,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
             //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
             tdrc ret_code = get_migrateable_task(affinity, &task);
             if (ret_code == TARGETDART_SUCCESS) {
-                DP("Preparing send task (%ld%ld) to process %d", task->uid.rank, task->uid.id, partner_proc);
+                DP("Preparing send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, partner_proc);
                 comm_man->signal_task_send(partner_proc, true);
                 comm_man->send_task(partner_proc, task);
             } else {
@@ -213,9 +228,14 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
             if (ret_code == TARGETDART_SUCCESS) {                
                 td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
                 comm_man->receive_task(partner_proc, task);
-                DP("Received task (%ld%ld) from process %d", task->uid.rank, task->uid.id, partner_proc);
+                DP("Received task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, partner_proc);
                 add_remote_task(task, physical_device_count + affinity);
             }
         }
     } 
+}
+
+
+int32_t TD_Scheduling_Manager::public_device_count() {
+    return affinity_queues->size() - 6;
 }

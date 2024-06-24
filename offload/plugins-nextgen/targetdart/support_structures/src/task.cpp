@@ -1,5 +1,6 @@
 
 #include <cstdint>
+#include <cstdlib>
 #include <sys/types.h>
 #include "../include/task.h"
 #include "../../../src/private.h"
@@ -26,7 +27,7 @@ tdrc set_image_base_address(ulong idx_image, intptr_t base_address) {
         _image_base_addresses->resize(idx_image+1);
     }
     // set base address for image (last device wins)
-    DP("set_image_base_address (enter) Setting base_address: " DPxMOD " for img: %lu", DPxPTR((void*)base_address), idx_image);
+    DP("set_image_base_address (enter) Setting base_address: " DPxMOD " for img: %lu\n", DPxPTR((void*)base_address), idx_image);
     (*_image_base_addresses)[idx_image] = base_address;
     return TARGETDART_SUCCESS;
 }
@@ -51,3 +52,4 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
     
     return TARGETDART_SUCCESS;
 }
+

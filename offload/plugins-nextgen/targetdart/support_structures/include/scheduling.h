@@ -6,6 +6,7 @@
 #include "communication.h"
 
 #include "PluginManager.h"
+#include <__atomic/atomic.h>
 #include <cstdint>
 #include <mutex>
 #include <unordered_set>
@@ -50,6 +51,9 @@ private:
     // Keeps the number of non completed tasks spawned by this process
     std::atomic<int64_t> active_tasks;
 
+    // Stores the next id for any created task.
+    std::atomic<int64_t> local_id_tracker;
+
     // The uids of replicated tasks to ensure they won`t be executed twice
     // tasks in this set are defined on a remote process
     Set_Wrapper *finalized_replicated;
@@ -70,6 +74,9 @@ private:
 public:
     TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator);
     ~TD_Scheduling_Manager();
+
+    // creates a new targetDART task
+    td_task_t *create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc);
 
     // adds a tasks to the user defined queue
     void add_task(td_task_t *task, int32_t DeviceID);
@@ -98,6 +105,9 @@ public:
 
     // implements an iterative scheduling algorithm 
     void iterative_schedule(device_affinity affinity);
+
+    // returns the number of user visible devices
+    int32_t public_device_count();
 
 };
 

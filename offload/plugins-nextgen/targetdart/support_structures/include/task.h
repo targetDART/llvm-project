@@ -18,9 +18,9 @@
 enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 
 // Main affinities
-#define TD_CPU_OFFSET 3  // Task that should only run on the CPU
-#define TD_OFFLOAD_OFFSET 6 // Task that should only run on an offload device
-#define TD_ANY_OFFSET TD_CPU_OFFSET + TD_OFFLOAD_OFFSET // Task that can run on any hardware
+#define TD_CPU_OFFSET 2  // Task that should only run on the CPU
+#define TD_OFFLOAD_OFFSET 5 // Task that should only run on an offload device
+#define TD_ANY_OFFSET TD_CPU_OFFSET + TD_OFFLOAD_OFFSET + 1 // Task that can run on any hardware
 // Sub affinities/priorities
 #define TD_MIGRATABLE_OFFSET 0 // The task may be migrated to another process
 #define TD_LOCAL_OFFSET -1 // The task must not be migrated to another process
@@ -38,6 +38,7 @@ physical_devices + 1 => Available GPUs + host device
 + CPU_affinity(Replicated, Remote) 
 + Offload_affinity(Replicated, Remote) 
 + Any_affinity(Replicated, Remote)
+// two additional padding slots are required to ensure that GPU/ANY replicated, remote queues are accessed correctly.
 */
 
 enum sub_affinity{KMIGRATEABLE = TD_MIGRATABLE_OFFSET, LOCAL = TD_LOCAL_OFFSET, REPLICA = TD_REPLICA_OFFSET, REMOTE = TD_REMOTE_OFFSET, REPLICATED = TD_REPLICATED_OFFSET};
@@ -56,8 +57,6 @@ typedef struct td_task_t{
     intptr_t            host_base_ptr;
     KernelArgsTy*       KernelArgs;
     ident_t*            Loc;
-    device_affinity     main_affinity;
-    sub_affinity        sub_affinity;
     td_uid_t            uid;
     int                 return_code;
     bool                isReplica;

@@ -18,11 +18,11 @@ TD_Communicator::TD_Communicator(){
         // MPI_Init(NULL, NULL);
         MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
         did_initialize_mpi = true;
-        DP("Internal MPI initialization");
+        DP("Internal MPI initialization\n");
     }
     MPI_Query_thread(&provided);
     if(provided != MPI_THREAD_MULTIPLE) {
-        handle_error_en(provided, "Your MPI does not support MPI_THREAD_MULTIPLE, which is required by targetDART. Guess I'll die.");
+        handle_error_en(provided, "Your MPI does not support MPI_THREAD_MULTIPLE, which is required by targetDART. Guess I'll die.\n");
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
@@ -33,12 +33,12 @@ TD_Communicator::TD_Communicator(){
     // create separate communicator for targetdart
     err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
     if(err != MPI_SUCCESS) {
-        handle_error_en(err, "Could not duplicate targetDART communicator. Guess I'll die.");
+        handle_error_en(err, "Could not duplicate targetDART communicator. Guess I'll die.\n");
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     MPI_Comm_size(targetdart_comm, &size);
     MPI_Comm_rank(targetdart_comm, &rank);
-    DP("MPI environment setup finished");
+    DP("MPI environment setup finished\n");
 }
 
 TD_Communicator::~TD_Communicator(){
@@ -46,7 +46,7 @@ TD_Communicator::~TD_Communicator(){
     //finalize MPI
     if (did_initialize_mpi) {
         MPI_Finalize();
-        DP("local MPI finalized");
+        DP("local MPI finalized\n");
     }
 }
 
@@ -65,13 +65,12 @@ tdrc TD_Communicator::declare_KernelArgs_type() {
 }
 
 tdrc TD_Communicator::declare_task_type() {
-    const int nitems = 4;
-    int blocklengths[4] = {1,2,2};
-    MPI_Datatype types[4] = {MPI_LONG, MPI_INT, MPI_LONG_LONG};
-    MPI_Aint offsets[4];
+    const int nitems = 2;
+    int blocklengths[2] = {1,2};
+    MPI_Datatype types[2] = {MPI_LONG, MPI_LONG_LONG};
+    MPI_Aint offsets[2];
     offsets[0] = (MPI_Aint) offsetof(td_task_t, host_base_ptr);
-    offsets[1] = (MPI_Aint) offsetof(td_task_t, main_affinity);
-    offsets[2] = (MPI_Aint) offsetof(td_task_t, uid);
+    offsets[1] = (MPI_Aint) offsetof(td_task_t, uid);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &TD_MPI_Task);
     MPI_Type_commit(&TD_MPI_Task);
@@ -83,7 +82,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-    DP("Send task (%ld%ld) to process %d", task->uid.rank, task->uid.id, dest);
+    DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     remote_task_map.insert({task->uid, task});
 
@@ -121,7 +120,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
-    DP("Send task (%ld%ld) to process %d finished", task->uid.rank, task->uid.id, dest);
+    DP("Send task (%ld%ld) to process %d finished\n", task->uid.rank, task->uid.id, dest);
 
     return TARGETDART_SUCCESS;
 }
@@ -130,7 +129,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
     //TODO: use MPI probe for complete receives
 
-    DP("Receive new task from process %d", source);
+    DP("Receive new task from process %d\n", source);
 
     //Receive Task Data
     MPI_Recv(task, 1, TD_MPI_Task, source , SEND_TASK, targetdart_comm, MPI_STATUS_IGNORE);
@@ -149,7 +148,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {    
         DP("Argument type of arg %d: " DPxMOD, i, DPxPTR(task->KernelArgs->ArgTypes[i]));
-        assert(!(OMP_TGT_MAPTYPE_LITERAL & task->KernelArgs->ArgTypes[i]) && "Parameters should not be mapped implicitly as literals to avoid remote GPU errors. Use map clause on literals as well. (map(to:var))");
+        assert(!(OMP_TGT_MAPTYPE_LITERAL & task->KernelArgs->ArgTypes[i]) && "Parameters should not be mapped implicitly as literals to avoid remote GPU errors. Use map clause on literals as well. (map(to:var))\n");
     }
 
     //Declare Mappers and Names
@@ -170,7 +169,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
         task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
 
         
-        DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
+        DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
         int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
         if (IsMapTo != 0)
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
@@ -196,7 +195,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgBasePtrs = task->KernelArgs->ArgPtrs;
 
 
-    DP("Received task (%ld%ld) from process %d, finished", task->uid.rank, task->uid.id, source);
+    DP("Received task (%ld%ld) from process %d, finished\n", task->uid.rank, task->uid.id, source);
 
 
     return TARGETDART_SUCCESS;
@@ -210,7 +209,7 @@ tdrc TD_Communicator::test_and_receive_tasks(td_task_t *task) {
 
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_TASK, targetdart_comm, &flag, &status);
     if (flag == true) {
-        DP("Task receive signaled");
+        DP("Task receive signaled\n");
         receive_task(status.MPI_SOURCE, task);
         return TARGETDART_SUCCESS;
     }
@@ -220,7 +219,7 @@ tdrc TD_Communicator::test_and_receive_tasks(td_task_t *task) {
 tdrc TD_Communicator::signal_task_send(int target, bool value) {
     int flag = value;
     MPI_Send(&flag, 1, MPI_INT, target, SIGNAL_TASK_SEND, targetdart_comm);
-    DP("Signal task send to process %d. Will send task %d", target, value);
+    DP("Signal task send to process %d. Will send task %d\n", target, value);
     return TARGETDART_SUCCESS;
 }
 
@@ -228,10 +227,10 @@ tdrc TD_Communicator::receive_signal_task_send(int source) {
     int flag;
     MPI_Recv(&flag, 1, MPI_INT, source, SIGNAL_TASK_SEND, targetdart_comm, MPI_STATUS_IGNORE);
     if (flag) {
-        DP("Task send signaled by process %d", source);
+        DP("Task send signaled by process %d\n", source);
         return TARGETDART_SUCCESS;
     }
-    DP("Task send declined by process %d", source);
+    DP("Task send declined by process %d\n", source);
     return TARGETDART_FAILURE;
 }
 
@@ -239,7 +238,7 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-    DP("Start result transfer of task (%ld%ld)", task->uid.rank, task->uid.id);
+    DP("Start result transfer of task (%ld%ld)\n", task->uid.rank, task->uid.id);
     //Send Task uid
     MPI_Send(&task->uid.id, 1, MPI_LONG_LONG, task->uid.rank, SEND_RESULT_UID, targetdart_comm);
 
@@ -258,14 +257,14 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
-    DP("Result transfer of task (%ld%ld) finished", task->uid.rank, task->uid.id);
+    DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);
     return TARGETDART_SUCCESS;
 }
 
 tdrc TD_Communicator::receive_task_result(int source) {
 
 
-    DP("Start result receival");
+    DP("Start result receival\n");
     //TODO: use MPI probe for complete receives
     int64_t uid;
     //Receive Task Data
@@ -285,7 +284,7 @@ tdrc TD_Communicator::receive_task_result(int source) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
     }
 
-    DP("Result transfer of task (%ld%ld) finished", task->uid.rank, task->uid.id);
+    DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);
     return TARGETDART_SUCCESS;
 }
 
@@ -297,7 +296,7 @@ tdrc TD_Communicator::test_and_receive_results() {
 
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
-        DP("Result receival signaled");
+        DP("Result receival signaled\n");
         receive_task_result(status.MPI_SOURCE);
         return TARGETDART_SUCCESS;
     }
