@@ -196,7 +196,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Initialize the device. After this call, the device should be already
   /// working and ready to accept queries or modifications.
   Error initImpl(GenericPluginTy &Plugin) override {
-    //TODO: setup Queues
     return Plugin::success();
   }
 
@@ -204,7 +203,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// device is no longer considered ready, so no queries or modifications are
   /// allowed.
   Error deinitImpl() override {
-    //TODO: cleanup queues
     return Plugin::success();
   }
 
@@ -259,18 +257,18 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Synchronize the current thread with the pending operations on the
   /// __tgt_async_info structure.
-  Error synchronizeImpl(__tgt_async_info &AsyncInfo) override{
+  Error synchronizeImpl(__tgt_async_info &AsyncInfo) override {
     //TODO
   }
 
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
-  Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override{
+  Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override {
     //TODO: 
   }
 
   /// Get the total device memory size
-  Error getDeviceMemorySize(uint64_t &DSize)override{
+  Error getDeviceMemorySize(uint64_t &DSize)override {
     DSize = 0;
     return Plugin::success();
   }
@@ -285,20 +283,20 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   }
 
   /// De-allocates device memory and unmaps the virtual address \p VAddr
-  Error memoryVAUnMap(void *VAddr, size_t Size) override{    
+  Error memoryVAUnMap(void *VAddr, size_t Size) override {    
     DP("targetDART devices cannot perform memory management\n");    
     return Plugin::success();
   }
 
   /// Lock the host buffer \p HstPtr with \p Size bytes with the vendor-specific
   /// API and return the device accessible pointer.
-  Expected<void *> dataLockImpl(void *HstPtr, int64_t Size) override{     
+  Expected<void *> dataLockImpl(void *HstPtr, int64_t Size) override {     
     DP("targetDART devices cannot perform memory management providing nullptr\n");    
     return nullptr;
   }
 
   /// Unlock a previously locked host buffer starting at \p HstPtr.
-  Error dataUnlockImpl(void *HstPtr) override{ 
+  Error dataUnlockImpl(void *HstPtr) override { 
     DP("targetDART devices cannot perform memory management\n");    
     return Plugin::success();
   }
@@ -306,18 +304,18 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Check whether the host buffer with address \p HstPtr is pinned by the
   /// underlying vendor-specific runtime (if any). Retrieve the host pointer,
   /// the device accessible pointer and the size of the original pinned buffer.
-  Expected<bool> isPinnedPtrImpl(void *HstPtr, void *&BaseHstPtr, void *&BaseDevAccessiblePtr, size_t &BaseSize) const override{
+  Expected<bool> isPinnedPtrImpl(void *HstPtr, void *&BaseHstPtr, void *&BaseDevAccessiblePtr, size_t &BaseSize) const override {
     return false;
   }
 
   /// Submit data to the device (host to device transfer).
-  Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+  Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     DP("targetDART submit Data, not supported\n");
     return Plugin::success();
   }
 
   /// Retrieve data from the device (device to host transfer).
-  Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override{    
+  Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override {    
     DP("targetDART retrieve Data, not supported\n");
     return Plugin::success();
   }
@@ -325,7 +323,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Exchange data between devices (device to device transfer). Calling this
   /// function is only valid if GenericPlugin::isDataExchangable() passing the
   /// two devices returns true.
-  Error dataExchangeImpl(const void *SrcPtr, GenericDeviceTy &DstDev, void *DstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+  Error dataExchangeImpl(const void *SrcPtr, GenericDeviceTy &DstDev, void *DstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     DP("Data management not supported for targetDART devices, exchange\n");
     return Plugin::error("Data management not supported for targetDART devices, exchange\n");
   }
@@ -336,7 +334,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   }
 
   /// Initialize a __tgt_device_info structure. Related to interop features.
-  Error initDeviceInfoImpl(__tgt_device_info *DeviceInfo) override{
+  Error initDeviceInfoImpl(__tgt_device_info *DeviceInfo) override {
     return Plugin::error("initDeviceInfoImpl not supported\n");
   }
 
@@ -354,34 +352,34 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   }
 
   /// Create an event.
-  Error createEventImpl(void **EventPtrStorage) override{
+  Error createEventImpl(void **EventPtrStorage) override {
     *EventPtrStorage = nullptr;
     return Plugin::success();
   }
 
   /// Destroy an event.
-  Error destroyEventImpl(void *EventPtr) override{
+  Error destroyEventImpl(void *EventPtr) override {
     return Plugin::success();
   }
 
   /// Start the recording of the event.
-  Error recordEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper) override{
+  Error recordEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     return Plugin::success();
   }
 
   /// Wait for an event to finish. Notice this wait is asynchronous if the
   /// __tgt_async_info is not nullptr.
-  virtual Error waitEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper)override{
+  virtual Error waitEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper)override {
     return Plugin::success();
   }
 
   /// Synchronize the current thread with the event.
-  Error syncEventImpl(void *EventPtr) override{
+  Error syncEventImpl(void *EventPtr) override {
     return Plugin::success();
   }
 
   /// Print information about the device.
-  Error obtainInfoImpl(InfoQueueTy &Info) override{
+  Error obtainInfoImpl(InfoQueueTy &Info) override {
     // TODO: Add more information about the device.
     Info.add("targetDART plugin\n");
     Info.add("targetDART OpenMP Device Number\n", DeviceId);
@@ -402,21 +400,21 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     return *TDKernel;
   }
 
-  Error getDeviceStackSize(uint64_t &V)  override{
+  Error getDeviceStackSize(uint64_t &V)  override {
     V = 0;
     return Plugin::success();
   }
 
   private: 
 
-  Error setDeviceStackSize(uint64_t V)  override{
+  Error setDeviceStackSize(uint64_t V)  override {
     return Plugin::success();
   }
-  Error getDeviceHeapSize(uint64_t &V)  override{
+  Error getDeviceHeapSize(uint64_t &V)  override {
     V = 0;
     return Plugin::success();
   }
-  Error setDeviceHeapSize(uint64_t V) override{
+  Error setDeviceHeapSize(uint64_t V) override {
     return Plugin::success();
   }
 
@@ -433,9 +431,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       1, // GV_Default_WG_Size
   };
 
-  //TODO: add queue per device
-  //TODO: add remote queue
-  //TODO: add replica queue
 };
 
 /// Class implementing common functionalities of offload plugins. Each plugin
@@ -459,13 +454,15 @@ struct targetDARTPluginTy : public GenericPluginTy {
   }
 
   /// Initialize the plugin and return the number of available devices.
-  Expected<int32_t> initImpl() override{
+  Expected<int32_t> initImpl() override {
     DP("init targetDART\n");
 
     DP("detected prior devices: %d\n", getDeviceIdStartIndex());
 
     //TODO: get size from other plugins
     int32_t external_devices = 4;
+
+    init_task_stuctures();
 
     td_comm = new TD_Communicator();
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
@@ -474,9 +471,11 @@ struct targetDARTPluginTy : public GenericPluginTy {
   }
 
   /// Deinitialize the plugin and release the resources.
-  Error deinitImpl() override{
+  Error deinitImpl() override {
     //TODO cleanup
-    std::cout << "finalize targetDART" << std::endl;
+    DP("finalize targetDART");
+
+    finalize_task_structes();
 
     // TODO: fix me
     //delete td_thread;
@@ -485,16 +484,21 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return Plugin::success();
   }
 
+  /// Adds additional user defined information to the plugin after initialization
+  Error addInfo(void *info) override { 
+    add_main_ptr(info);
+    return Plugin::success();
+  }
+
   /// Create a new device for the underlying plugin.
   GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,
-                                        int32_t NumDevices) override{
-    std::cout << "create targetDART device: " << DeviceID << std::endl;
+                                        int32_t NumDevices) override {
     return new targetDARTDeviceTy(Plugin, DeviceID, NumDevices);
   }
 
   /// Create a new global handler for the underlying plugin.
-  GenericGlobalHandlerTy *createGlobalHandler() override{
+  GenericGlobalHandlerTy *createGlobalHandler() override {
     return new targetDARTGlobalHandlerTy();
   }
 
@@ -527,14 +531,14 @@ struct targetDARTPluginTy : public GenericPluginTy {
   }
 
   /// Get the constant name identifier for this plugin.
-  const char *getName() const override{
+  const char *getName() const override {
     return GETNAME(TARGET_NAME);
   }
 
   /// Indicate if an image is compatible with the plugin devices. Notice that
   /// this function may be called before actually initializing the devices. So
   /// we could not move this function into GenericDeviceTy.
-  Expected<bool> isELFCompatible(StringRef Image) const override{
+  Expected<bool> isELFCompatible(StringRef Image) const override {
     return true;
   }
 

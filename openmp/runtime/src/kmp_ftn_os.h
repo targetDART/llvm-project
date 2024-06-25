@@ -151,6 +151,8 @@
 #define FTN_GET_INTEROP_TYPE_DESC omp_get_interop_type_desc
 #define FTN_GET_INTEROP_RC_DESC omp_get_interop_rc_desc
 
+#define FTN_TD_INIT td_init
+
 #endif /* KMP_FTN_PLAIN */
 
 /* ------------------------------------------------------------------------ */
@@ -287,6 +289,8 @@
 #define FTN_GET_INTEROP_NAME omp_get_interop_name_
 #define FTN_GET_INTEROP_TYPE_DESC omp_get_interop_type_desc_
 #define FTN_GET_INTEROP_RC_DESC omp_get_interop_rc_desc_
+
+#define FTN_TD_INIT td_init_
 
 #endif /* KMP_FTN_APPEND */
 

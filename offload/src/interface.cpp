@@ -32,6 +32,11 @@
 using namespace llvm::omp::target::ompt;
 #endif
 
+EXTERN int td_init(void *main_ptr) {
+    PM->addInfo(main_ptr);
+    return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /// adds requires flags
 EXTERN void __tgt_register_requires(int64_t Flags) {

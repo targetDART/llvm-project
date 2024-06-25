@@ -57,6 +57,12 @@ void PluginManager::deinit() {
   DP("RTLs unloaded!\n");
 }
 
+void PluginManager::addInfo(void *info) {
+  for(auto &Plugin: Plugins) {
+    Plugin->addInfo(info);
+  }
+}
+
 void PluginManager::initDevices(GenericPluginTy &RTL) {
   // If this RTL has already been initialized.
   if (PM->DeviceOffsets.contains(&RTL))

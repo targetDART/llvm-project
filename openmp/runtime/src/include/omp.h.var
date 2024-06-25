@@ -101,6 +101,9 @@
     extern void   __KAI_KMPC_CONVENTION  omp_destroy_nest_lock (omp_nest_lock_t *);
     extern int    __KAI_KMPC_CONVENTION  omp_test_nest_lock    (omp_nest_lock_t *);
 
+    /* targetDART added functions */
+    extern int __KAI_KMPC_CONVENTION td_init(void* main_ptr);
+
     /* OpenMP 5.0  Synchronization hints*/
     typedef enum omp_sync_hint_t {
         omp_sync_hint_none           = 0,

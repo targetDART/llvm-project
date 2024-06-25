@@ -52,6 +52,9 @@ struct PluginManager {
 
   void deinit();
 
+  // Adds additional information for the delayed initialization of a plugin
+  void addInfo(void *info);
+
   // Register a shared library with all (compatible) RTLs.
   void registerLib(__tgt_bin_desc *Desc);
 

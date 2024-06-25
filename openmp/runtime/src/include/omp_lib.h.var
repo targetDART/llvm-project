@@ -272,6 +272,10 @@
 !       ***
 !       *** omp_* entry points
 !       ***
+        subroutine td_init(main_ptr) bind(c)
+          import
+          integer (kind=kmp_pointer_kind), value :: main_ptr
+        end subroutine td_init
 
         subroutine omp_set_num_threads(num_threads) bind(c)
           import

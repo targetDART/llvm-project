@@ -176,7 +176,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                                                                                     return a.cost < b.cost;
                                                                                 });
 
-    size_t local_idx;
+    size_t local_idx = comm_man->size;
     for (size_t i = 0; i < combined_vector.size(); i++) {
         if (combined_vector.at(i).id == comm_man->rank) {
             local_idx = i;
@@ -184,6 +184,10 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
         }
     }
     
+    if (local_idx == comm_man->size) {
+        handle_error_en(1, "local rank not found in index search.");
+    }
+
     // implement Chameleon based victim selection
     size_t partner_idx;
     if (combined_vector.size() % 2 == 0) {

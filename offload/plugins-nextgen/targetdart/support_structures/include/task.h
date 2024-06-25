@@ -88,7 +88,7 @@ tdrc finalize_task_structes();
 * Sets base address of particular image index.
 * This is necessary to determine the entry point for functions that represent a target construct
 */
-tdrc set_image_base_address(int idx_image, intptr_t base_address);
+tdrc set_image_base_address(size_t idx_image, intptr_t base_address);
 
 /*
 * Function apply_image_base_address
@@ -103,4 +103,18 @@ intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress);
 */
 tdrc invoke_task(td_task_t *task, int64_t Device);
 
+/*
+* Initializes the reference pointer to normalize the task pointer.
+* main_ptr needs to be the same function in the same binary in all processes.
+*/
+int add_main_ptr(void* main_ptr);
+
+
+/**
+* Function get_base_address
+* Generates the base address for the current process
+* 
+* Works only for identical BINARIES
+*/
+tdrc get_base_address(void * main_ptr);
 #endif //_TARGETDART_TASK_H

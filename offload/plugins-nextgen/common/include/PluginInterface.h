@@ -978,6 +978,9 @@ struct GenericPluginTy {
   Error deinit();
   virtual Error deinitImpl() = 0;
 
+  /// Adds additional user defined information to the plugin after initialization
+  virtual Error addInfo(void *info) { return Error::success();}
+
   /// Create a new device for the underlying plugin.
   virtual GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,
