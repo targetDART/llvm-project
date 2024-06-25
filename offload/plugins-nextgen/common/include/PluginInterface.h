@@ -1077,9 +1077,12 @@ struct GenericPluginTy {
   /// Adds additional user defined information to the plugin after initialization
   virtual Error addInfo(void *info) { return Error::success();}
 
+<<<<<<< HEAD
   /// Adds the number of devices initialized by plugins before the current one
   virtual Error addPriorPhysicalDevices(int deviceCount) { return Error::success();}
 
+=======
+>>>>>>> f1cf17b4056e (provided function for baseline pointer and task normalization)
   /// Create a new device for the underlying plugin.
   virtual GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,

@@ -534,6 +534,8 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     init_task_stuctures();
 
+    init_task_stuctures();
+
     td_comm = new TD_Communicator();
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
@@ -552,6 +554,12 @@ struct targetDARTPluginTy : public GenericPluginTy {
     delete td_thread;
     delete td_comm;
     delete td_sched;
+    return Plugin::success();
+  }
+
+  /// Adds additional user defined information to the plugin after initialization
+  Error addInfo(void *info) override { 
+    add_main_ptr(info);
     return Plugin::success();
   }
 
