@@ -6,22 +6,20 @@
 
 
 Set_Wrapper::Set_Wrapper() {
-    internal_set = new std::unordered_set<size_t>();
 }
 Set_Wrapper::~Set_Wrapper() {
-    delete internal_set;
 }
 
 
 void Set_Wrapper::add_task(td_uid_t uid) {
     std::unique_lock<std::mutex> lock(set_mutex);
-    internal_set->insert(uid.id);
+    internal_set.insert(uid.id);
 }
 
 bool Set_Wrapper::task_exists(td_uid_t uid) {
     std::unique_lock<std::mutex> lock(set_mutex);
-    if (internal_set->find(uid.id) != internal_set->end()) {
-        internal_set->erase(uid.id);
+    if (internal_set.find(uid.id) != internal_set.end()) {
+        internal_set.erase(uid.id);
         return true;
     }
     return false;
@@ -41,18 +39,12 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
 
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
-    
-    finalized_replicated = new Set_Wrapper();
-    started_local_replica = new Set_Wrapper();  
-
     repartition = false;  
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
-    // TODO: fix me
-    delete finalized_replicated;
-    delete started_local_replica;
-    delete affinity_queues;
+    //TODO: Fixme
+    //delete affinity_queues;
 }
 
 td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc) {
@@ -105,8 +97,8 @@ tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
             *task = affinity_queues->at(physical_device_count + device_offset + sub_offset).getTask();
             if (*task != nullptr) {
                 if (sub_offset == TD_REPLICA_OFFSET) {            
-                    started_local_replica->add_task((*task)->uid);
-                } else if (sub_offset == TD_REPLICATED_OFFSET && finalized_replicated->task_exists((*task)->uid)) {
+                    started_local_replica.add_task((*task)->uid);
+                } else if (sub_offset == TD_REPLICATED_OFFSET && finalized_replicated.task_exists((*task)->uid)) {
                     // TODO: clean up task
                     active_tasks.fetch_sub(1);
                     continue;
@@ -130,7 +122,7 @@ void TD_Scheduling_Manager::notify_task_completion(td_uid_t taskID, bool isRepli
     active_tasks.fetch_sub(1);
 
     if (isReplica) {        
-        finalized_replicated->add_task(taskID);
+        finalized_replicated.add_task(taskID);
     }
 }
 
@@ -176,7 +168,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                                                                                     return a.cost < b.cost;
                                                                                 });
 
-    size_t local_idx = comm_man->size;
+    int local_idx = comm_man->size;
     for (size_t i = 0; i < combined_vector.size(); i++) {
         if (combined_vector.at(i).id == comm_man->rank) {
             local_idx = i;
@@ -189,16 +181,16 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     }
 
     // implement Chameleon based victim selection
-    size_t partner_idx;
+    int partner_idx;
     if (combined_vector.size() % 2 == 0) {
-        size_t half = combined_vector.size() / 2;
+        int half = combined_vector.size() / 2;
         if (local_idx < half) {
             partner_idx = combined_vector.size() + local_idx - half;
         } else {
             partner_idx = local_idx - half;
         }
     } else {
-        size_t half = combined_vector.size() / 2;
+        int half = combined_vector.size() / 2;
         if (local_idx < half) {
             partner_idx = combined_vector.size() + local_idx - half;
         } else {

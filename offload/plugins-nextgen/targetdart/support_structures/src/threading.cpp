@@ -116,11 +116,11 @@ tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
 
     scheduler_th = std::thread(__pin_and_workload, &scheduler_th, (*assignments)[0], &schedule_thread_loop, -1);
 
-    executor_th = new std::vector<std::thread>(physical_device_count + 1);
+    executor_th.resize(physical_device_count + 1);
 
     //initialize all executor threads
     for (int i = 0; i <= physical_device_count; i++) {
-        executor_th->at(i) = std::thread(__pin_and_workload, &executor_th->at(i), (*assignments)[i+1], &exec_thread_loop, i);
+        executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+1], &exec_thread_loop, i);
     }
 
     DP("spawned management threads\n");

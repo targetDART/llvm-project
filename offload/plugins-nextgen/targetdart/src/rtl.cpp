@@ -182,9 +182,10 @@ private:
 struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Construct a device with its device id within the plugin, the number of
   /// devices in the plugin and the grid values for that kind of device.
-  targetDARTDeviceTy(GenericPluginTy &Plugin, int32_t DeviceId, int32_t NumDevices)
+  targetDARTDeviceTy(GenericPluginTy &Plugin, int32_t DeviceId, int32_t NumDevices, TD_Scheduling_Manager *sched_man)
       : GenericDeviceTy(Plugin, DeviceId, NumDevices, targetDARTGridValues) {
         deviceID = DeviceId;
+        td_sched = sched_man;
       }
 
   /// Set the context of the device if needed, before calling device-specific
@@ -264,7 +265,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override {
-    //TODO: 
+    //TODO: figure out if adding sched_man to asyncInfo is relevant
+
+    td_sched->is_empty();
   }
 
   /// Get the total device memory size
@@ -420,6 +423,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   int32_t deviceID;
 
+  TD_Scheduling_Manager *td_sched;
+
   /// Grid values for the targetDART plugin.
   static constexpr GV targetDARTGridValues = {
       1, // GV_Slot_Size
@@ -473,14 +478,14 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Deinitialize the plugin and release the resources.
   Error deinitImpl() override {
     //TODO cleanup
-    DP("finalize targetDART");
+    DP("finalize targetDART\n");
 
     finalize_task_structes();
 
     // TODO: fix me
-    //delete td_thread;
-    //delete td_sched;
     delete td_comm;
+    //delete td_sched;
+    //delete td_thread;
     return Plugin::success();
   }
 
@@ -494,7 +499,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,
                                         int32_t NumDevices) override {
-    return new targetDARTDeviceTy(Plugin, DeviceID, NumDevices);
+    return new targetDARTDeviceTy(Plugin, DeviceID, NumDevices, td_sched);
   }
 
   /// Create a new global handler for the underlying plugin.

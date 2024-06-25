@@ -22,7 +22,7 @@ typedef struct td_sort_cost_tuple_t{
 class Set_Wrapper {
 
 private:
-    std::unordered_set<size_t> *internal_set;
+    std::unordered_set<size_t> internal_set;
     std::mutex set_mutex;
 
 public: 
@@ -56,11 +56,11 @@ private:
 
     // The uids of replicated tasks to ensure they won`t be executed twice
     // tasks in this set are defined on a remote process
-    Set_Wrapper *finalized_replicated;
+    Set_Wrapper finalized_replicated;
 
     // The uids of replica tasks started on their home machine t ensure they won`t be executed twice
     // tasks in this set are defined on the local process
-    Set_Wrapper *started_local_replica;
+    Set_Wrapper started_local_replica;
 
     // defines the priorities of affinities
     std::vector<int32_t> priorities;

@@ -9,7 +9,7 @@
 /// Data structure that defines a single queue
 class TD_Task_Queue {
 private:
-    std::queue<td_task_t*> *queue;
+    std::queue<td_task_t*> queue;
     std::mutex queue_mutex;
 
 public:

@@ -12,7 +12,7 @@
 class TD_Thread_Manager {
 private:
     std::thread scheduler_th;
-    std::vector<std::thread> *executor_th;
+    std::vector<std::thread> executor_th;
 
     TD_Scheduling_Manager *schedule_man;
     TD_Communicator *comm_man;
