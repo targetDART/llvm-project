@@ -1,7 +1,9 @@
 #include "../include/scheduling.h"
 #include "../include/communication.h"
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <thread>
 #include <vector>
 
 
@@ -37,6 +39,7 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     active_tasks.store(0);
     local_id_tracker.store(0);
 
+    // Defines the order in which the corresponding queues are accessed during task execution
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
     repartition = false;  
@@ -234,4 +237,11 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 
 int32_t TD_Scheduling_Manager::public_device_count() {
     return affinity_queues->size() - 6;
+}
+
+void TD_Scheduling_Manager::synchronize() {
+    do {
+        // sleep for a few micro seconds to limit contention
+        std::this_thread::sleep_for(std::chrono::microseconds(10));
+    }while (is_empty());
 }

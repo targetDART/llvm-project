@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <iostream>
 #include <ffi.h>
+#include <unistd.h>
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
@@ -61,7 +62,7 @@ struct targetDARTDeviceImageTy : public DeviceImageTy {
 
   /// Getter and setter for the dynamic library.
   DynamicLibrary &getDynamicLibrary() { return DynLib; }
-  void setDynamicLibrary(const DynamicLibrary &Lib) { DynLib = Lib; }
+  void setDynamicLibrary(const DynamicLibrary &Lib) { DynLib = Lib;}
 
 private:
   /// The dynamic library that loaded the image.
@@ -98,7 +99,9 @@ public:
 /// implement the necessary virtual function members.
 struct targetDARTKernelTy: public GenericKernelTy {
   /// Construct a kernel with a name and a execution mode.
-  targetDARTKernelTy(const char *Name) : GenericKernelTy(Name) {}
+  targetDARTKernelTy(const char *Name, TD_Scheduling_Manager *sched_man) : GenericKernelTy(Name) {
+    td_sched = sched_man;
+  }
 
   ~targetDARTKernelTy() {}
 
@@ -133,7 +136,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
   }
 
   Error addHostInfo(ident_t *HostLoc, void *HostEntryPtr) override {
-    HostPtr = HostEntryPtr;
+    HostPtr = (intptr_t) HostEntryPtr;
     Loc = HostLoc;
     return Plugin::success();
   }
@@ -146,13 +149,14 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
     KernelArgs.NumArgs--;
 
-
+    td_task_t *task = td_sched->create_task(HostPtr, &KernelArgs, Loc);
+    td_sched->add_task(task, GenericDevice.getDeviceId());
 
     // TODO: add task to queue
-    /* auto Ret = targetKernelWrapper(Loc, 0, 1, 1, HostPtr, &KernelArgs);
+    /*auto Ret = targetKernelWrapper(Loc, 0, 1, 1, (void *) HostPtr, &KernelArgs);
     if(Ret) {
       return Plugin::error("targetDART offloading failed\n");
-    }   */ 
+    }    */
     
     return Plugin::success();
   }
@@ -171,8 +175,9 @@ protected:
 private: 
 
   void (*CPUFunc)(void);
-  void *HostPtr;
+  intptr_t HostPtr;
   ident_t *Loc;
+  TD_Scheduling_Manager *td_sched;
 
 };
 
@@ -260,14 +265,25 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// __tgt_async_info structure.
   Error synchronizeImpl(__tgt_async_info &AsyncInfo) override {
     //TODO
+    // Synchronizing a targetDART device requires the synchronization of all devices, due to the ability to migrate tasks between devices.
+    // This synchronization is restricted to the local process, including all remote executions migrated to and from the process.
+
+    DP("SYNCHRONIZE\n");
+    td_sched->synchronize();
+
+    return Plugin::success();
+
   }
 
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override {
     //TODO: figure out if adding sched_man to asyncInfo is relevant
-
-    td_sched->is_empty();
+    DP("QUERY\n");
+    if (td_sched->is_empty()) {
+      return Plugin::success();
+    }
+    return Plugin::check(1, "Scheduler not synchronizd\n");
   }
 
   /// Get the total device memory size
@@ -333,6 +349,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Initialize a __tgt_async_info structure. Related to interop features.
   Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    DP("Init Async\n");
     return Plugin::error("initAsyncInfoImpl not supported\n");
   }
 
@@ -356,28 +373,34 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Create an event.
   Error createEventImpl(void **EventPtrStorage) override {
+    DP("Create EVENT\n");
     *EventPtrStorage = nullptr;
     return Plugin::success();
   }
 
   /// Destroy an event.
   Error destroyEventImpl(void *EventPtr) override {
+    DP("Destroy EVENT\n");
     return Plugin::success();
   }
 
   /// Start the recording of the event.
   Error recordEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+
+    DP("record EVENT\n");
     return Plugin::success();
   }
 
   /// Wait for an event to finish. Notice this wait is asynchronous if the
   /// __tgt_async_info is not nullptr.
   virtual Error waitEventImpl(void *EventPtr, AsyncInfoWrapperTy &AsyncInfoWrapper)override {
+    DP("wait EVENT\n");
     return Plugin::success();
   }
 
   /// Synchronize the current thread with the event.
   Error syncEventImpl(void *EventPtr) override {
+    DP("SYNCHRONIZE EVENT\n");
     return Plugin::success();
   }
 
@@ -398,7 +421,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     if (!TDKernel)
       return Plugin::error("Failed to allocate memory for targetDART kernel\n");
 
-    new (TDKernel) targetDARTKernelTy(Name);
+    new (TDKernel) targetDARTKernelTy(Name, td_sched);
 
     return *TDKernel;
   }
@@ -464,8 +487,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     DP("detected prior devices: %d\n", getDeviceIdStartIndex());
 
-    //TODO: get size from other plugins
-    int32_t external_devices = 4;
+    int32_t external_devices = getPhysicalDevices();
 
     init_task_stuctures();
 
@@ -553,7 +575,8 @@ struct targetDARTPluginTy : public GenericPluginTy {
     TD_Thread_Manager *td_thread;
 
     int getPhysicalDevices() {
-      
+      // TODO: implement properly
+      return 4;
     }
 };
 

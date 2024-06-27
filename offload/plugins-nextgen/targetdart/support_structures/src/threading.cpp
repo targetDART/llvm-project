@@ -1,5 +1,6 @@
 #include "../include/threading.h"
 #include <cstddef>
+#include <cstdlib>
 #include <functional>
 #include <string>
 #include <iostream>
@@ -118,10 +119,12 @@ tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
 
     executor_th.resize(physical_device_count + 1);
 
-    //initialize all executor threads
-    for (int i = 0; i <= physical_device_count; i++) {
+    //initialize all offloading threads
+    for (int i = 0; i < physical_device_count; i++) {
         executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+1], &exec_thread_loop, i);
     }
+    // initialize CPU thread
+    executor_th.at(physical_device_count) = std::thread(__pin_and_workload, &executor_th.at(physical_device_count), (*assignments)[physical_device_count+1], &exec_thread_loop, physical_device_count);
 
     DP("spawned management threads\n");
     return TARGETDART_SUCCESS;
@@ -147,8 +150,10 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             }
             iter++;        
             schedule_man->iterative_schedule(ANY);
-
-            comm_man->test_and_receive_results();
+            td_uid_t uid;
+            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
+                schedule_man->notify_task_completion(uid, false);
+            }
         }
 
         scheduler_done.store(true);
@@ -177,10 +182,12 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 //finalize after the task finished
                 if (task->uid.rank != comm_man->rank) {
                     comm_man->send_task_result(task);
-                    schedule_man->notify_task_completion(task->uid, true);
+                    schedule_man->notify_task_completion(task->uid, false);
+                    //free(task);
                     DP("finished remote execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                 } else {
                     schedule_man->notify_task_completion(task->uid, false);
+                    //free(task);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                 }
             } 

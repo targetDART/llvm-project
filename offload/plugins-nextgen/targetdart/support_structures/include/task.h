@@ -41,7 +41,7 @@ physical_devices + 1 => Available GPUs + host device
 // two additional padding slots are required to ensure that GPU/ANY replicated, remote queues are accessed correctly.
 */
 
-enum sub_affinity{KMIGRATEABLE = TD_MIGRATABLE_OFFSET, LOCAL = TD_LOCAL_OFFSET, REPLICA = TD_REPLICA_OFFSET, REMOTE = TD_REMOTE_OFFSET, REPLICATED = TD_REPLICATED_OFFSET};
+enum sub_affinity{MIGRATEABLE = TD_MIGRATABLE_OFFSET, LOCAL = TD_LOCAL_OFFSET, REPLICA = TD_REPLICA_OFFSET, REMOTE = TD_REMOTE_OFFSET, REPLICATED = TD_REPLICATED_OFFSET};
 enum device_affinity{CPU = TD_CPU_OFFSET, GPU = TD_OFFLOAD_OFFSET, ANY = TD_ANY_OFFSET};
 
 typedef struct td_uid_t{

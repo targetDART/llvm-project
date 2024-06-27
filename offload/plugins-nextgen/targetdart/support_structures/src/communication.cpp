@@ -3,6 +3,7 @@
 
 #include "Shared/Debug.h"
 #include "mpi.h"
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <unordered_map>
@@ -42,7 +43,6 @@ TD_Communicator::TD_Communicator(){
 }
 
 TD_Communicator::~TD_Communicator(){
-    // TODO: finalize mpi and data structures
     //finalize MPI
     if (did_initialize_mpi) {
         MPI_Finalize();
@@ -261,17 +261,18 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::receive_task_result(int source) {
+tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
 
-
+    size_t id;
     DP("Start result receival\n");
     //TODO: use MPI probe for complete receives
-    int64_t uid;
     //Receive Task Data
-    MPI_Recv(&uid, 1, MPI_INT64_T, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    MPI_Recv(&id, 1, MPI_INT64_T, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    uid->id = id;
+    uid->rank = source;
 
-    td_task_t *task = remote_task_map[{uid, source}];
-    remote_task_map.erase({uid, source});
+    td_task_t *task = remote_task_map[*uid];
+    remote_task_map.erase(*uid);
 
     //Receive Task return code
     MPI_Recv(&task->return_code, 1, MPI_INT, source, SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
@@ -288,7 +289,7 @@ tdrc TD_Communicator::receive_task_result(int source) {
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::test_and_receive_results() {
+tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
 
     //test, if a task result can be received
     MPI_Status status;
@@ -297,7 +298,7 @@ tdrc TD_Communicator::test_and_receive_results() {
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
         DP("Result receival signaled\n");
-        receive_task_result(status.MPI_SOURCE);
+        receive_task_result(status.MPI_SOURCE, uid);
         return TARGETDART_SUCCESS;
     }
     return TARGETDART_FAILURE;

@@ -6,7 +6,7 @@
 #include "communication.h"
 
 #include "PluginManager.h"
-#include <__atomic/atomic.h>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <unordered_set>
@@ -92,7 +92,7 @@ public:
     tdrc get_migrateable_task(device_affinity affinity, td_task_t **task);
 
     // notify the completion of a local task
-    void notify_task_completion(td_uid_t taskID, bool remote);
+    void notify_task_completion(td_uid_t taskID, bool isReplica);
 
     // returns true, iff no tasks are remaining in any queue
     bool is_empty();    
@@ -108,6 +108,9 @@ public:
 
     // returns the number of user visible devices
     int32_t public_device_count();
+
+    // synchronize the targetdart plugin with the current thread
+    void synchronize();
 
 };
 
