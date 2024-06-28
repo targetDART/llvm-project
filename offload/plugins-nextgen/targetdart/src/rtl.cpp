@@ -149,6 +149,9 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
     KernelArgs.NumArgs--;
 
+    // add scheduling manager to the queue to ensure that the synchronization is performed
+    AsyncInfoWrapper.setQueueAs<TD_Scheduling_Manager*>(td_sched);
+
     td_task_t *task = td_sched->create_task(HostPtr, &KernelArgs, Loc);
     td_sched->add_task(task, GenericDevice.getDeviceId());
 
@@ -350,7 +353,14 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Initialize a __tgt_async_info structure. Related to interop features.
   Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     DP("Init Async\n");
-    return Plugin::error("initAsyncInfoImpl not supported\n");
+    // TODO: refine
+    TD_Scheduling_Manager *sched_man = AsyncInfoWrapper.getQueueAs<TD_Scheduling_Manager*>();
+
+    if (!sched_man) {      
+      AsyncInfoWrapper.setQueueAs<TD_Scheduling_Manager*>(td_sched);
+    }
+    
+    return Plugin::success();
   }
 
   /// Initialize a __tgt_device_info structure. Related to interop features.

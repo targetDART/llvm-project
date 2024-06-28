@@ -120,11 +120,9 @@ tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
     executor_th.resize(physical_device_count + 1);
 
     //initialize all offloading threads
-    for (int i = 0; i < physical_device_count; i++) {
+    for (int i = 0; i <= physical_device_count; i++) {
         executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+1], &exec_thread_loop, i);
     }
-    // initialize CPU thread
-    executor_th.at(physical_device_count) = std::thread(__pin_and_workload, &executor_th.at(physical_device_count), (*assignments)[physical_device_count+1], &exec_thread_loop, physical_device_count);
 
     DP("spawned management threads\n");
     return TARGETDART_SUCCESS;
@@ -163,6 +161,10 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     exec_thread_loop = [&] (int deviceID) {
         DP("Starting executor thread for device %d\n", deviceID);
         int iter = 0;
+        int phys_device_id = deviceID;
+        if (deviceID == physical_device_count) {
+            phys_device_id = -1;
+        }
         while (!scheduler_done.load() || !is_finalizing || !schedule_man->is_empty()) {
             td_task_t *task;
             iter++;
@@ -173,7 +175,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             if (schedule_man->get_task(deviceID, &task) == TARGETDART_SUCCESS) {
                 DP("start execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                 //execute the task on your own device
-                int return_code = invoke_task(task, deviceID);
+                int return_code = invoke_task(task, phys_device_id);
                 task->return_code = return_code;
                 /* if (return_code == TARGETDART_FAILURE) {         
                     //handle_error_en(-1, "Task execution failed.\n");

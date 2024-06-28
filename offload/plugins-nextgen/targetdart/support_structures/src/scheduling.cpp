@@ -240,8 +240,8 @@ int32_t TD_Scheduling_Manager::public_device_count() {
 }
 
 void TD_Scheduling_Manager::synchronize() {
-    do {
+    while (!is_empty()) {
         // sleep for a few micro seconds to limit contention
         std::this_thread::sleep_for(std::chrono::microseconds(10));
-    }while (is_empty());
+    }
 }
