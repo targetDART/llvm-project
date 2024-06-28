@@ -63,6 +63,16 @@ void PluginManager::addInfo(void *info) {
   }
 }
 
+int PluginManager::getPhysicalDevices() {
+  int sum = 0;
+  for(auto &Plugin: Plugins) {
+    if (Plugin->providesPhysicalDevices()) {
+      sum += Plugin->getNumDevices();
+    }
+  }
+  return sum;
+}
+
 void PluginManager::initDevices(GenericPluginTy &RTL) {
   // If this RTL has already been initialized.
   if (PM->DeviceOffsets.contains(&RTL))

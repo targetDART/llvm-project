@@ -527,6 +527,11 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return Plugin::success();
   }
 
+  /// Returns true, iff the plugin defines a driver for a physical device.
+  bool providesPhysicalDevices() override {
+    return false;
+  }
+
   /// Create a new device for the underlying plugin.
   GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,

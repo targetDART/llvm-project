@@ -72,6 +72,9 @@ VERS1.0 {
     __tgt_interop_destroy;
     ompt_libomptarget_connect;
     td_init;
+    td_advance;
+    td_phase_progress;
+    td_device_offset;
   local:
     *;
 };

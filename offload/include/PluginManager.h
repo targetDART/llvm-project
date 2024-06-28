@@ -55,6 +55,9 @@ struct PluginManager {
   // Adds additional information for the delayed initialization of a plugin
   void addInfo(void *info);
 
+  // Provides the number of physical devices available to offload
+  int getPhysicalDevices();
+
   // Register a shared library with all (compatible) RTLs.
   void registerLib(__tgt_bin_desc *Desc);
 

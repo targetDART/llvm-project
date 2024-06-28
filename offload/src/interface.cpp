@@ -37,6 +37,20 @@ EXTERN int td_init(void *main_ptr) {
     return 0;
 }
 
+EXTERN int td_advance(int phase) {
+    DP("Not yet implemented!\n");
+    return 0;
+}
+
+EXTERN int td_phase_progress(int phase) {
+    DP("Not yet implemented!\n");
+    return 0;
+}
+
+EXTERN int td_device_offset() {
+    return PM->getPhysicalDevices();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /// adds requires flags
 EXTERN void __tgt_register_requires(int64_t Flags) {

@@ -101,8 +101,34 @@
     extern void   __KAI_KMPC_CONVENTION  omp_destroy_nest_lock (omp_nest_lock_t *);
     extern int    __KAI_KMPC_CONVENTION  omp_test_nest_lock    (omp_nest_lock_t *);
 
+    /* targetDART defines */
+
+    // Main affinities
+    #define TD_CPU_OFFSET 2  // Task that should only run on the CPU
+    #define TD_OFFLOAD_OFFSET 5 // Task that should only run on an offload device
+    #define TD_ANY_OFFSET TD_CPU_OFFSET + TD_OFFLOAD_OFFSET + 1 // Task that can run on any hardware
+    // Sub affinities/priorities
+    #define TD_MIGRATABLE_OFFSET 0 // The task may be migrated to another process
+    #define TD_LOCAL_OFFSET -1 // The task must not be migrated to another process
+    #define TD_REPLICA_OFFSET -2 // The task was created on the local process and exists multiple times. Additional communication for cancelation necessary
+
+    #define TARGETDART_CPU       td_device_offset() + TD_CPU_OFFSET
+    #define TARGETDART_OFFLOAD   td_device_offset() + TD_OFFLOAD_OFFSET
+    #define TARGETDART_ANY       td_device_offset() + TD_ANY_OFFSET
+
+    #define TARGETDART_CPU_LOCAL       TARGETDART_CPU + TD_LOCAL_OFFSET
+    #define TARGETDART_OFFLOAD_LOCAL   TARGETDART_OFFLOAD + TD_LOCAL_OFFSET
+    #define TARGETDART_ANY_LOCAL       TARGETDART_ANY + TD_LOCAL_OFFSET
+
+    #define TARGETDART_CPU_REPLICA       TARGETDART_CPU + TD_REPLICA_OFFSET
+    #define TARGETDART_OFFLOAD_REPLICA   TARGETDART_OFFLOAD + TD_REPLICA_OFFSET
+    #define TARGETDART_ANY_REPLICA       TARGETDART_ANY + TD_REPLICA_OFFSET
+
     /* targetDART added functions */
-    extern int __KAI_KMPC_CONVENTION td_init(void* main_ptr);
+    extern int  __KAI_KMPC_CONVENTION   td_init             (void *);
+    extern int  __KAI_KMPC_CONVENTION   td_device_offset    (void);
+    extern int  __KAI_KMPC_CONVENTION   td_advance          (int);
+    extern int  __KAI_KMPC_CONVENTION   td_phase_progress   (int);
 
     /* OpenMP 5.0  Synchronization hints*/
     typedef enum omp_sync_hint_t {

@@ -1011,6 +1011,11 @@ struct GenericPluginTy {
     return true;
   }
 
+  /// Returns true, iff the plugin defines a driver for a physical device.
+  virtual bool providesPhysicalDevices() {
+    return true;
+  }
+
   /// Get the ELF code to recognize the binary image of this plugin.
   virtual uint16_t getMagicElfBits() const = 0;
 

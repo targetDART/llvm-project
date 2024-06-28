@@ -152,6 +152,9 @@
 #define FTN_GET_INTEROP_RC_DESC omp_get_interop_rc_desc
 
 #define FTN_TD_INIT td_init
+#define FTN_TD_DEVICE_OFFSET td_device_offset
+#define FTN_TD_PHASE_PROGRESS td_phase_progress
+#define FTN_TD_ADVANCE td_advance 
 
 #endif /* KMP_FTN_PLAIN */
 
@@ -291,6 +294,9 @@
 #define FTN_GET_INTEROP_RC_DESC omp_get_interop_rc_desc_
 
 #define FTN_TD_INIT td_init_
+#define FTN_TD_DEVICE_OFFSET td_device_offset_
+#define FTN_TD_PHASE_PROGRESS td_phase_progress_
+#define FTN_TD_ADVANCE td_advance_
 
 #endif /* KMP_FTN_APPEND */
 

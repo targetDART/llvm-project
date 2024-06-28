@@ -214,6 +214,21 @@
             integer (kind=kmp_pointer_kind), value :: main_ptr
           end subroutine td_init
 
+          subroutine td_advance(advancement) bind(c)
+            import
+            integer (kind=omp_integer_kind), value :: advancement
+          end subroutine td_advance
+
+          subroutine td_phase_progress(phase) bind(c)
+            import
+            integer (kind=omp_integer_kind), value :: phase
+          end subroutine td_phase_progress
+
+          subroutine td_device_offset() bind(c)
+            import
+            integer (kind=kmp_pointer_kind), value :: main_ptr
+          end subroutine td_device_offset
+
           subroutine omp_set_num_threads(num_threads) bind(c)
             use omp_lib_kinds
             integer (kind=omp_integer_kind), value :: num_threads
