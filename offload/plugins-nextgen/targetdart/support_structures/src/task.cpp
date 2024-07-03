@@ -111,6 +111,7 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
 
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+        // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
         devicePtrs[i] = DeviceOrErr->allocData(task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgPtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
         const bool hasFlagTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
         if (hasFlagTo) {        
@@ -146,7 +147,6 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
     }
     assert(TargetTable && "Global data has not been mapped\n");
 
-    DP("start kernel exec " DPxMOD "\n", DPxPTR(TM->Table->TargetsTable[Device]));
     // Launch device execution.
     void *TgtEntryPtr = TargetTable->EntriesBegin[TM->Index].addr;
     DP("Launching target execution %s with pointer " DPxMOD " (index=%d).\n",
@@ -158,11 +158,16 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
                                TargetAsyncInfo, task->Loc, HostPtr);
 
     // Deallocate data on the device and transfer it from device to host if necessary
-    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
         if (hasFlagFrom) {        
             DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
         }
+    }
+
+    DeviceOrErr->synchronize(TargetAsyncInfo);
+    // Deallocate data on the device and transfer it from device to host if necessary
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
     }
 
