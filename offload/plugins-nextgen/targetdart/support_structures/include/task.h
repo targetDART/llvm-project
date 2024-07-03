@@ -58,6 +58,8 @@ typedef struct td_task_t{
     KernelArgsTy*       KernelArgs;
     ident_t*            Loc;
     td_uid_t            uid;
+    int64_t             nameLen;
+    const char*         name;
     int                 return_code;
     bool                isReplica;
 } td_task_t;
@@ -117,4 +119,7 @@ int add_main_ptr(void* main_ptr);
 * Works only for identical BINARIES
 */
 tdrc get_base_address(void * main_ptr);
+
+
+extern bool checkDeviceAndCtors(int64_t &DeviceID, ident_t *Loc);
 #endif //_TARGETDART_TASK_H

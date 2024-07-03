@@ -12,7 +12,7 @@
 
 #include <cstdint>
 #include <iostream>
-#include <ffi.h>
+#include <string.h>
 #include <unistd.h>
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
@@ -120,9 +120,9 @@ struct targetDARTKernelTy: public GenericKernelTy {
       return Plugin::error("Invalid function for kernel %s\n", getName());
 
     // Save the function pointer.
-    CPUFunc = (void (*)())Global.getPtr();
+    //CPUFunc = (void (*)())Global.getPtr();
     DP("Function for kernel %s\n", getName());
-    std::cout << "Function Pointer: " << Global.getPtr() << std::endl;
+    DP("Function name length %d\n", strlen(getName()));
 
     // TODO: Check which settings are appropriate for the mpi plugin
     // for now we are using the Elf64 plugin configuration
@@ -177,7 +177,7 @@ protected:
 
 private: 
 
-  void (*CPUFunc)(void);
+  //void (*CPUFunc)(void);
   intptr_t HostPtr;
   ident_t *Loc;
   TD_Scheduling_Manager *td_sched;
@@ -283,10 +283,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override {
     //TODO: figure out if adding sched_man to asyncInfo is relevant
     DP("QUERY\n");
-    if (td_sched->is_empty()) {
+    if (!td_sched->is_empty()) {
       return Plugin::success();
     }
-    return Plugin::check(1, "Scheduler not synchronizd\n");
+    return Plugin::check(1, "Scheduler not synchronized\n");
   }
 
   /// Get the total device memory size
@@ -478,7 +478,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
   /// Construct a plugin instance.
   targetDARTPluginTy() : GenericPluginTy(getTripleArch()) {
-    std::cout << "create targetDART plugin" << std::endl;
+    DP("create targetDART plugin\n");
   }
 
   ~targetDARTPluginTy() {}

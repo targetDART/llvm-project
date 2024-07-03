@@ -66,8 +66,8 @@ tdrc TD_Communicator::declare_KernelArgs_type() {
 
 tdrc TD_Communicator::declare_task_type() {
     const int nitems = 2;
-    int blocklengths[2] = {1,2};
-    MPI_Datatype types[2] = {MPI_LONG, MPI_LONG_LONG};
+    int blocklengths[2] = {1,3};
+    MPI_Datatype types[2] = {MPI_LONG, MPI_INT64_T};
     MPI_Aint offsets[2];
     offsets[0] = (MPI_Aint) offsetof(td_task_t, host_base_ptr);
     offsets[1] = (MPI_Aint) offsetof(td_task_t, uid);
@@ -116,6 +116,9 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //Send base location
     int64_t Locptr = (int64_t) apply_image_base_address((intptr_t) task->Loc->psource, false);
     MPI_Send(&Locptr, 1, MPI_INT64_T, dest, SEND_LOCS_PSOURCE, targetdart_comm);
+
+    //Send task name
+    MPI_Send(task->name, task->nameLen, MPI_CHAR, dest, SEND_NAME, targetdart_comm);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
@@ -189,6 +192,10 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     int64_t Locptr;
     MPI_Recv(&Locptr, 1, MPI_INT64_T, source, SEND_LOCS_PSOURCE, targetdart_comm, MPI_STATUS_IGNORE);
     task->Loc->psource = (const char*) apply_image_base_address((intptr_t) Locptr, true);
+
+    // Receive task name
+    task->name = new char[task->nameLen];
+    MPI_Recv((void *) task->name, task->nameLen, MPI_CHAR, source, SEND_NAME, targetdart_comm, MPI_STATUS_IGNORE);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
