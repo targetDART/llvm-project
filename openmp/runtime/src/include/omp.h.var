@@ -112,9 +112,11 @@
     #define TD_LOCAL_OFFSET -1 // The task must not be migrated to another process
     #define TD_REPLICA_OFFSET -2 // The task was created on the local process and exists multiple times. Additional communication for cancelation necessary
 
-    #define TARGETDART_CPU       td_device_offset() + TD_CPU_OFFSET
-    #define TARGETDART_OFFLOAD   td_device_offset() + TD_OFFLOAD_OFFSET
-    #define TARGETDART_ANY       td_device_offset() + TD_ANY_OFFSET
+    #define TARGETDART_DEVICE(n) td_device_offset() + n
+
+    #define TARGETDART_CPU       2 * td_device_offset() + 1 + TD_CPU_OFFSET
+    #define TARGETDART_OFFLOAD   2 * td_device_offset() + 1 + TD_OFFLOAD_OFFSET
+    #define TARGETDART_ANY       2 * td_device_offset() + 1 + TD_ANY_OFFSET
 
     #define TARGETDART_CPU_LOCAL       TARGETDART_CPU + TD_LOCAL_OFFSET
     #define TARGETDART_OFFLOAD_LOCAL   TARGETDART_OFFLOAD + TD_LOCAL_OFFSET

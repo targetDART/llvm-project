@@ -159,21 +159,22 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     };
 
     exec_thread_loop = [&] (int deviceID) {
-        DP("Starting executor thread for device %d\n", deviceID);
         int iter = 0;
         int phys_device_id = deviceID;
         if (deviceID == physical_device_count) {
             phys_device_id = -1;
         }
+        DP("Starting executor thread for device %d\n", phys_device_id);
         while (!scheduler_done.load() || !is_finalizing || !schedule_man->is_empty()) {
             td_task_t *task;
             iter++;
             if (iter == 8000000) {
                 iter = 0;
                 DP("ping from executor of device %d\n", deviceID);
+                DP("remaining load %d\n", schedule_man->get_active_tasks());
             }
             if (schedule_man->get_task(deviceID, &task) == TARGETDART_SUCCESS) {
-                DP("start execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
+                DP("start execution of task (%ld%ld) on device %d\n", task->uid.rank, task->uid.id, phys_device_id);
                 //execute the task on your own device
                 int return_code = invoke_task(task, phys_device_id);
                 task->return_code = return_code;

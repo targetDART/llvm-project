@@ -112,6 +112,9 @@ public:
     // synchronize the targetdart plugin with the current thread
     void synchronize();
 
+    // Returns the number of active tasks
+    int64_t get_active_tasks();
+
 };
 
 

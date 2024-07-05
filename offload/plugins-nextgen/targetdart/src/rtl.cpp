@@ -122,7 +122,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
     // Save the function pointer.
     //CPUFunc = (void (*)())Global.getPtr();
     DP("Function for kernel %s\n", getName());
-    DP("Function name length %d\n", strlen(getName()));
+    DP("Function name length %zu\n", strlen(getName()));
 
     // TODO: Check which settings are appropriate for the mpi plugin
     // for now we are using the Elf64 plugin configuration
@@ -273,6 +273,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
     DP("SYNCHRONIZE\n");
     td_sched->synchronize();
+    AsyncInfo.Queue = nullptr;
 
     return Plugin::success();
 
@@ -527,11 +528,6 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return Plugin::success();
   }
 
-  /// Returns true, iff the plugin defines a driver for a physical device.
-  bool providesPhysicalDevices() override {
-    return false;
-  }
-
   /// Create a new device for the underlying plugin.
   GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,
@@ -582,6 +578,11 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// we could not move this function into GenericDeviceTy.
   Expected<bool> isELFCompatible(StringRef Image) const override {
     return true;
+  }
+
+  /// Returns true, iff the plugin defines a driver for a physical device.
+  bool providesPhysicalDevices() override {
+    return false;
   }
 
   private:

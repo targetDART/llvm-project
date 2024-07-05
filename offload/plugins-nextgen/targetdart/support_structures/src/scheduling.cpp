@@ -12,7 +12,6 @@ Set_Wrapper::Set_Wrapper() {
 Set_Wrapper::~Set_Wrapper() {
 }
 
-
 void Set_Wrapper::add_task(td_uid_t uid) {
     std::unique_lock<std::mutex> lock(set_mutex);
     internal_set.insert(uid.id);
@@ -62,9 +61,33 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
     return task;
 }
 
+KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
+    KernelArgsTy *LocalKernelArgs = new KernelArgsTy();
+    LocalKernelArgs->Version = KernelArgs-> Version;
+    LocalKernelArgs->NumArgs = KernelArgs->NumArgs;
+    LocalKernelArgs->ArgBasePtrs = KernelArgs->ArgBasePtrs;
+    LocalKernelArgs->ArgPtrs = KernelArgs->ArgPtrs;
+    LocalKernelArgs->ArgSizes = KernelArgs->ArgSizes;
+    LocalKernelArgs->ArgTypes = KernelArgs->ArgTypes;
+    LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
+    LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;
+    LocalKernelArgs->Tripcount = KernelArgs->Tripcount;
+    LocalKernelArgs->Flags = KernelArgs->Flags;
+    LocalKernelArgs->DynCGroupMem = 0;
+    LocalKernelArgs->NumTeams[0] = KernelArgs->NumTeams[0];
+    LocalKernelArgs->NumTeams[1] = 0;
+    LocalKernelArgs->NumTeams[2] = 0;
+    LocalKernelArgs->ThreadLimit[0] = KernelArgs->ThreadLimit[0];
+    LocalKernelArgs->ThreadLimit[1] = 0;
+    LocalKernelArgs->ThreadLimit[2] = 0;
+    return LocalKernelArgs;
+}
+
 void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
     active_tasks.fetch_add(1);
+    task->KernelArgs = copyKernelArgs(task->KernelArgs);
     affinity_queues->at(DeviceID).addTask(task);
+    DP("added task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, DeviceID);
 }
 
 void TD_Scheduling_Manager::add_remote_task(td_task_t *task, int32_t DeviceID) {
@@ -87,7 +110,7 @@ tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
     int affinity_prio[2];
     affinity_prio[1] = TD_ANY_OFFSET;
 
-    if (PhysicalDeviceID < physical_device_count - 1) {
+    if (PhysicalDeviceID < physical_device_count) {
         affinity_prio[0] = TD_OFFLOAD_OFFSET;
     } else {
         affinity_prio[0] = TD_CPU_OFFSET;
@@ -97,7 +120,7 @@ tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
     // Prio 2: any device affinity
     for (auto device_offset : affinity_prio) {
         for (auto sub_offset : priorities) {
-            *task = affinity_queues->at(physical_device_count + device_offset + sub_offset).getTask();
+            *task = affinity_queues->at(physical_device_count + 1 + device_offset + sub_offset).getTask();
             if (*task != nullptr) {
                 if (sub_offset == TD_REPLICA_OFFSET) {            
                     started_local_replica.add_task((*task)->uid);
@@ -106,6 +129,7 @@ tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
                     active_tasks.fetch_sub(1);
                     continue;
                 }
+                DP("Gotten Task for PhyscalID: %d in queue: %d device count %d device offset %d affinity offset %d\n", PhysicalDeviceID, 1+physical_device_count + device_offset + sub_offset, physical_device_count, device_offset, sub_offset);
                 return TARGETDART_SUCCESS;
             }
         }
@@ -244,4 +268,8 @@ void TD_Scheduling_Manager::synchronize() {
         // sleep for a few micro seconds to limit contention
         std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
+}
+
+int64_t TD_Scheduling_Manager::get_active_tasks() {
+    return active_tasks.load();
 }

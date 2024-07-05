@@ -109,6 +109,8 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
 
     void *devicePtrs[task->KernelArgs->NumArgs];
 
+    DP("Allocating %d arguments for task (%ld%ld)\n", task->KernelArgs->NumArgs, task->uid.rank, task->uid.id);
+
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         // non blocking alloc is not non blocking but rather uses the non-blocking calls internally

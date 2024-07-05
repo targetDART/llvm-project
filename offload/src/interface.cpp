@@ -282,6 +282,7 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   DP("Argument Type: 0x%" PRIx64 "\n", KernelArgs->ArgTypes[1]);
   DP("Argument Number: %d\n", KernelArgs->NumArgs);
   DP("Argument Version: %d\n", KernelArgs->Version);
+  DP("Kernel Args Pointer: " DPxMOD "\n", DPxPTR(KernelArgs));
 
   assert(PM && "Runtime not initialized");
   static_assert(std::is_convertible_v<TargetAsyncInfoTy, AsyncInfoTy>,

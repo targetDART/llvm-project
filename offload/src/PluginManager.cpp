@@ -65,11 +65,13 @@ void PluginManager::addInfo(void *info) {
 
 int PluginManager::getPhysicalDevices() {
   int sum = 0;
-  for(auto &Plugin: Plugins) {
-    if (Plugin->providesPhysicalDevices()) {
-      sum += Plugin->getNumDevices();
+  for(int i = 0; i < getNumDevices(); i++) {
+    auto device = getDevice(i);
+    if (device->RTL->providesPhysicalDevices()) {
+      sum++;
     }
   }
+  DP("device sum: %d\n", sum);
   return sum;
 }
 
