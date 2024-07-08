@@ -284,7 +284,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override {
     //TODO: figure out if adding sched_man to asyncInfo is relevant
     DP("QUERY\n");
-    if (!td_sched->is_empty()) {
+    if (td_sched->is_empty()) {
+      AsyncInfo.Queue = nullptr;
+      return Plugin::success();
+    } else {
       return Plugin::success();
     }
     return Plugin::check(1, "Scheduler not synchronized\n");

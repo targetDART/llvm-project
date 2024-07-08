@@ -24,8 +24,10 @@ private:
     MPI_Datatype TD_MPI_Task;
 
     // communicator for remote task requests
-    MPI_Comm targetdart_comm;
+    MPI_Comm targetdart_comm = MPI_COMM_NULL;
 
+    // MPI Session for MPI managment
+    MPI_Session td_libhandle = MPI_SESSION_NULL;
 
     // test if MPI was initialized by targedart
     bool did_initialize_mpi = false;
