@@ -10,44 +10,104 @@
 #include <vector>
 
 TD_Communicator::TD_Communicator(){
-    // check whether MPI is initialized, otherwise do so
-    int mpi_initialized, err;
-    mpi_initialized = 0;
-    int provided;
-    err = MPI_Initialized(&mpi_initialized);
-    if(!mpi_initialized) {
-        // MPI_Init(NULL, NULL);
-        MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
-        did_initialize_mpi = true;
-        DP("Internal MPI initialization\n");
-    }
-    MPI_Query_thread(&provided);
-    if(provided != MPI_THREAD_MULTIPLE) {
-        handle_error_en(provided, "Your MPI does not support MPI_THREAD_MULTIPLE, which is required by targetDART. Guess I'll die.\n");
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
+  int rc, flag, valuelen;
+  const char pset_name[] = "mpi://WORLD";
+  const char mt_key[] = "thread_level";
+  const char mt_value[] = "MPI_THREAD_MULTIPLE";
+  char out_value[100]; /* large enough */
+  MPI_Group wgroup = MPI_GROUP_NULL;
+  MPI_Info sinfo = MPI_INFO_NULL;
+  MPI_Info tinfo = MPI_INFO_NULL;
 
-    //decare KernelArgs,task as MPI Type
-    declare_KernelArgs_type();
-    declare_task_type();
+  // Create initial MPI Session
+  MPI_Info_create(&sinfo);
+  MPI_Info_set(sinfo, mt_key, mt_value);
+  rc = MPI_Session_init(sinfo, MPI_ERRORS_RETURN, &td_libhandle);
+  if (rc != MPI_SUCCESS) {
+    DP("Failed setting session info\n");
+    ret = -1;
+    goto fn_exit;
+  }
 
-    // create separate communicator for targetdart
-    err = MPI_Comm_dup(MPI_COMM_WORLD, &targetdart_comm);
-    if(err != MPI_SUCCESS) {
-        handle_error_en(err, "Could not duplicate targetDART communicator. Guess I'll die.\n");
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-    MPI_Comm_size(targetdart_comm, &size);
-    MPI_Comm_rank(targetdart_comm, &rank);
-    DP("MPI environment setup finished\n");
+  /*
+   * check we got thread support level foo library needs
+   */
+  rc = MPI_Session_get_info(td_libhandle, &tinfo);
+  if (rc != MPI_SUCCESS) {
+    DP("Failed getting session info\n");
+    ret = -1;
+    goto fn_exit;
+  }
+
+  valuelen = sizeof(out_value);
+  MPI_Info_get(tinfo, mt_key,  valuelen, out_value, &flag);
+  if (0 == flag) {
+    DP("Could not find key %s\n", mt_key);
+    ret = -1;
+    goto fn_exit;
+  }
+
+  if (strcmp(out_value, mt_value)) {
+    DP("Did not get thread multiple support, got %s\n", out_value);
+    ret = -1;
+    goto fn_exit;
+  }
+
+  /*
+   * create a group from the WORLD process set
+   */
+  rc = MPI_Group_from_session_pset(td_libhandle, pset_name, &wgroup);
+  if (rc != MPI_SUCCESS) {
+    DP("Failed getting lib group\n");
+    ret = -1;
+    goto fn_exit;
+  }
+
+  /*
+   * get a communicator
+   */
+  rc = MPI_Comm_create_from_group(wgroup,
+                                  "org.mpi-forum.mpi-v4_0.example-ex11_8",
+                                  MPI_INFO_NULL, MPI_ERRORS_RETURN, &targetdart_comm);
+  if (rc != MPI_SUCCESS) {
+    DP("Failed getting lib comm\n");
+    ret = -1;
+    goto fn_exit;
+  }
+
+  MPI_Comm_rank(targetdart_comm, &rank);
+  MPI_Comm_size(targetdart_comm, &size);
+  /*
+   * free group, library doesn't need it.
+   */
+
+  if (ret != -1)
+    return;
+fn_exit:
+  DP("Closing lib\n");
+  MPI_Group_free(&wgroup);
+
+  if (sinfo != MPI_INFO_NULL) {
+    MPI_Info_free(&sinfo);
+  }
+
+  if (tinfo != MPI_INFO_NULL) {
+    MPI_Info_free(&tinfo);
+  }
+
+  if (ret != 0) {
+    MPI_Session_finalize(&td_libhandle);
+  }
+
+  return;
 }
 
 TD_Communicator::~TD_Communicator(){
-    //finalize MPI
-    if (did_initialize_mpi) {
-        MPI_Finalize();
-        DP("local MPI finalized\n");
-    }
+  DP("lib internal ret = %d\n", ret);
+  if (ret == 0) {
+    DP("Closing lib\n");
+    MPI_Session_finalize(&td_libhandle);
+  }
 }
 
 tdrc TD_Communicator::declare_KernelArgs_type() {
