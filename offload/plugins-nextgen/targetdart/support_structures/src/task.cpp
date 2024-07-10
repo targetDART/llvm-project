@@ -159,6 +159,10 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
     auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs, offsets.data(), *task->KernelArgs,
                                TargetAsyncInfo, task->Loc, HostPtr);
 
+    if (Err) {
+        DP("Kernel launch of task (%ld%ld) failed\n", task->uid.rank, task->uid.id);
+    }
+
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
@@ -183,12 +187,12 @@ int add_main_ptr(void *main_ptr) {
 
 tdrc get_base_address(void *main_ptr) {
   Dl_info info;
-  int rc;
+  //int rc;
   //link_map * map = (link_map *)malloc(1000*sizeof(link_map));
   //void *start_ptr = (void*)map;
   // struct link_map map;
   //rc = dladdr1(main_ptr, &info, (void**)&map, RTLD_DL_LINKMAP);
-  rc = dladdr(main_ptr, &info);
+  dladdr(main_ptr, &info);
   // Store base pointer for lokal process
   // TODO: is the image base address necessary
   set_image_base_address(99, (intptr_t)info.dli_fbase);    

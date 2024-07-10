@@ -272,7 +272,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     // This synchronization is restricted to the local process, including all remote executions migrated to and from the process.
 
     DP("SYNCHRONIZE\n");
-    td_sched->synchronize();
+    TD_Scheduling_Manager *sched_man = reinterpret_cast<TD_Scheduling_Manager*>(AsyncInfo.Queue);
+    sched_man->synchronize();
     AsyncInfo.Queue = nullptr;
 
     return Plugin::success();
@@ -282,9 +283,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Query for the completion of the pending operations on the __tgt_async_info
   /// structure in a non-blocking manner.
   Error queryAsyncImpl(__tgt_async_info &AsyncInfo) override {
-    //TODO: figure out if adding sched_man to asyncInfo is relevant
-    DP("QUERY\n");
-    if (td_sched->is_empty()) {
+    TD_Scheduling_Manager *sched_man = reinterpret_cast<TD_Scheduling_Manager*>(AsyncInfo.Queue);
+    if (sched_man->is_empty()) {
       AsyncInfo.Queue = nullptr;
       return Plugin::success();
     } else {

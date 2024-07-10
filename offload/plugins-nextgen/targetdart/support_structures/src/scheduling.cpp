@@ -90,14 +90,16 @@ void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
     DP("added task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, DeviceID);
 }
 
-void TD_Scheduling_Manager::add_remote_task(td_task_t *task, int32_t DeviceID) {
+void TD_Scheduling_Manager::add_remote_task(td_task_t *task, device_affinity DeviceID) {
     active_tasks.fetch_add(1);
-    affinity_queues->at(DeviceID + TD_REMOTE_OFFSET).addTask(task);
+    affinity_queues->at(physical_device_count + 1 + DeviceID + TD_REMOTE_OFFSET).addTask(task);
+    DP("added remote task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, physical_device_count + 1 + DeviceID + TD_REMOTE_OFFSET);
 }
 
-void TD_Scheduling_Manager::add_replicated_task(td_task_t *task, int32_t DeviceID) {
+void TD_Scheduling_Manager::add_replicated_task(td_task_t *task, device_affinity DeviceID) {
     active_tasks.fetch_add(1);
-    affinity_queues->at(DeviceID + TD_REPLICA_OFFSET).addTask(task);
+    affinity_queues->at(physical_device_count + 1 + DeviceID + TD_REPLICA_OFFSET).addTask(task);
+    DP("added replicated task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, physical_device_count + 1 + DeviceID + TD_REPLICA_OFFSET);
 }
 
 tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task) {
@@ -138,7 +140,7 @@ tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
 }
 
 tdrc TD_Scheduling_Manager::get_migrateable_task(device_affinity affinity, td_task_t **task) {
-    *task = affinity_queues->at(physical_device_count + affinity + TD_ANY_OFFSET).getTask();
+    *task = affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getTask();
     if (*task != nullptr) {
         return TARGETDART_SUCCESS;
     }
@@ -183,8 +185,9 @@ COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE
 }
 
 void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
-    std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(affinity_queues->at(affinity).getSize());
+    std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getSize());
     std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
+    DP("iterative schedule: Rank 0: %lu Rank 1: %ld\n", cost_vector.at(0), cost_vector.at(1));
 
     for (size_t i = 0; i < combined_vector.size(); i++) {
         combined_vector[i].cost = cost_vector[i];
@@ -229,7 +232,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 
     COST_DATA_TYPE transfer_load = __compute_transfer_load(combined_vector.at(local_idx).cost, combined_vector.at(partner_idx).cost);
     
-    
+    DP("Found Partner proc: %d for load: %ld\n", partner_proc, transfer_load);
     if (transfer_load == 0) {
         return;
     } else if (transfer_load > 0) {
@@ -252,7 +255,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                 td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
                 comm_man->receive_task(partner_proc, task);
                 DP("Received task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, partner_proc);
-                add_remote_task(task, physical_device_count + affinity);
+                add_remote_task(task, affinity);
             }
         }
     } 

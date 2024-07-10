@@ -59,7 +59,10 @@ void PluginManager::deinit() {
 
 void PluginManager::addInfo(void *info) {
   for(auto &Plugin: Plugins) {
-    Plugin->addInfo(info);
+    auto rc = Plugin->addInfo(info);
+    if (rc) {
+      DP("Adding info for info ptr: " DPxMOD " failed.\n", DPxPTR(info));
+    }
   }
 }
 

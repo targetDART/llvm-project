@@ -81,9 +81,9 @@ public:
     // adds a tasks to the user defined queue
     void add_task(td_task_t *task, int32_t DeviceID);
     // adds a task migrated to the local process
-    void add_remote_task(td_task_t *task, int32_t DeviceID);
+    void add_remote_task(td_task_t *task, device_affinity DeviceType);
     // adds a task replicated from another process
-    void add_replicated_task(td_task_t *task, int32_t DeviceID);
+    void add_replicated_task(td_task_t *task, device_affinity DeviceType);
 
     // returns true, iff task is available ready for execution. Implements the priorities
     tdrc get_task(int32_t PhysicalDeviceID, td_task_t **task);

@@ -105,8 +105,9 @@ fn_exit:
 TD_Communicator::~TD_Communicator(){
   DP("lib internal ret = %d\n", ret);
   if (ret == 0) {
-    DP("Closing lib\n");
+    DP("Closing MPI lib\n");
     MPI_Session_finalize(&td_libhandle);
+    DP("Closed MPI lib\n");
   }
 }
 
@@ -148,12 +149,16 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
 
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
+    DP("Send task structure for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
     //Send static KernelArgs values excluding pointervalues
     MPI_Send(task->KernelArgs, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
+    DP("Send KernelArgs for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
     //Send Argument sizes for actual data transfers
     MPI_Send(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
+    DP("Send ArgSizes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
     //Send Argument types for each kernel
     MPI_Send(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
+    DP("Send ArgTypes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Send the Base Pointer offsets for all arguments
     std::vector<int64_t> diff(task->KernelArgs->NumArgs);
@@ -196,19 +201,20 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
     //Receive Task Data
     MPI_Recv(task, 1, TD_MPI_Task, source , SEND_TASK, targetdart_comm, MPI_STATUS_IGNORE);
+    DP("Recv task structure for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
 
     //Receive static KernelArgs values excluding pointervalues
     task->KernelArgs = new KernelArgsTy;
     MPI_Recv(task->KernelArgs, 1, TD_Kernel_Args, source, SEND_KERNEL_ARGS, targetdart_comm, MPI_STATUS_IGNORE);
-    
+    DP("Recv KernelArgs for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
     //Receive Argument sizes for actual data transfers
     task->KernelArgs->ArgSizes = new int64_t[task->KernelArgs->NumArgs];
     MPI_Recv(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_SIZES, targetdart_comm, MPI_STATUS_IGNORE);
-    
+    DP("Recv ArgSizes for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
     //Receive Argument types for each kernel
     task->KernelArgs->ArgTypes = new int64_t[task->KernelArgs->NumArgs];
     MPI_Recv(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
-
+    DP("Recv ArgTypes for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {    
         DP("Argument type of arg %d: " DPxMOD, i, DPxPTR(task->KernelArgs->ArgTypes[i]));
         assert(!(OMP_TGT_MAPTYPE_LITERAL & task->KernelArgs->ArgTypes[i]) && "Parameters should not be mapped implicitly as literals to avoid remote GPU errors. Use map clause on literals as well. (map(to:var))\n");
@@ -228,7 +234,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         //TODO: look into datatype and allocation
-        task->KernelArgs->ArgBasePtrs[i] = std::malloc(task->KernelArgs->ArgSizes[i] + diff[i]);
+        task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
         task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
 
         

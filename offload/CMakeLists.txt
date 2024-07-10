@@ -225,6 +225,12 @@ if(OFFLOAD_HAVE_WERROR_CTOR)
   list(APPEND offload_compile_flags -Werror=global-constructors)
 endif()
 
+option(LIBOMPTARGET_ENABLE_UBSAN "Build with UBSan" OFF)
+if(LIBOMPTARGET_ENABLE_UBSAN)
+  set(CMAKE_CXX_COMPILER_LAUNCHER env LD_PRELOAD=/dev/shm/as388453/build-llvm/lib/clang/19/lib/x86_64-unknown-linux-gnu/libclang_rt.ubsan_standalone.so)
+  set(offload_compile_flags ${offload_compile_flags} -fsanitize=undefined -fno-omit-frame-pointer -L/dev/shm/as388453/build-llvm/lib/clang/19/lib/x86_64-unknown-linux-gnu/ -llibclang_rt.ubsan_minimal.so)
+endif()
+
 # TODO: Consider enabling LTO by default if supported.
 # https://cmake.org/cmake/help/latest/module/CheckIPOSupported.html can be used
 # to test for working LTO. However, before CMake 3.24 this will test the

@@ -148,6 +148,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             }
             iter++;        
             schedule_man->iterative_schedule(ANY);
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
             td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
@@ -171,7 +172,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             if (iter == 8000000) {
                 iter = 0;
                 DP("ping from executor of device %d\n", deviceID);
-                DP("remaining load %d\n", schedule_man->get_active_tasks());
+                DP("remaining load %ld\n", schedule_man->get_active_tasks());
             }
             if (schedule_man->get_task(deviceID, &task) == TARGETDART_SUCCESS) {
                 DP("start execution of task (%ld%ld) on device %d\n", task->uid.rank, task->uid.id, phys_device_id);
