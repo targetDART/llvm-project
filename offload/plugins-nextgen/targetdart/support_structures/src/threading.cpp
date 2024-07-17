@@ -210,5 +210,18 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
 
 TD_Thread_Manager::~TD_Thread_Manager() {
-    //TODO: sync and clean up
+
+    DP("begin finalization of targetDART, wait for remaining work");
+    is_finalizing = true;  
+
+    scheduler_th.join();
+
+    DP("Synchronized threads start joining %d management threads", executor_th.size());
+    for (int i = 0; i < executor_th.size(); i++) { 
+        DP("Joining executor: %d", i);
+        executor_th.at(i).join();
+        DP("Joined executor: %d", i);
+    }
+
+    DP("finalized management threads");
 }

@@ -58,8 +58,6 @@ typedef struct td_task_t{
     KernelArgsTy*       KernelArgs;
     ident_t*            Loc;
     td_uid_t            uid;
-    int64_t             nameLen;
-    const char*         name;
     int                 return_code;
     bool                isReplica;
 } td_task_t;

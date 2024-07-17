@@ -9,7 +9,7 @@
 #define COST_DATA_TYPE int64_t
 #define COST_MPI_DATA_TYPE MPI_LONG
 
-enum MpiTaskTransferTag {SIGNAL_TASK_SEND, SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_BASE_PTRS, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE, SEND_NAME, SEND_RESULT_UID, SEND_RESULT_DATA, SEND_RESULT_RETURN_CODE};
+enum MpiTaskTransferTag {SIGNAL_TASK_SEND, SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_BASE_PTRS, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE, SEND_RESULT_UID, SEND_RESULT_DATA, SEND_RESULT_RETURN_CODE};
 
 typedef struct td_global_sched_params_t{
     COST_DATA_TYPE        total_cost;
@@ -22,6 +22,7 @@ class TD_Communicator {
 private:
     MPI_Datatype TD_Kernel_Args;
     MPI_Datatype TD_MPI_Task;
+    MPI_Datatype TD_TASK_UID;
 
     // communicator for remote task requests
     MPI_Comm targetdart_comm = MPI_COMM_NULL;
@@ -38,6 +39,8 @@ private:
     tdrc declare_KernelArgs_type();
 
     tdrc declare_task_type();
+
+    tdrc declare_uid_type();
 
 public:
     // initializes the communication and communcicator

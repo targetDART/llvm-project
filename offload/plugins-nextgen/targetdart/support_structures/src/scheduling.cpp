@@ -187,7 +187,7 @@ COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE
 void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getSize());
     std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
-    DP("iterative schedule: Rank 0: %lu Rank 1: %ld\n", cost_vector.at(0), cost_vector.at(1));
+    //DP("iterative schedule: Rank 0: %lu Rank 1: %ld\n", cost_vector.at(0), cost_vector.at(1));
 
     for (size_t i = 0; i < combined_vector.size(); i++) {
         combined_vector[i].cost = cost_vector[i];
@@ -232,7 +232,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 
     COST_DATA_TYPE transfer_load = __compute_transfer_load(combined_vector.at(local_idx).cost, combined_vector.at(partner_idx).cost);
     
-    DP("Found Partner proc: %d for load: %ld\n", partner_proc, transfer_load);
+    //DP("Found Partner proc: %d for load: %ld\n", partner_proc, transfer_load);
     if (transfer_load == 0) {
         return;
     } else if (transfer_load > 0) {
@@ -252,7 +252,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
         for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
             tdrc ret_code = comm_man->receive_signal_task_send(partner_proc);
             if (ret_code == TARGETDART_SUCCESS) {                
-                td_task_t *task = (td_task_t*) std::malloc(sizeof(td_task_t));
+                td_task_t *task = new td_task_t;
                 comm_man->receive_task(partner_proc, task);
                 DP("Received task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, partner_proc);
                 add_remote_task(task, affinity);

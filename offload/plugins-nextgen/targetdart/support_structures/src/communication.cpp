@@ -81,6 +81,10 @@ TD_Communicator::TD_Communicator(){
    * free group, library doesn't need it.
    */
 
+  declare_KernelArgs_type();
+  declare_uid_type();
+  declare_task_type();
+
   if (ret != -1)
     return;
 fn_exit:
@@ -127,14 +131,27 @@ tdrc TD_Communicator::declare_KernelArgs_type() {
 
 tdrc TD_Communicator::declare_task_type() {
     const int nitems = 2;
-    int blocklengths[2] = {1,3};
-    MPI_Datatype types[2] = {MPI_LONG, MPI_INT64_T};
+    int blocklengths[2] = {1,1};
+    MPI_Datatype types[2] = {MPI_LONG, TD_TASK_UID};
     MPI_Aint offsets[2];
     offsets[0] = (MPI_Aint) offsetof(td_task_t, host_base_ptr);
     offsets[1] = (MPI_Aint) offsetof(td_task_t, uid);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &TD_MPI_Task);
     MPI_Type_commit(&TD_MPI_Task);
+
+    return TARGETDART_SUCCESS;
+}
+
+tdrc TD_Communicator::declare_uid_type() {
+    const int nitems = 1;
+    int blocklengths[1] = {2};
+    MPI_Datatype types[1] = {MPI_INT64_T};
+    MPI_Aint offsets[1];
+    offsets[0] = (MPI_Aint) offsetof(td_uid_t, id);
+
+    MPI_Type_create_struct(nitems, blocklengths, offsets, types, &TD_TASK_UID);
+    MPI_Type_commit(&TD_TASK_UID);
 
     return TARGETDART_SUCCESS;
 }
@@ -170,20 +187,21 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
-        if (IsMapTo != 0)
+        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+        if (IsMapTo != 0) {
             MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+            DP("Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+        }
     }
 
     // Send source location to support debuggin information
     MPI_Send(task->Loc, 4, MPI_INT32_T, dest, SEND_SOURCE_LOCS, targetdart_comm);
+    DP("Send Loc for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Send base location
     int64_t Locptr = (int64_t) apply_image_base_address((intptr_t) task->Loc->psource, false);
     MPI_Send(&Locptr, 1, MPI_INT64_T, dest, SEND_LOCS_PSOURCE, targetdart_comm);
-
-    //Send task name
-    MPI_Send(task->name, task->nameLen, MPI_CHAR, dest, SEND_NAME, targetdart_comm);
+    DP("Send Locptr for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
@@ -216,7 +234,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     MPI_Recv(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
     DP("Recv ArgTypes for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {    
-        DP("Argument type of arg %d: " DPxMOD, i, DPxPTR(task->KernelArgs->ArgTypes[i]));
+        DP("Argument type of arg %d: " DPxMOD "\n", i, DPxPTR(task->KernelArgs->ArgTypes[i]));
         assert(!(OMP_TGT_MAPTYPE_LITERAL & task->KernelArgs->ArgTypes[i]) && "Parameters should not be mapped implicitly as literals to avoid remote GPU errors. Use map clause on literals as well. (map(to:var))\n");
     }
 
@@ -227,7 +245,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     //Receive the Base Pointer offsets for all arguments
     std::vector<int64_t> diff(task->KernelArgs->NumArgs);
     MPI_Recv(diff.data(), task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_BASE_PTRS, targetdart_comm,MPI_STATUS_IGNORE);
-    
+    DP("Recv pointer diff for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
     //Receive all parameter values
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
     task->KernelArgs->ArgBasePtrs = new void*[task->KernelArgs->NumArgs];
@@ -239,10 +257,12 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
         
         DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
-        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & 0x001;
-        if (IsMapTo != 0)
+        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+        if (IsMapTo != 0) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
-    
+            DP("Recv mem for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+        }
+
         //Fill Mappers and Names with null
         task->KernelArgs->ArgMappers[i] = NULL;
         task->KernelArgs->ArgNames[i] = NULL;
@@ -258,10 +278,6 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     int64_t Locptr;
     MPI_Recv(&Locptr, 1, MPI_INT64_T, source, SEND_LOCS_PSOURCE, targetdart_comm, MPI_STATUS_IGNORE);
     task->Loc->psource = (const char*) apply_image_base_address((intptr_t) Locptr, true);
-
-    // Receive task name
-    task->name = new char[task->nameLen];
-    MPI_Recv((void *) task->name, task->nameLen, MPI_CHAR, source, SEND_NAME, targetdart_comm, MPI_STATUS_IGNORE);
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
@@ -313,22 +329,26 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     //TODO: Use non-blocking send
     DP("Start result transfer of task (%ld%ld)\n", task->uid.rank, task->uid.id);
     //Send Task uid
-    MPI_Send(&task->uid.id, 1, MPI_LONG_LONG, task->uid.rank, SEND_RESULT_UID, targetdart_comm);
+    MPI_Send(&task->uid, 1, TD_TASK_UID, task->uid.rank, SEND_RESULT_UID, targetdart_comm);
+    DP("Sending result for task (%ld%ld) to process %ld\n", task->uid.rank, task->uid.id, task->uid.rank);
 
     //Send Task returncode
     MPI_Send(&task->return_code, 1, MPI_INT, task->uid.rank, SEND_RESULT_RETURN_CODE, targetdart_comm);
+    DP("Sending Return Code: %d for task (%ld%ld) in remote task map\n", task->return_code, task->uid.rank, task->uid.id);
 
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & 0x002;
+        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
         if (IsMapFrom != 0) {
             MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
+            DP("Sending result for task (%ld%ld) at " DPxMOD " \n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]));
         }
     }
 
     //Base Pointers == pointers can be assumed for simple cases.
     //For complex combinations of pointers and scalars OMP breaks without our interference
+    //TODO: free task data
 
     DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);
     return TARGETDART_SUCCESS;
@@ -336,26 +356,29 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
 
 tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
 
-    size_t id;
     DP("Start result receival\n");
     //TODO: use MPI probe for complete receives
     //Receive Task Data
-    MPI_Recv(&id, 1, MPI_INT64_T, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
-    uid->id = id;
-    uid->rank = source;
+    MPI_Recv(uid, 1, TD_TASK_UID, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    DP("Receiving result for task (%ld%ld) from process %d\n", uid->rank, uid->id, source);
 
     td_task_t *task = remote_task_map[*uid];
     remote_task_map.erase(*uid);
 
+    DP("Found task (%ld%ld) in remote task map\n", task->uid.rank, task->uid.id);
+
     //Receive Task return code
     MPI_Recv(&task->return_code, 1, MPI_INT, source, SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
+    DP("Getting Return Code: %d for task (%ld%ld) in remote task map\n", task->return_code, task->uid.rank, task->uid.id);
 
     //Receive all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & 0x002;
-        if (IsMapFrom != 0)
+        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+        if (IsMapFrom != 0) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
+            DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+        }
     }
 
     DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);

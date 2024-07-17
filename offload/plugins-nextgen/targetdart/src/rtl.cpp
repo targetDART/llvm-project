@@ -497,6 +497,9 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override {
+    if (std::getenv("TD_ACTIVATE") == NULL) 
+      return 0;
+
     DP("init targetDART\n");
 
     DP("detected prior devices: %d\n", getDeviceIdStartIndex());
@@ -513,15 +516,17 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
   /// Deinitialize the plugin and release the resources.
   Error deinitImpl() override {
+    if (std::getenv("TD_ACTIVATE") == NULL) 
+      return Plugin::success();
     //TODO cleanup
     DP("finalize targetDART\n");
 
     finalize_task_structes();
 
     // TODO: fix me
+    delete td_thread;
     delete td_comm;
     //delete td_sched;
-    //delete td_thread;
     return Plugin::success();
   }
 

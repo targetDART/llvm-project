@@ -3,6 +3,7 @@ message(STATUS "Building the llvm-omp-device-info tool")
 add_openmp_tool(llvm-omp-device-info llvm-omp-device-info.cpp)
 
 llvm_update_compile_flags(llvm-omp-device-info)
+target_link_options(llvm-omp-device-info PUBLIC ${offload_link_flags})
 
 target_include_directories(llvm-omp-device-info PRIVATE
   ${LIBOMPTARGET_INCLUDE_DIR}
