@@ -84,6 +84,12 @@ tdrc init_task_stuctures();
 tdrc finalize_task_structes();
 
 /*
+* Frees all memory assoziated with the task.
+* This should onle be used to free data structures depending on locality
+*/
+tdrc delete_task(td_task_t *task, bool local);
+
+/*
 * Function set_image_base_address
 * Sets base address of particular image index.
 * This is necessary to determine the entry point for functions that represent a target construct

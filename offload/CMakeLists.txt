@@ -229,8 +229,8 @@ option(LIBOMPTARGET_ENABLE_UBSAN "Build with UBSan" OFF)
 if(LIBOMPTARGET_ENABLE_UBSAN)
   #set(CMAKE_CXX_COMPILER_LAUNCHER env LD_PRELOAD=/dev/shm/as388453/build-llvm/lib/clang/19/lib/x86_64-unknown-linux-gnu/libclang_rt.ubsan_standalone.so)
   string(REPLACE "-Wl,-z,defs" "" CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
-  set(offload_compile_flags ${offload_compile_flags} -fsanitize=undefined -fno-omit-frame-pointer -L/dev/shm/as388453/build-llvm/lib/clang/19/lib/x86_64-unknown-linux-gnu/)
-  set(offload_link_flags ${offload_link_flags} -fsanitize=undefined -fno-omit-frame-pointer -L/dev/shm/as388453/build-llvm/lib/clang/19/lib/x86_64-unknown-linux-gnu/)
+  set(offload_compile_flags ${offload_compile_flags} -g -fsanitize=undefined -fsanitize-minimal-runtime -fno-omit-frame-pointer)
+  set(offload_link_flags ${offload_link_flags} -g -fsanitize=undefined -fsanitize-minimal-runtime -fno-omit-frame-pointer)
 endif()
 
 # TODO: Consider enabling LTO by default if supported.

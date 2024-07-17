@@ -26,6 +26,25 @@ tdrc finalize_task_structes() {
 }
 
 /*
+* Frees all memory assoziated with the task.
+* This should onle be used to free data structures explicitly allocated on remote nodes
+*/
+tdrc delete_task(td_task_t *task, bool local) {
+    if (!local) {
+        delete task->Loc;
+        delete task->KernelArgs->ArgPtrs;
+        delete task->KernelArgs->ArgBasePtrs;
+        delete task->KernelArgs->ArgMappers;
+        delete task->KernelArgs->ArgNames;
+        delete task->KernelArgs->ArgTypes;
+        delete task->KernelArgs->ArgSizes;
+        delete task->KernelArgs;
+    }
+    delete task;
+    return TARGETDART_SUCCESS;
+}
+
+/*
  * Function set_image_base_address
  * Sets base address of particular image index.
  * This is necessary to determine the entry point for functions that represent a target construct
@@ -107,7 +126,7 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
     // create new async info
     AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
 
-    void *devicePtrs[task->KernelArgs->NumArgs];
+    std::vector<void *> devicePtrs(task->KernelArgs->NumArgs);
 
     DP("Allocating %d arguments for task (%ld%ld)\n", task->KernelArgs->NumArgs, task->uid.rank, task->uid.id);
 
@@ -156,7 +175,7 @@ tdrc invoke_task(td_task_t *task, int64_t Device) {
         
 
     DP("Running kernel for task (%ld%ld)\n", task->uid.rank, task->uid.id);
-    auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs, offsets.data(), *task->KernelArgs,
+    auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs.data(), offsets.data(), *task->KernelArgs,
                                TargetAsyncInfo, task->Loc, HostPtr);
 
     if (Err) {

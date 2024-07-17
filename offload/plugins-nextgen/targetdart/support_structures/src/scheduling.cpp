@@ -46,7 +46,7 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
     //TODO: Fixme
-    //delete affinity_queues;
+    delete affinity_queues;
 }
 
 td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc) {

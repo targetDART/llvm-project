@@ -187,11 +187,11 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 if (task->uid.rank != comm_man->rank) {
                     comm_man->send_task_result(task);
                     schedule_man->notify_task_completion(task->uid, false);
-                    //free(task);
+                    delete_task(task, false);
                     DP("finished remote execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                 } else {
                     schedule_man->notify_task_completion(task->uid, false);
-                    //free(task);
+                    delete_task(task, true);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                 }
             } 
@@ -216,11 +216,11 @@ TD_Thread_Manager::~TD_Thread_Manager() {
 
     scheduler_th.join();
 
-    DP("Synchronized threads start joining %d management threads", executor_th.size());
-    for (int i = 0; i < executor_th.size(); i++) { 
-        DP("Joining executor: %d", i);
+    DP("Synchronized threads start joining %zu management threads", executor_th.size());
+    for (size_t i = 0; i < executor_th.size(); i++) { 
+        DP("Joining executor: %zu", i);
         executor_th.at(i).join();
-        DP("Joined executor: %d", i);
+        DP("Joined executor: %zu", i);
     }
 
     DP("finalized management threads");

@@ -518,15 +518,13 @@ struct targetDARTPluginTy : public GenericPluginTy {
   Error deinitImpl() override {
     if (std::getenv("TD_ACTIVATE") == NULL) 
       return Plugin::success();
-    //TODO cleanup
     DP("finalize targetDART\n");
 
     finalize_task_structes();
 
-    // TODO: fix me
     delete td_thread;
     delete td_comm;
-    //delete td_sched;
+    delete td_sched;
     return Plugin::success();
   }
 
