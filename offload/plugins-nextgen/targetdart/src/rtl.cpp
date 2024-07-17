@@ -547,6 +547,10 @@ struct targetDARTPluginTy : public GenericPluginTy {
   Error deinitImpl() override {
     if (std::getenv("TD_ACTIVATE") == NULL) 
       return Plugin::success();
+<<<<<<< HEAD
+=======
+    //TODO cleanup
+>>>>>>> 5c99f669b517 (single node running targetDART and working UBSan)
     DP("finalize targetDART\n");
 
     finalize_task_structes();
