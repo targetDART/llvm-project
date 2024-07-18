@@ -9,7 +9,18 @@
 #include <unordered_map>
 #include <vector>
 
+
+void TD_Communicator::transfer_setup() {
+  MPI_Comm_rank(targetdart_comm, &rank);
+  MPI_Comm_size(targetdart_comm, &size);
+
+  declare_KernelArgs_type();
+  declare_uid_type();
+  declare_task_type();
+}
+
 TD_Communicator::TD_Communicator(){
+
   int rc, flag, valuelen;
   const char pset_name[] = "mpi://WORLD";
   const char mt_key[] = "thread_level";
@@ -74,16 +85,13 @@ TD_Communicator::TD_Communicator(){
     ret = -1;
     goto fn_exit;
   }
-
-  MPI_Comm_rank(targetdart_comm, &rank);
-  MPI_Comm_size(targetdart_comm, &size);
+  
+  
   /*
    * free group, library doesn't need it.
    */
 
-  declare_KernelArgs_type();
-  declare_uid_type();
-  declare_task_type();
+  transfer_setup();
 
   if (ret != -1)
     return;
@@ -107,12 +115,12 @@ fn_exit:
 }
 
 TD_Communicator::~TD_Communicator(){
-  DP("lib internal ret = %d\n", ret);
-  if (ret == 0) {
-    DP("Closing MPI lib\n");
-    MPI_Session_finalize(&td_libhandle);
-    DP("Closed MPI lib\n");
-  }
+    DP("lib internal ret = %d\n", ret);
+    if (ret == 0) {
+        DP("Closing MPI lib\n");
+        MPI_Session_finalize(&td_libhandle);
+        DP("Closed MPI lib\n");
+    }
 }
 
 tdrc TD_Communicator::declare_KernelArgs_type() {

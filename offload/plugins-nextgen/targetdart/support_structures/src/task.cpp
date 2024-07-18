@@ -31,8 +31,11 @@ tdrc finalize_task_structes() {
 */
 tdrc delete_task(td_task_t *task, bool local) {
     if (!local) {
+        DP("num args: %d\n",task->KernelArgs->NumArgs);
+        for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
+            std::free(task->KernelArgs->ArgBasePtrs[i]);
+        }
         delete task->Loc;
-        delete task->KernelArgs->ArgPtrs;
         delete task->KernelArgs->ArgBasePtrs;
         delete task->KernelArgs->ArgMappers;
         delete task->KernelArgs->ArgNames;

@@ -45,7 +45,6 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
-    //TODO: Fixme
     delete affinity_queues;
 }
 

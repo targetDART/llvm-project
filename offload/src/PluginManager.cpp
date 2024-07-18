@@ -74,7 +74,6 @@ int PluginManager::getPhysicalDevices() {
       sum++;
     }
   }
-  DP("device sum: %d\n", sum);
   return sum;
 }
 
@@ -174,6 +173,7 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
     if (Entry.flags == OMP_REGISTER_REQUIRES)
       PM->addRequirements(Entry.data);
 
+  int priorDevices = 0;
   // Initialize all the plugins that have associated images.
   for (auto &Plugin : Plugins) {
     if (Plugin->is_initialized())
@@ -184,11 +184,19 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
       if (!Plugin->is_valid_binary(&Desc->DeviceImages[i],
                                    /*Initialized=*/false))
         continue;
+      
+      // add external device count to current device
+      if (auto Err = Plugin->addPriorPhysicalDevices(priorDevices)) {
+        [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
+        DP("Failed to access plugin pre initialization: %s\n", InfoMsg.c_str());
+      }
 
+      // init plugin
       if (auto Err = Plugin->init()) {
         [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
         DP("Failed to init plugin: %s\n", InfoMsg.c_str());
       } else {
+        priorDevices += Plugin->number_of_devices();
         DP("Registered plugin %s with %d visible device(s)\n",
            Plugin->getName(), Plugin->number_of_devices());
       }

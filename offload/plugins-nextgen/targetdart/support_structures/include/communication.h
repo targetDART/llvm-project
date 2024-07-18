@@ -42,6 +42,8 @@ private:
 
     tdrc declare_uid_type();
 
+    void transfer_setup();
+
 public:
     // initializes the communication and communcicator
     TD_Communicator();

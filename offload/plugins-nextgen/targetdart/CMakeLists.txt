@@ -19,6 +19,7 @@ if(NOT(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(ppc64le)$" AND CMAKE_SYSTEM_NAM
 endif()
 
 message("Building targetDART NextGen scheduling plugin.")
+message(WARNING "Building targetDART NextGen scheduling plugin requires MPI Session support.")
 
 # Create the library and add the default arguments.
 add_target_library(omptarget.rtl.targetdart TARGETDART)

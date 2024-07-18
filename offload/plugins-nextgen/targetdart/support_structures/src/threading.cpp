@@ -187,12 +187,12 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 if (task->uid.rank != comm_man->rank) {
                     comm_man->send_task_result(task);
                     schedule_man->notify_task_completion(task->uid, false);
-                    delete_task(task, false);
                     DP("finished remote execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
+                    delete_task(task, false);
                 } else {
                     schedule_man->notify_task_completion(task->uid, false);
-                    delete_task(task, true);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
+                    delete_task(task, true);
                 }
             } 
         }    

@@ -495,6 +495,11 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return false;
   }
 
+  Error addPriorPhysicalDevices(int deviceCount) override { 
+    physicalDeviceCount = deviceCount;
+    return Error::success();
+  }
+
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override {
     if (std::getenv("TD_ACTIVATE") == NULL) 
@@ -502,7 +507,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     DP("init targetDART\n");
 
-    DP("detected prior devices: %d\n", getDeviceIdStartIndex());
+    DP("detected prior devices: %d\n", getPhysicalDevices());
 
     int32_t external_devices = getPhysicalDevices();
 
@@ -596,9 +601,10 @@ struct targetDARTPluginTy : public GenericPluginTy {
     TD_Scheduling_Manager *td_sched;
     TD_Thread_Manager *td_thread;
 
+    int physicalDeviceCount;
+
     int getPhysicalDevices() {
-      // TODO: implement properly
-      return 4;
+      return physicalDeviceCount;
     }
 };
 
