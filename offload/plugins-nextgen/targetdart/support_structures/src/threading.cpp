@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
+#include <omp.h>
 #include <string>
 #include <iostream>
 
@@ -163,7 +164,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         int iter = 0;
         int phys_device_id = deviceID;
         if (deviceID == physical_device_count) {
-            phys_device_id = -1;
+            phys_device_id = omp_get_initial_device();
         }
         DP("Starting executor thread for device %d\n", phys_device_id);
         while (!scheduler_done.load() || !is_finalizing || !schedule_man->is_empty()) {

@@ -154,12 +154,6 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
     td_task_t *task = td_sched->create_task(HostPtr, &KernelArgs, Loc);
     td_sched->add_task(task, GenericDevice.getDeviceId());
-
-    // TODO: add task to queue
-    /*auto Ret = targetKernelWrapper(Loc, 0, 1, 1, (void *) HostPtr, &KernelArgs);
-    if(Ret) {
-      return Plugin::error("targetDART offloading failed\n");
-    }    */
     
     return Plugin::success();
   }
