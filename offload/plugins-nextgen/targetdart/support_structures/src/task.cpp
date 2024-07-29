@@ -43,6 +43,7 @@ tdrc delete_task(td_task_t *task, bool local) {
         delete task->KernelArgs->ArgSizes;
         delete task->KernelArgs;
     }
+    delete task->KernelArgs;
     delete task;
     return TARGETDART_SUCCESS;
 }

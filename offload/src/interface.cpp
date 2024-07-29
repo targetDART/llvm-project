@@ -357,12 +357,6 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
   return OMP_TGT_SUCCESS;
 }
 
-int targetKernelWrapper(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
-                               int32_t ThreadLimit, void *HostPtr,
-                               KernelArgsTy *KernelArgs) {
-  return targetKernel<TaskAsyncInfoWrapperTy>(Loc, DeviceId, NumTeams, ThreadLimit, HostPtr, KernelArgs);
-}
-
 /// Implements a kernel entry that executes the target region on the specified
 /// device.
 ///

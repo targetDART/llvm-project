@@ -321,9 +321,8 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     int64_t effective_device = Device;
 
-    if (effective_device == -1 || effective_device == omp_get_initial_device()) {
-        effective_device = total_device_count();
-        //auto Ret = targetKernelWrapper(task->Loc, effectiveDevice, task->KernelArgs->NumTeams[0], task->KernelArgs->ThreadLimit[0], (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
+    if (effective_device == total_device_count()) {
+        //task->KernelArgs->NumTeams[0] = 92;
     }
 
     // get physical device

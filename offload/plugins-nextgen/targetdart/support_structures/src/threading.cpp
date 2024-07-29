@@ -67,6 +67,7 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placemen
             placements->at(i) = i;
         }
         DP("Management threads assigned cores 0-%zu, use OMP_PLACES=%zu:num_threads\n", placements->size()-1, placements->size());
+        DP("For a parallel CPU execution use OMP_NUM_TEAMS with a value as high as possible.\n");
         return TARGETDART_FAILURE;
     }
 

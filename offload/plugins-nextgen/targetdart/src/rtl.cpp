@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <omp.h>
 #include <string.h>
 #include <unistd.h>
 #include <ffi.h>
@@ -125,7 +126,6 @@ struct targetDARTKernelTy: public GenericKernelTy {
     DP("Function for kernel %s\n", getName());
     DP("Function name length %zu\n", strlen(getName()));
 
-    // TODO: Check which settings are appropriate for the mpi plugin
     // for now we are using the Elf64 plugin configuration
     KernelEnvironment.Configuration.ExecMode = OMP_TGT_EXEC_MODE_GENERIC;
     KernelEnvironment.Configuration.MayUseNestedParallelism = /* Unknown */ 2;
@@ -145,8 +145,6 @@ struct targetDARTKernelTy: public GenericKernelTy {
   /// Launch the kernel on the specific device. The device must be the same
   /// one used to initialize the kernel.
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
-
-    //TODO: define reasonalble direct execution device
     if (GenericDevice.getDeviceId() == td_sched->public_device_count()) {
       // Create a vector of ffi_types, one per argument.
       SmallVector<ffi_type *, 16> ArgTypes(KernelArgs.NumArgs, &ffi_type_pointer);
@@ -169,7 +167,6 @@ struct targetDARTKernelTy: public GenericKernelTy {
     DP("targetDART Kernel launch\n");
 
     KernelArgs.NumArgs--;
-
     // add scheduling manager to the queue to ensure that the synchronization is performed
     AsyncInfoWrapper.setQueueAs<TD_Scheduling_Manager*>(td_sched);
 
