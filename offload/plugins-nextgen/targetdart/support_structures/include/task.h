@@ -22,9 +22,9 @@ enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 #define TD_OFFLOAD_OFFSET 5 // Task that should only run on an offload device
 #define TD_ANY_OFFSET TD_CPU_OFFSET + TD_OFFLOAD_OFFSET + 1 // Task that can run on any hardware
 // Sub affinities/priorities
-#define TD_MIGRATABLE_OFFSET 0 // The task may be migrated to another process
-#define TD_LOCAL_OFFSET -1 // The task must not be migrated to another process
 #define TD_REPLICA_OFFSET -2 // The task was created on the local process and exists multiple times. Additional communication for cancelation necessary
+#define TD_LOCAL_OFFSET -1 // The task must not be migrated to another process
+#define TD_MIGRATABLE_OFFSET 0 // The task may be migrated to another process
 #define TD_REMOTE_OFFSET 7 // The task was created on another device and exist only a single time accross the runtime
 #define TD_REPLICATED_OFFSET 8 // The task was created on another device and exists multiple times. Additional communication for cancelation necessary
 

@@ -14,6 +14,7 @@
 #include <iostream>
 #include <string.h>
 #include <unistd.h>
+#include <ffi.h>
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
@@ -146,7 +147,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
 
     //TODO: define reasonalble direct execution device
-    if (GenericDevice.getDeviceId() == TBC) {
+    if (GenericDevice.getDeviceId() == td_sched->public_device_count()) {
       // Create a vector of ffi_types, one per argument.
       SmallVector<ffi_type *, 16> ArgTypes(KernelArgs.NumArgs, &ffi_type_pointer);
       ffi_type **ArgTypesPtr = (ArgTypes.size()) ? &ArgTypes[0] : nullptr;

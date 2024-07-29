@@ -312,25 +312,24 @@ TableMap *TD_Scheduling_Manager::getTableMap(void *HostPtr) {
   return nullptr;
 }
 
+int32_t TD_Scheduling_Manager::total_device_count() {
+    return physical_device_count + public_device_count();
+}
+
 // executes a task on a given device
 tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
-    int64_t effectiveDevice = Device;
+    int64_t effective_device = Device;
 
-    if (effectiveDevice == -1 || effectiveDevice == omp_get_initial_device()) {
-        effectiveDevice = 
-        auto Ret = targetKernelWrapper(task->Loc, effectiveDevice, task->KernelArgs->NumTeams[0], task->KernelArgs->ThreadLimit[0], (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
-        if(Ret) {
-            return TARGETDART_FAILURE;
-        }   
-    
-        return TARGETDART_SUCCESS;
+    if (effective_device == -1 || effective_device == omp_get_initial_device()) {
+        effective_device = total_device_count();
+        //auto Ret = targetKernelWrapper(task->Loc, effectiveDevice, task->KernelArgs->NumTeams[0], task->KernelArgs->ThreadLimit[0], (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
     }
 
     // get physical device
     auto DeviceOrErr = PM->getDevice(effective_device);
     if (!DeviceOrErr)
-        FATAL_MESSAGE(effectiveDevice, "%s", toString(DeviceOrErr.takeError()).c_str());
+        FATAL_MESSAGE(effective_device, "%s", toString(DeviceOrErr.takeError()).c_str());
     
     // create new async info
     AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
@@ -349,7 +348,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         }
     }
 
-    if (checkDeviceAndCtors(effectiveDevice, task->Loc)) {
+    if (checkDeviceAndCtors(effective_device, task->Loc)) {
         DP("Not offloading to device %" PRId64 "\n", effective_device);
         return TARGETDART_FAILURE;
     }
@@ -371,9 +370,9 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     __tgt_target_table *TargetTable = nullptr;
     {
         std::lock_guard<std::mutex> TrlTblLock(PM->TrlTblMtx);
-        assert(TM->Table->TargetsTable.size() > (size_t)effective_device &&
+        assert(TM->Table->TargetsTable.size() > (size_t)effectiveDevice &&
                 "Not expecting a device ID outside the table's bounds!");
-        TargetTable = TM->Table->TargetsTable[effectiveDevice];
+        TargetTable = TM->Table->TargetsTable[effective_device];
     }
     assert(TargetTable && "Global data has not been mapped\n");
 

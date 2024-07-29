@@ -164,7 +164,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         int iter = 0;
         int phys_device_id = deviceID;
         if (deviceID == physical_device_count) {
-            phys_device_id = omp_get_initial_device();
+            phys_device_id = schedule_man->total_device_count();
         }
         DP("Starting executor thread for device %d\n", phys_device_id);
         while (!scheduler_done.load() || !is_finalizing || !schedule_man->is_empty()) {
@@ -212,17 +212,17 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
 TD_Thread_Manager::~TD_Thread_Manager() {
 
-    DP("begin finalization of targetDART, wait for remaining work");
+    DP("begin finalization of targetDART, wait for remaining work\n");
     is_finalizing = true;  
 
     scheduler_th.join();
 
-    DP("Synchronized threads start joining %zu management threads", executor_th.size());
+    DP("Synchronized threads start joining %zu management threads\n", executor_th.size());
     for (size_t i = 0; i < executor_th.size(); i++) { 
-        DP("Joining executor: %zu", i);
+        DP("Joining executor: %zu\n", i);
         executor_th.at(i).join();
-        DP("Joined executor: %zu", i);
+        DP("Joined executor: %zu\n", i);
     }
 
-    DP("finalized management threads");
+    DP("finalized management threads\n");
 }
