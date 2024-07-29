@@ -120,7 +120,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
       return Plugin::error("Invalid function for kernel %s\n", getName());
 
     // Save the function pointer.
-    //CPUFunc = (void (*)())Global.getPtr();
+    CPUFunc = (void (*)())Global.getPtr();
     DP("Function for kernel %s\n", getName());
     DP("Function name length %zu\n", strlen(getName()));
 
@@ -144,6 +144,26 @@ struct targetDARTKernelTy: public GenericKernelTy {
   /// Launch the kernel on the specific device. The device must be the same
   /// one used to initialize the kernel.
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
+
+    //TODO: define reasonalble direct execution device
+    if (GenericDevice.getDeviceId() == TBC) {
+      // Create a vector of ffi_types, one per argument.
+      SmallVector<ffi_type *, 16> ArgTypes(KernelArgs.NumArgs, &ffi_type_pointer);
+      ffi_type **ArgTypesPtr = (ArgTypes.size()) ? &ArgTypes[0] : nullptr;
+
+      // Prepare the cif structure before running the kernel function.
+      ffi_cif Cif;
+      ffi_status Status = ffi_prep_cif(&Cif, FFI_DEFAULT_ABI, KernelArgs.NumArgs,
+                                       &ffi_type_void, ArgTypesPtr);
+      if (Status != FFI_OK)
+        return Plugin::error("Error in ffi_prep_cif: %d", Status);
+
+      // Call the kernel function through libffi.
+      long Return;
+      ffi_call(&Cif, CPUFunc, &Return, (void **)Args);
+
+      return Plugin::success();
+    }
 
     DP("targetDART Kernel launch\n");
 
@@ -171,7 +191,7 @@ protected:
 
 private: 
 
-  //void (*CPUFunc)(void);
+  void (*CPUFunc)(void);
   intptr_t HostPtr;
   ident_t *Loc;
   TD_Scheduling_Manager *td_sched;
@@ -329,14 +349,16 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   }
 
   /// Submit data to the device (host to device transfer).
-  Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override {
-    DP("targetDART submit Data, not supported\n");
+  Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
+                       AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    std::memcpy(TgtPtr, HstPtr, Size);
     return Plugin::success();
   }
 
   /// Retrieve data from the device (device to host transfer).
-  Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override {    
-    DP("targetDART retrieve Data, not supported\n");
+  Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
+                         AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    std::memcpy(HstPtr, TgtPtr, Size);
     return Plugin::success();
   }
 
@@ -368,14 +390,25 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *, TargetAllocTy Kind) override {
+    if (Size == 0)
+      return nullptr;
 
-    DP("targetDART alloc Data, not supported\n");
-    return nullptr;
+    void *MemAlloc = nullptr;
+    switch (Kind) {
+    case TARGET_ALLOC_DEFAULT:
+    case TARGET_ALLOC_DEVICE:
+    case TARGET_ALLOC_HOST:
+    case TARGET_ALLOC_SHARED:
+    case TARGET_ALLOC_DEVICE_NON_BLOCKING:
+      MemAlloc = std::malloc(Size);
+      break;
+    }
+    return MemAlloc;
   }
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
-    DP("targetDART free Data, not supported\n");
+    std::free(TgtPtr);
     return OFFLOAD_SUCCESS;
   }
 
@@ -510,7 +543,8 @@ struct targetDARTPluginTy : public GenericPluginTy {
     td_comm = new TD_Communicator();
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
-    return td_sched->public_device_count();
+    // Add one device for direct CPU execution
+    return td_sched->public_device_count() + 1;
   }
 
   /// Deinitialize the plugin and release the resources.

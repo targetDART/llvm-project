@@ -178,7 +178,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             if (schedule_man->get_task(deviceID, &task) == TARGETDART_SUCCESS) {
                 DP("start execution of task (%ld%ld) on device %d\n", task->uid.rank, task->uid.id, phys_device_id);
                 //execute the task on your own device
-                int return_code = invoke_task(task, phys_device_id);
+                int return_code = schedule_man->invoke_task(task, phys_device_id);
                 task->return_code = return_code;
                 /* if (return_code == TARGETDART_FAILURE) {         
                     //handle_error_en(-1, "Task execution failed.\n");

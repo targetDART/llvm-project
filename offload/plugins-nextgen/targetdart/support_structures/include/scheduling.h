@@ -68,6 +68,10 @@ private:
     // States if the repartitioning should be triggered
     bool repartition;
 
+    /// Find the table information in the map or look it up in the translation
+    /// tables.
+    TableMap *getTableMap(void *HostPtr);
+
     // Reference to the communication manager
     TD_Communicator *comm_man;
 
@@ -114,6 +118,9 @@ public:
 
     // Returns the number of active tasks
     int64_t get_active_tasks();
+
+    // executes a task on a given device;
+    tdrc invoke_task(td_task_t *task, int64_t Device);
 
 };
 

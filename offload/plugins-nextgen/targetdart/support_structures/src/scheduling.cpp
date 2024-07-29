@@ -275,3 +275,135 @@ void TD_Scheduling_Manager::synchronize() {
 int64_t TD_Scheduling_Manager::get_active_tasks() {
     return active_tasks.load();
 }
+
+/// Find the table information in the map or look it up in the translation
+/// tables.
+TableMap *TD_Scheduling_Manager::getTableMap(void *HostPtr) {
+  std::lock_guard<std::mutex> TblMapLock(PM->TblMapMtx);
+  HostPtrToTableMapTy::iterator TableMapIt =
+      PM->HostPtrToTableMap.find(HostPtr);
+
+  if (TableMapIt != PM->HostPtrToTableMap.end())
+    return &TableMapIt->second;
+
+  // We don't have a map. So search all the registered libraries.
+  TableMap *TM = nullptr;
+  std::lock_guard<std::mutex> TrlTblLock(PM->TrlTblMtx);
+  for (HostEntriesBeginToTransTableTy::iterator Itr =
+           PM->HostEntriesBeginToTransTable.begin();
+       Itr != PM->HostEntriesBeginToTransTable.end(); ++Itr) {
+    // get the translation table (which contains all the good info).
+    TranslationTable *TransTable = &Itr->second;
+    // iterate over all the host table entries to see if we can locate the
+    // host_ptr.
+    __tgt_offload_entry *Cur = TransTable->HostTable.EntriesBegin;
+    for (uint32_t I = 0; Cur < TransTable->HostTable.EntriesEnd; ++Cur, ++I) {
+      if (Cur->addr != HostPtr)
+        continue;
+      // we got a match, now fill the HostPtrToTableMap so that we
+      // may avoid this search next time.
+      TM = &(PM->HostPtrToTableMap)[HostPtr];
+      TM->Table = TransTable;
+      TM->Index = I;
+      return TM;
+    }
+  }
+
+  return nullptr;
+}
+
+// executes a task on a given device
+tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
+
+    int64_t effectiveDevice = Device;
+
+    if (effectiveDevice == -1 || effectiveDevice == omp_get_initial_device()) {
+        effectiveDevice = 
+        auto Ret = targetKernelWrapper(task->Loc, effectiveDevice, task->KernelArgs->NumTeams[0], task->KernelArgs->ThreadLimit[0], (void *) apply_image_base_address(task->host_base_ptr, true), task->KernelArgs);
+        if(Ret) {
+            return TARGETDART_FAILURE;
+        }   
+    
+        return TARGETDART_SUCCESS;
+    }
+
+    // get physical device
+    auto DeviceOrErr = PM->getDevice(effective_device);
+    if (!DeviceOrErr)
+        FATAL_MESSAGE(effectiveDevice, "%s", toString(DeviceOrErr.takeError()).c_str());
+    
+    // create new async info
+    AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
+
+    std::vector<void *> devicePtrs(task->KernelArgs->NumArgs);
+
+    DP("Allocating %d arguments for task (%ld%ld)\n", task->KernelArgs->NumArgs, task->uid.rank, task->uid.id);
+
+    // Allocate data on the device and transfer it from host to device if necessary
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+        // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
+        devicePtrs[i] = DeviceOrErr->allocData(task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgPtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        const bool hasFlagTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+        if (hasFlagTo) {        
+            DeviceOrErr->submitData(devicePtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
+        }
+    }
+
+    if (checkDeviceAndCtors(effectiveDevice, task->Loc)) {
+        DP("Not offloading to device %" PRId64 "\n", effective_device);
+        return TARGETDART_FAILURE;
+    }
+
+    // generate a Kernel
+    llvm::SmallVector<ptrdiff_t> offsets(task->KernelArgs->NumArgs, 0);
+
+    void *HostPtr = (void *) apply_image_base_address(task->host_base_ptr, true);
+
+    TableMap *TM = getTableMap(HostPtr);
+    // No map for this host pointer found!
+    if (!TM) {
+        REPORT("Host ptr " DPxMOD " does not have a matching target pointer.\n",
+            DPxPTR(HostPtr));
+        return TARGETDART_FAILURE;
+    }
+
+    // get target table.
+    __tgt_target_table *TargetTable = nullptr;
+    {
+        std::lock_guard<std::mutex> TrlTblLock(PM->TrlTblMtx);
+        assert(TM->Table->TargetsTable.size() > (size_t)effective_device &&
+                "Not expecting a device ID outside the table's bounds!");
+        TargetTable = TM->Table->TargetsTable[effectiveDevice];
+    }
+    assert(TargetTable && "Global data has not been mapped\n");
+
+    // Launch device execution.
+    void *TgtEntryPtr = TargetTable->EntriesBegin[TM->Index].addr;
+    DP("Launching target execution %s with pointer " DPxMOD " (index=%d).\n",
+        TargetTable->EntriesBegin[TM->Index].name, DPxPTR(TgtEntryPtr), TM->Index);
+        
+
+    DP("Running kernel for task (%ld%ld)\n", task->uid.rank, task->uid.id);
+    auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs.data(), offsets.data(), *task->KernelArgs,
+                               TargetAsyncInfo, task->Loc, HostPtr);
+
+    if (Err) {
+        DP("Kernel launch of task (%ld%ld) failed\n", task->uid.rank, task->uid.id);
+    }
+
+    // Deallocate data on the device and transfer it from device to host if necessary
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
+        const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+        if (hasFlagFrom) {        
+            DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
+        }
+    }
+
+    DeviceOrErr->synchronize(TargetAsyncInfo);
+    // Deallocate data on the device and transfer it from device to host if necessary
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
+        DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+    }
+
+    return TARGETDART_SUCCESS;    
+}
