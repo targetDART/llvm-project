@@ -404,7 +404,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     }
 
     // Synchronization on CPU 
-    if (effective_device == total_device_count())
+    if (effective_device != total_device_count())
         DeviceOrErr->synchronize(TargetAsyncInfo);
 
     return TARGETDART_SUCCESS;    
