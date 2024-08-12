@@ -149,7 +149,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 DP("ping\n");
             }
             iter++;        
-            schedule_man->iterative_schedule(ANY);
+            schedule_man->iterative_schedule(CPU);
             std::this_thread::sleep_for(std::chrono::microseconds(100));
             td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {

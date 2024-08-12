@@ -41,7 +41,6 @@ tdrc delete_task(td_task_t *task, bool local) {
         delete task->KernelArgs->ArgNames;
         delete task->KernelArgs->ArgTypes;
         delete task->KernelArgs->ArgSizes;
-        delete task->KernelArgs;
     }
     delete task->KernelArgs;
     delete task;
@@ -69,7 +68,8 @@ tdrc set_image_base_address(size_t idx_image, intptr_t base_address) {
  * Else it creates a base address
  */
 intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress) {
-    if (isBaseAddress) {
+    DP("Base address: " DPxMOD " Image start: " DPxMOD "\n", DPxPTR(base_address), DPxPTR((*_image_base_addresses)[99]));
+    if (isBaseAddress) { 
       return base_address + (*_image_base_addresses)[99];
     }
     return base_address - (*_image_base_addresses)[99];
