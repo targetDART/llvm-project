@@ -349,14 +349,12 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Submit data to the device (host to device transfer).
   Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
                        AsyncInfoWrapperTy &AsyncInfoWrapper) override {
-    std::memcpy(TgtPtr, HstPtr, Size);
     return Plugin::success();
   }
 
   /// Retrieve data from the device (device to host transfer).
   Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
                          AsyncInfoWrapperTy &AsyncInfoWrapper) override {
-    std::memcpy(HstPtr, TgtPtr, Size);
     return Plugin::success();
   }
 
@@ -388,25 +386,12 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *, TargetAllocTy Kind) override {
-    if (Size == 0)
-      return nullptr;
 
-    void *MemAlloc = nullptr;
-    switch (Kind) {
-    case TARGET_ALLOC_DEFAULT:
-    case TARGET_ALLOC_DEVICE:
-    case TARGET_ALLOC_HOST:
-    case TARGET_ALLOC_SHARED:
-    case TARGET_ALLOC_DEVICE_NON_BLOCKING:
-      MemAlloc = std::malloc(Size);
-      break;
-    }
-    return MemAlloc;
+    return nullptr;
   }
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
-    std::free(TgtPtr);
     return OFFLOAD_SUCCESS;
   }
 

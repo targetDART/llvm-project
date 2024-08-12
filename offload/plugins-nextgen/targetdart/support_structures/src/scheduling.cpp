@@ -321,10 +321,6 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     int64_t effective_device = Device;
 
-    if (effective_device == total_device_count()) {
-        //task->KernelArgs->NumTeams[0] = 92;
-    }
-
     // get physical device
     auto DeviceOrErr = PM->getDevice(effective_device);
     if (!DeviceOrErr)
@@ -339,8 +335,13 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
-        devicePtrs[i] = DeviceOrErr->allocData(task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgPtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        if (effective_device == total_device_count()) {
+            // Avoid data ttransfers for CPU execution
+            devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
+        } else {
+            // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
+            devicePtrs[i] = DeviceOrErr->allocData(task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgPtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        }
         const bool hasFlagTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
         if (hasFlagTo) {        
             DeviceOrErr->submitData(devicePtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
@@ -397,11 +398,14 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         }
     }
 
-    DeviceOrErr->synchronize(TargetAsyncInfo);
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
     }
+
+    // Synchronization on CPU 
+    if (effective_device == total_device_count())
+        DeviceOrErr->synchronize(TargetAsyncInfo);
 
     return TARGETDART_SUCCESS;    
 }
