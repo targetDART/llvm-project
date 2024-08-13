@@ -325,6 +325,16 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     auto DeviceOrErr = PM->getDevice(effective_device);
     if (!DeviceOrErr)
         FATAL_MESSAGE(effective_device, "%s", toString(DeviceOrErr.takeError()).c_str());
+
+    void *HostPtr = (void *) apply_image_base_address(task->host_base_ptr, true);
+
+    TableMap *TM = getTableMap(HostPtr);
+    // No map for this host pointer found!
+    if (!TM) {
+        REPORT("Host ptr " DPxMOD " does not have a matching target pointer.\n",
+            DPxPTR(HostPtr));
+        return TARGETDART_FAILURE;
+    }
     
     // create new async info
     AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
@@ -356,16 +366,6 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // generate a Kernel
     llvm::SmallVector<ptrdiff_t> offsets(task->KernelArgs->NumArgs, 0);
 
-    void *HostPtr = (void *) apply_image_base_address(task->host_base_ptr, true);
-
-    TableMap *TM = getTableMap(HostPtr);
-    // No map for this host pointer found!
-    if (!TM) {
-        REPORT("Host ptr " DPxMOD " does not have a matching target pointer.\n",
-            DPxPTR(HostPtr));
-        return TARGETDART_FAILURE;
-    }
-
     // get target table.
     __tgt_target_table *TargetTable = nullptr;
     {
@@ -381,6 +381,8 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     DP("Launching target execution %s with pointer " DPxMOD " (index=%d).\n",
         TargetTable->EntriesBegin[TM->Index].name, DPxPTR(TgtEntryPtr), TM->Index);
         
+    task->KernelArgs->NumTeams[0] = 10;
+    task->KernelArgs->ThreadLimit[0] = 10;
 
     DP("Running kernel for task (%ld%ld)\n", task->uid.rank, task->uid.id);
     auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs.data(), offsets.data(), *task->KernelArgs,
