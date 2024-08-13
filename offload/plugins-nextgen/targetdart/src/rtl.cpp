@@ -157,6 +157,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
   /// one used to initialize the kernel.
   Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, KernelLaunchParamsTy LaunchParams, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
     if (GenericDevice.getDeviceId() == td_sched->public_device_count()) {
+      DP("targetDART direct Kernel launch\n");
       // Create a vector of ffi_types, one per argument.
       SmallVector<ffi_type *, 16> ArgTypes(KernelArgs.NumArgs, &ffi_type_pointer);
       ffi_type **ArgTypesPtr = (ArgTypes.size()) ? &ArgTypes[0] : nullptr;
@@ -547,10 +548,6 @@ struct targetDARTPluginTy : public GenericPluginTy {
   Error deinitImpl() override {
     if (std::getenv("TD_ACTIVATE") == NULL) 
       return Plugin::success();
-<<<<<<< HEAD
-=======
-    //TODO cleanup
->>>>>>> 5c99f669b517 (single node running targetDART and working UBSan)
     DP("finalize targetDART\n");
 
     finalize_task_structes();
@@ -558,12 +555,6 @@ struct targetDARTPluginTy : public GenericPluginTy {
     delete td_thread;
     delete td_comm;
     delete td_sched;
-    return Plugin::success();
-  }
-
-  /// Adds additional user defined information to the plugin after initialization
-  Error addInfo(void *info) override { 
-    add_main_ptr(info);
     return Plugin::success();
   }
 
@@ -628,11 +619,6 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// we could not move this function into GenericDeviceTy.
   Expected<bool> isELFCompatible(uint32_t, StringRef Image) const override {
     return true;
-  }
-
-  /// Returns true, iff the plugin defines a driver for a physical device.
-  bool providesPhysicalDevices() override {
-    return false;
   }
 
   private:

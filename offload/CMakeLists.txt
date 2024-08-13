@@ -141,7 +141,7 @@ endif()
 
 set(LIBOMPTARGET_ALL_PLUGIN_TARGETS amdgpu cuda targetdart host) #
 set(LIBOMPTARGET_PLUGINS_TO_BUILD "all" CACHE STRING
-    "Semicolon-separated list of plugins to use: cuda, amdgpu, host or \"all\".")
+    "Semicolon-separated list of plugins to use: cuda, amdgpu, targetdart, host or \"all\".")
 
 if(LIBOMPTARGET_PLUGINS_TO_BUILD STREQUAL "all")
   set(LIBOMPTARGET_PLUGINS_TO_BUILD ${LIBOMPTARGET_ALL_PLUGIN_TARGETS})

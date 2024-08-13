@@ -148,65 +148,13 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
     if (Entry.flags == OMP_REGISTER_REQUIRES)
       PM->addRequirements(Entry.data);
     
-  int priorDevices = 0;
-  // Initialize all the plugins that have associated images.
-  for (auto &Plugin : Plugins) {
-    // Extract the exectuable image and extra information if availible.
-    for (int32_t i = 0; i < Desc->NumDeviceImages; ++i) {
-      if (Plugin->is_initialized())
-        continue;
-
-      if (!Plugin->is_valid_binary(&Desc->DeviceImages[i],
-                                   /*Initialized=*/false))
-        continue;
-
-      // add external device count to current device
-      if (auto Err = Plugin->addPriorPhysicalDevices(priorDevices)) {
-        [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
-        DP("Failed to access plugin pre initialization: %s\n", InfoMsg.c_str());
-      }
-
-      // init plugin
-      if (auto Err = Plugin->init()) {
-        [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
-        DP("Failed to init plugin: %s\n", InfoMsg.c_str());
-      } else {
-        priorDevices += Plugin->number_of_devices();
-        DP("Registered plugin %s with %d visible device(s)\n",
-           Plugin->getName(), Plugin->number_of_devices());
-      }
-    }
-  }
-
-  DP("number of images %d\n", Desc->NumDeviceImages);
-
-  // Initialize all the plugins that have associated images.
-  for (auto &Plugin : Plugins) {
-    if (Plugin->is_initialized())
-      continue;
-
-    // Extract the exectuable image and extra information if availible.
-    for (int32_t i = 0; i < Desc->NumDeviceImages; ++i) {
-      if (!Plugin->is_valid_binary(&Desc->DeviceImages[i],
-                                   /*Initialized=*/false))
-        continue;
-
-      if (auto Err = Plugin->init()) {
-        [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
-        DP("Failed to init plugin: %s\n", InfoMsg.c_str());
-      } else {
-        DP("Registered plugin %s with %d visible device(s)\n",
-           Plugin->getName(), Plugin->number_of_devices());
-      }
-    }
-  }
-
   DP("number of images %d\n", Desc->NumDeviceImages);
 
   // Extract the exectuable image and extra information if availible.
-  for (int32_t i = 0; i < Desc->NumDeviceImages; ++i)
+  for (int32_t i = Desc->NumDeviceImages - 1; i >= 0; --i)
     PM->addDeviceImage(*Desc, Desc->DeviceImages[i]);
-
+  
+  int priorDevices = 0;
   // Register the images with the RTLs that understand them, if any.
   for (DeviceImageTy &DI : PM->deviceImages()) {
     // Obtain the image and information that was previously extracted.
@@ -220,6 +168,12 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
       if (!R.is_plugin_compatible(Img))
         continue;
 
+      // add external device count to current device
+      if (auto Err = R.addPriorPhysicalDevices(priorDevices)) {
+        [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
+        DP("Failed to access plugin pre initialization: %s\n", InfoMsg.c_str());
+      }
+
       if (!initializePlugin(R))
         continue;
 
@@ -227,6 +181,11 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
         DP("Skipping plugin %s with no visible devices\n", R.getName());
         continue;
       }
+
+      // Add the number of initialized plugins to the total amount
+      priorDevices += R.number_of_devices();
+      DP("Registered plugin %s with %d visible device(s)\n",
+           R.getName(), R.number_of_devices());
 
       for (int32_t DeviceId = 0; DeviceId < R.number_of_devices(); ++DeviceId) {
         if (!R.is_device_compatible(DeviceId, Img))
@@ -273,6 +232,8 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
 
         PM->TrlTblMtx.unlock();
       }
+      // only initialize and register one plugin per DeviceImage
+      break;
     }
     if (!FoundRTL)
       DP("No RTL found for image " DPxMOD "!\n", DPxPTR(Img->ImageStart));
