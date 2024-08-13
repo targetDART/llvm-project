@@ -155,7 +155,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
   /// Launch the kernel on the specific device. The device must be the same
   /// one used to initialize the kernel.
-  Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, void *Args, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
+  Error launchImpl(GenericDeviceTy &GenericDevice, uint32_t NumThreads, uint64_t NumBlocks, KernelArgsTy &KernelArgs, KernelLaunchParamsTy LaunchParams, AsyncInfoWrapperTy &AsyncInfoWrapper) const override {
     if (GenericDevice.getDeviceId() == td_sched->public_device_count()) {
       // Create a vector of ffi_types, one per argument.
       SmallVector<ffi_type *, 16> ArgTypes(KernelArgs.NumArgs, &ffi_type_pointer);
@@ -170,7 +170,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
 
       // Call the kernel function through libffi.
       long Return;
-      ffi_call(&Cif, CPUFunc, &Return, (void **)Args);
+      ffi_call(&Cif, CPUFunc, &Return, (void **)LaunchParams.Ptrs);
 
       return Plugin::success();
     }
@@ -626,7 +626,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Indicate if an image is compatible with the plugin devices. Notice that
   /// this function may be called before actually initializing the devices. So
   /// we could not move this function into GenericDeviceTy.
-  Expected<bool> isELFCompatible(StringRef Image) const override {
+  Expected<bool> isELFCompatible(uint32_t, StringRef Image) const override {
     return true;
   }
 
