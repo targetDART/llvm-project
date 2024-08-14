@@ -54,6 +54,9 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
     task->isReplica = false;
     task->KernelArgs = KernelArgs;
     task->Loc = Loc;
+    //TODO: fill with sum of Argsizes (KernelArgs)
+    //TODO: extend MPI datatype
+    task->cached_total_sizes = 0;
 
     task->uid = {local_id_tracker.fetch_add(1), comm_man->rank};
 
