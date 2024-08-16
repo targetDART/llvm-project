@@ -58,6 +58,9 @@ struct PluginManager {
   // Provides the number of physical devices available to offload
   int getPhysicalDevices();
 
+  // Handles the registration of plugins for all with early or delayed initialization
+  void handleDeviceImages(__tgt_bin_desc *Desc, bool delayed);
+
   // Register a shared library with all (compatible) RTLs.
   void registerLib(__tgt_bin_desc *Desc);
 

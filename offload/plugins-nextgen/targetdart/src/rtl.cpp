@@ -522,12 +522,27 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return Error::success();
   }
 
+  bool delayInitialization() override { 
+    return true;
+  }
+
+  void detectPhysicalDevices() {
+    int deviceCount = 0;
+    for (auto &plugin : PM->plugins()) {
+      if (plugin.providesPhysicalDevices()) 
+        deviceCount += plugin.number_of_devices();
+    }
+    physicalDeviceCount = deviceCount;
+  }
+
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override {
     if (std::getenv("TD_ACTIVATE") == NULL) 
       return 0;
 
     DP("init targetDART\n");
+
+    detectPhysicalDevices();
 
     DP("detected prior devices: %d\n", getPhysicalDevices());
 

@@ -24,6 +24,12 @@ message(WARNING "Building targetDART NextGen scheduling plugin requires MPI Sess
 # Create the library and add the default arguments.
 add_target_library(omptarget.rtl.targetdart TARGETDART)
 
+if(FFI_STATIC_LIBRARIES)
+  target_link_libraries(omptarget.rtl.targetdart PRIVATE FFI::ffi_static)
+else()
+  target_link_libraries(omptarget.rtl.targetdart PRIVATE FFI::ffi)
+endif()
+
 target_sources(omptarget.rtl.targetdart PRIVATE
   src/rtl.cpp
 )

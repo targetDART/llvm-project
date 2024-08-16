@@ -1080,6 +1080,9 @@ struct GenericPluginTy {
   /// Adds the number of devices initialized by plugins before the current one
   virtual Error addPriorPhysicalDevices(int deviceCount) { return Error::success();}
 
+  /// Defines whether or not the initialization of the plugin should be delayed
+  virtual bool delayInitialization() { return false;}
+
   /// Create a new device for the underlying plugin.
   virtual GenericDeviceTy *createDevice(GenericPluginTy &Plugin,
                                         int32_t DeviceID,

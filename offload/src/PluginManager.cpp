@@ -139,22 +139,8 @@ void PluginManager::initializeAllDevices() {
   }
 }
 
-void PluginManager::registerLib(__tgt_bin_desc *Desc) {
-  PM->RTLsMtx.lock();
-
-  // Add in all the OpenMP requirements associated with this binary.
-  for (__tgt_offload_entry &Entry :
-       llvm::make_range(Desc->HostEntriesBegin, Desc->HostEntriesEnd))
-    if (Entry.flags == OMP_REGISTER_REQUIRES)
-      PM->addRequirements(Entry.data);
-    
-  DP("number of images %d\n", Desc->NumDeviceImages);
-
-  // Extract the exectuable image and extra information if availible.
-  for (int32_t i = Desc->NumDeviceImages - 1; i >= 0; --i)
-    PM->addDeviceImage(*Desc, Desc->DeviceImages[i]);
-  
-  int priorDevices = 0;
+void PluginManager::handleDeviceImages(__tgt_bin_desc *Desc, bool delayed) {
+  //int priorDevices = 0;
   // Register the images with the RTLs that understand them, if any.
   for (DeviceImageTy &DI : PM->deviceImages()) {
     // Obtain the image and information that was previously extracted.
@@ -165,14 +151,17 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
     // Scan the RTLs that have associated images until we find one that supports
     // the current image.
     for (auto &R : plugins()) {
+      if (R.delayInitialization() != delayed)
+        continue;        
+
       if (!R.is_plugin_compatible(Img))
         continue;
 
-      // add external device count to current device
+      /* // add external device count to current device
       if (auto Err = R.addPriorPhysicalDevices(priorDevices)) {
         [[maybe_unused]] std::string InfoMsg = toString(std::move(Err));
         DP("Failed to access plugin pre initialization: %s\n", InfoMsg.c_str());
-      }
+      } */
 
       if (!initializePlugin(R))
         continue;
@@ -182,8 +171,8 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
         continue;
       }
 
-      // Add the number of initialized plugins to the total amount
-      priorDevices += R.number_of_devices();
+      /* // Add the number of initialized plugins to the total amount
+      priorDevices += R.number_of_devices(); */
       DP("Registered plugin %s with %d visible device(s)\n",
            R.getName(), R.number_of_devices());
 
@@ -238,6 +227,26 @@ void PluginManager::registerLib(__tgt_bin_desc *Desc) {
     if (!FoundRTL)
       DP("No RTL found for image " DPxMOD "!\n", DPxPTR(Img->ImageStart));
   }
+}
+
+void PluginManager::registerLib(__tgt_bin_desc *Desc) {
+  PM->RTLsMtx.lock();
+
+  // Add in all the OpenMP requirements associated with this binary.
+  for (__tgt_offload_entry &Entry :
+       llvm::make_range(Desc->HostEntriesBegin, Desc->HostEntriesEnd))
+    if (Entry.flags == OMP_REGISTER_REQUIRES)
+      PM->addRequirements(Entry.data);
+    
+  DP("number of images %d\n", Desc->NumDeviceImages);
+
+  // Extract the exectuable image and extra information if availible.
+  for (int32_t i = 0; i < Desc->NumDeviceImages; ++i)
+    PM->addDeviceImage(*Desc, Desc->DeviceImages[i]);
+  
+  handleDeviceImages(Desc, false);
+  handleDeviceImages(Desc, true);
+
   PM->RTLsMtx.unlock();
 
   bool UseAutoZeroCopy = Plugins.size() > 0;
