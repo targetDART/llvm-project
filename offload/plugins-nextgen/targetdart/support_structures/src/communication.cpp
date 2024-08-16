@@ -409,7 +409,7 @@ tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
     return TARGETDART_FAILURE;
 }
 
-td_global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYPE local_cost_param) {
+global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYPE local_cost_param) {
     COST_DATA_TYPE reduce = 0;
     COST_DATA_TYPE exScan = 0;
     COST_DATA_TYPE local_cost = local_cost_param;

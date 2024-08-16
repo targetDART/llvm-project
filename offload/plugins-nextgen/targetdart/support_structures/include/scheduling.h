@@ -13,6 +13,7 @@
 #include <vector>
 
 #define SIMPLE_REACTIVITY_LOAD 1
+#define BALANCE_FACTOR 0.8
 
 typedef struct td_sort_cost_tuple_t{
     COST_DATA_TYPE        cost;
@@ -72,6 +73,13 @@ private:
     /// tables.
     TableMap *getTableMap(void *HostPtr);
 
+    /**
+    * Implements the rescheduling of tasks for the local MPI process and its current victim, defined by offset.
+    * target_load: defines the load the victim should have in total after migration.
+    * affinity: defines which kinds of tasks should be considered for a rescheduling.
+    */
+    void partial_global_reschedule(COST_DATA_TYPE target_load, device_affinity affinity, int offset);
+
     // Reference to the communication manager
     TD_Communicator *comm_man;
 
@@ -109,6 +117,9 @@ public:
 
     // implements an iterative scheduling algorithm 
     void iterative_schedule(device_affinity affinity);
+
+    // implements a global repartitioning algorithm based on ExScan
+    void global_reschedule(device_affinity affinity);
 
     // returns the number of user visible devices
     int32_t public_device_count();

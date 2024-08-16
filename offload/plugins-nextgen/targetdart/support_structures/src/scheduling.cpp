@@ -56,7 +56,7 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
     task->Loc = Loc;
     // fill with sum of Argsizes (KernelArgs)
     task->cached_total_sizes = 0;
-    for (int i = 0; i < KernelArgs->NumArgs; i++) {
+    for (uint32_t i = 0; i < KernelArgs->NumArgs; i++) {
         task->cached_total_sizes += (COST_DATA_TYPE) KernelArgs->ArgSizes[i];
     }
     
@@ -266,6 +266,89 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     } 
 }
 
+
+/**
+* Implements the rescheduling of tasks for the local MPI process and its current victim, defined by offset.
+* target_load: defines the load the victim should have in total after migration.
+* affinity: defines which kinds of tasks should be considered for a rescheduling.
+*/
+void TD_Scheduling_Manager::partial_global_reschedule(COST_DATA_TYPE target_load, device_affinity affinity, int offset) {
+    std::vector<td_task_t*> transferred_tasks;
+    COST_DATA_TYPE totalcost = 0;
+    while (totalcost < BALANCE_FACTOR * target_load) {
+        td_task_t *next_task;
+        tdrc return_code = get_migrateable_task(affinity, &next_task);
+        if (return_code == TARGETDART_FAILURE) {
+            break;
+        }
+        if (next_task->cached_total_sizes >= target_load/BALANCE_FACTOR) {
+            break;
+        } else {
+            transferred_tasks.push_back(next_task);
+        }
+    }
+    
+    //TODO: think about MPI_pack as well
+    for (size_t t = 0; t < transferred_tasks.size(); t++) {
+        comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
+    }
+}
+
+void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
+    global_sched_params_t params = comm_man->global_cost_communicator(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost());
+    COST_DATA_TYPE target_load = params.total_cost / comm_man->size;
+
+
+    DP("Do global reschedule with local load %ld and target load %ld", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
+
+    COST_DATA_TYPE pre_transfer = 0;
+    COST_DATA_TYPE post_transfer = 0;
+
+    //compute pre_transfer
+    if (comm_man->rank != 0) {
+        COST_DATA_TYPE predecessor_load = params.prefix_sum / comm_man->rank;
+        pre_transfer = (target_load - predecessor_load) * comm_man->rank;
+    }
+
+    DP("Send a load of %ld to predecessors", pre_transfer);
+
+    //compute post_transfer
+    if (comm_man->size != comm_man->size - 1) {
+        COST_DATA_TYPE successor_cost = params.total_cost - params.local_cost - params.prefix_sum;
+        int num_successors = comm_man->size - 1 - comm_man->rank; //inverted rank
+        COST_DATA_TYPE successor_load = successor_cost/num_successors;
+        post_transfer = (target_load - successor_load) * num_successors;
+    }
+
+    DP("Send a load of %ld to successors", post_transfer);
+
+    //calculate num tasks per direktion
+    if (pre_transfer < 0) {
+        pre_transfer = 0;
+    }
+    if (post_transfer < 0) {
+        post_transfer = 0;
+    }
+
+    //compute furthest data transfer
+    int pre_distance = pre_transfer/target_load + 1;
+    int post_distance = post_transfer/target_load + 1;
+
+    //general case transfers predecessor
+    for (int i = 1; i < pre_distance; i++) {
+        partial_global_reschedule(target_load, affinity, -i);
+    }
+    //general case transfers successor
+    for (int i = 1; i < post_distance; i++) {
+        partial_global_reschedule(target_load, affinity, i);
+    }
+    
+    COST_DATA_TYPE pre_remainder_load = pre_transfer % target_load;    
+    partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
+    COST_DATA_TYPE post_remainder_load = post_transfer % target_load;    
+    partial_global_reschedule(post_remainder_load, affinity, post_distance);
+
+}
 
 int32_t TD_Scheduling_Manager::public_device_count() {
     return affinity_queues->size() - 6;

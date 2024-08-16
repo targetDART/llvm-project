@@ -6,16 +6,15 @@
 #include <cstddef>
 #include <unordered_map>
 
-#define COST_DATA_TYPE int64_t
 #define COST_MPI_DATA_TYPE MPI_LONG
 
 enum MpiTaskTransferTag {SIGNAL_TASK_SEND, SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_BASE_PTRS, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE, SEND_RESULT_UID, SEND_RESULT_DATA, SEND_RESULT_RETURN_CODE};
 
-typedef struct td_global_sched_params_t{
+typedef struct global_sched_params_t{
     COST_DATA_TYPE        total_cost;
     COST_DATA_TYPE        prefix_sum;
     COST_DATA_TYPE        local_cost;
-} td_global_sched_params_t;
+} global_sched_params_t;
 
 // class wrapping MPI and communication specific information
 class TD_Communicator {
@@ -77,7 +76,7 @@ public:
     /**
     * implements a global repratitioning of tasks accross all processes.
     */
-    td_global_sched_params_t global_cost_communicator(COST_DATA_TYPE local_cost_param);
+    global_sched_params_t global_cost_communicator(COST_DATA_TYPE local_cost_param);
 
     /**
     * implements a log(n) based vector exchange within MPI

@@ -7,11 +7,12 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include "communication.h"
 #include "omptarget.h"
 
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
+
+#define COST_DATA_TYPE int64_t
 
 #define handle_error_en(en, msg) \
            do { errno = en; DP("ERROR: %s : %s\n", msg, strerror(en)); exit(EXIT_FAILURE); } while (0)
