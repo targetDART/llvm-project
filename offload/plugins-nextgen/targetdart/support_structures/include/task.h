@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include "communication.h"
 #include "omptarget.h"
 
 #include "PluginInterface.h"
@@ -58,7 +59,7 @@ typedef struct td_task_t{
     KernelArgsTy*       KernelArgs;
     ident_t*            Loc;
     td_uid_t            uid;
-    int64_t             cached_total_sizes;
+    COST_DATA_TYPE      cached_total_sizes;
     int                 return_code;
     bool                isReplica;
 } td_task_t;

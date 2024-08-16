@@ -54,9 +54,12 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
     task->isReplica = false;
     task->KernelArgs = KernelArgs;
     task->Loc = Loc;
-    //TODO: fill with sum of Argsizes (KernelArgs)
-    //TODO: extend MPI datatype
+    // fill with sum of Argsizes (KernelArgs)
     task->cached_total_sizes = 0;
+    for (int i = 0; i < KernelArgs->NumArgs; i++) {
+        task->cached_total_sizes += (COST_DATA_TYPE) KernelArgs->ArgSizes[i];
+    }
+    
 
     task->uid = {local_id_tracker.fetch_add(1), comm_man->rank};
 
@@ -187,7 +190,7 @@ COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE
 }
 
 void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
-    std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getSize());
+    std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost());
     std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
     //DP("iterative schedule: Rank 0: %lu Rank 1: %ld\n", cost_vector.at(0), cost_vector.at(1));
 

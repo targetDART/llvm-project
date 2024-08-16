@@ -4,6 +4,7 @@
 #include <queue>
 
 TD_Task_Queue::TD_Task_Queue() {
+    total_cost = 0;
 }
 
 TD_Task_Queue::~TD_Task_Queue() {
@@ -16,14 +17,20 @@ td_task_t *TD_Task_Queue::getTask() {
     }
     td_task_t *task = queue.front();
     queue.pop();
+    total_cost -= task->cached_total_sizes;
     return task;
 }
 
 void TD_Task_Queue::addTask(td_task_t *task) {
     std::unique_lock<std::mutex> lock(queue_mutex);
     queue.push(task);
+    total_cost += task->cached_total_sizes;
 }
 
 size_t TD_Task_Queue::getSize() {
     return queue.size();
+}
+
+COST_DATA_TYPE TD_Task_Queue::getCost() {
+    return total_cost;
 }
