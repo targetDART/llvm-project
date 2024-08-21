@@ -161,6 +161,17 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         DP("Scheduling thread finished\n");  
     };
 
+    auto receiver_thread_loop = [&] (int deviceID) {
+        while (!scheduler_done.load() && comm_man->size > 1) {
+            td_uid_t uid;
+            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
+                schedule_man->notify_task_completion(uid, false);
+            }
+            td_task_t task;
+            comm_man->test_and_receive_tasks(&task);
+        }
+    };
+
     exec_thread_loop = [&] (int deviceID) {
         int iter = 0;
         int phys_device_id = deviceID;
