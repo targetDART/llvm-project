@@ -12,6 +12,7 @@
 class TD_Thread_Manager {
 private:
     std::thread scheduler_th;
+    std::thread receiver_th;
     std::vector<std::thread> executor_th;
 
     TD_Scheduling_Manager *schedule_man;
@@ -27,6 +28,12 @@ private:
     * Defines the routine performed by the dedicated scheduling thread.
     */
     std::function<void(int)> schedule_thread_loop;
+
+    /**
+    * Defines the routine performaed the the dedicated receiver thread.
+    * Receiving tasks and results.
+    */
+    std::function<void(int)> receiver_thread_loop;
 
     /**
     * Defines the routine performed by the executor threads.

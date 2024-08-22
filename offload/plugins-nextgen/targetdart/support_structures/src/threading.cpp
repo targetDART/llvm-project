@@ -77,8 +77,10 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placemen
 
     placements->at(0) = std::stoi(assignments.at(0));
     DP("Scheduling thread assiged to core %d from env\n", (*placements)[0]);
+    placements->at(1) = std::stoi(assignments.at(1));
+    DP("Receiver thread assiged to core %d from env\n", (*placements)[1]);
 
-    for (size_t i = 1; i < std::min( assignments.size(), placements->size()); i++) {
+    for (size_t i = 2; i < std::min( assignments.size(), placements->size()); i++) {
         placements->at(i) = std::stoi(assignments.at(i));
         DP("Execution thread %zu assiged to core %d from env\n", i - 1, (*placements)[i]);
     }
@@ -119,11 +121,13 @@ tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
 
     scheduler_th = std::thread(__pin_and_workload, &scheduler_th, (*assignments)[0], &schedule_thread_loop, -1);
 
+    receiver_th = std::thread(__pin_and_workload, &receiver_th, (*assignments)[1], &receiver_thread_loop, -1);
+
     executor_th.resize(physical_device_count + 1);
 
     //initialize all offloading threads
     for (int i = 0; i <= physical_device_count; i++) {
-        executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+1], &exec_thread_loop, i);
+        executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+2], &exec_thread_loop, i);
     }
 
     DP("spawned management threads\n");
@@ -149,26 +153,27 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 DP("ping\n");
             }
             iter++;        
+            schedule_man->iterative_schedule(CPU);
+            schedule_man->iterative_schedule(GPU);
             schedule_man->iterative_schedule(ANY);
             std::this_thread::sleep_for(std::chrono::microseconds(100));
-            td_uid_t uid;
+            /*td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
-            }
+            }*/
         }
 
         scheduler_done.store(true);
         DP("Scheduling thread finished\n");  
     };
 
-    auto receiver_thread_loop = [&] (int deviceID) {
+    receiver_thread_loop = [&] (int deviceID) {
+        DP("Starting Receiver thread\n");
         while (!scheduler_done.load() && comm_man->size > 1) {
             td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
             }
-            td_task_t task;
-            comm_man->test_and_receive_tasks(&task);
         }
     };
 
@@ -214,7 +219,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     };
 
     // Physical devices aka GPUs + CPU + Scheduling
-    std::vector<int> placements(physical_device_count + 2);
+    std::vector<int> placements(physical_device_count + 3);
 
     get_thread_placement_from_env(&placements);
 
@@ -228,6 +233,8 @@ TD_Thread_Manager::~TD_Thread_Manager() {
     is_finalizing = true;  
 
     scheduler_th.join();
+
+    receiver_th.join();
 
     DP("Synchronized threads start joining %zu management threads\n", executor_th.size());
     for (size_t i = 0; i < executor_th.size(); i++) { 
