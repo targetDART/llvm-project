@@ -1,0 +1,119 @@
+stages:          # List of stages for jobs, and their order of execution
+  - build-clang
+  - build-omp
+  - compile
+  - run
+  - deploy
+  
+
+variables: 
+  SLURM_PARAM_ACCOUNT: "-A rwth1447"
+  SLURM_DPARAM_ACCOUNT: "-A rwth1447"
+  SLURM_DPARAM_TIME:  "-t 2:00:00"
+  SLURM_PARAM_EXCLUSIVE: "--exclusive"
+  DIR: "/dev/shm"
+  GIT_DEPTH: "1"
+  GIT_SUBMODULE_STRATEGY: recursive
+
+.base:
+  tags: ["hpc"]
+  id_tokens:
+    HPC_CI_TOKEN:
+      aud: aixCIlenz
+  before_script:
+    - ml purge
+    - ml gompi CUDA binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils Ninja Python
+    - export PATH=$PWD/software/bin:$PWD/software/llvm/bin:$PATH
+    - export LIBRARY_PATH=$PWD/software/llvm/lib:$PWD/software/llvm/lib/x86_64-unknown-linux-gnu:$LIBRARY_PATH
+    - export LD_LIBRARY_PATH=$PWD/software/llvm/lib:$PWD/software/llvm/lib/x86_64-unknown-linux-gnu:$LD_LIBRARY_PATH
+    - export CPATH=$PWD/software/llvm/include:$CPATH
+    - export PSM2_CUDA=1
+    - export CC=clang
+    - export CXX=clang++
+    - export OMPI_CXX=$PWD/software/llvm/bin/clang++
+    - export OMPI_CC=$PWD/software/llvm/bin/clang
+
+
+.exec:
+  extends: .base
+  variables:
+    GIT_STRATEGY: none
+    SLURM_PARAM_CORES: "-c 96"
+    SLURM_PARAM_NODES: "-N 2 -n 2"
+    SLURM_PARAM_GPUS: "--gpus-per-node=4"
+
+.compile:
+  extends: .base
+
+
+build-clang-job:       # This job runs in the build stage, which runs first.
+  extends: .base
+  stage: build-clang
+  script:
+    - ml use /home/ja664344/.modules/spr
+    - ml purge
+    - ml GCC/11 mpich/4
+    - ml CUDA/12.3.0 binutils hwloc libxml2 ncurses GMP Z3 libffi elfutils Ninja Python
+    - module use ~pj416018/.modules
+    - module load clang/17-release
+    - pip install pexpect
+    - echo $PWD
+    - ls -la $PWD/
+    - export SOURCES=$PWD/llvm
+    - mkdir -p $DIR/build-llvm
+    - cd $DIR/build-llvm
+    - | 
+      if [[ ! -f "CMakeCache.txt" ]]; then
+        cmake -G Ninja $SOURCES \
+            -DCMAKE_BUILD_TYPE=Release\
+            -DLLVM_ENABLE_PROJECTS='clang;clang-tools-extra;lldb;lld' \
+            -DLLVM_ENABLE_RUNTIMES='compiler-rt;libcxx;libcxxabi;libunwind;openmp;offload' \
+            -DCMAKE_INSTALL_PREFIX=$WORK/software/llvm \
+            -DLLVM_INSTALL_UTILS=ON \
+            -DCMAKE_CXX_COMPILER=$CXX \
+            -DCMAKE_C_COMPILER=$CC \
+            -DCLANG_DEFAULT_CXX_STDLIB='libc++' \
+            -DLLVM_ENABLE_LIBCXX=on\
+            -DCMAKE_CXX_FLAGS='-std=c++20' \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
+            -DLIBOMPTARGET_ENABLE_DEBUG=1 \
+            -DLIBOMPTARGET_ENABLE_UBSAN=OFF \
+            -DLIBOMPTARGET_CMAKE_BUILD_TYPE=Debug \
+            -DLIBOMPTARGET_PLUGINS_TO_BUILD='cuda;amdgpu;targetdart' 
+      fi
+    - ninja -j$(nproc --all) install
+    - cd -
+    - mkdir -p software/bin
+    - echo -e '#!/bin/bash\n\n' "clang++ -I/work/ja664344/sw/spr/gcc/GCC-13.2.0/mpich/4.2.2/include -L/work/ja664344/sw/spr/gcc/GCC-13.2.0/mpich/4.2.2/lib -lmpicxx -L$WORK/software/llvm/lib -I$WORK/software/llvm/lib/clang/19/include/ -fopenmp -fopenmp-targets=x86_64,nvptx64 -march=sm_90 -march=sapphirerapids -fuse-ld=lld -lmpi" '$@' > software/bin/clangwrap
+    - chmod +x software/bin/clangwrap
+    - ls -la software/bin
+    - cat software/bin/clangwrap
+    - clangwrap -v
+  artifacts:
+    paths:
+      - ./software/*
+
+compile-job:
+  extends: .compile
+  stage: compile
+  dependencies: [build-clang-job, build-omp-job]
+  script:
+    - ls
+    - clangwrap -v
+    - OMPI_CXX=clangwrap mpicxx Applications/simple_examples/$TEST_CASE.cpp -o $TEST_CASE.exe  
+  artifacts:
+    paths:
+      - "*.exe"   
+  parallel:
+    matrix:
+      - TEST_CASE: ["00notquitehelloworld", "01MxM_load_count", "02MxM_load_count_nested", "03MxM_load_count_dependencies", "04MxM_load_count_parallel", "05MxM_load_count_advance", "06MxM_load_count_phase_progress", "07MxM_load_imbalance"]
+
+run-job:
+  extends: .exec
+  stage: run
+  dependencies: [compile-job, build-clang-job, build-omp-job]
+  script:
+    - OMP_PLACES="6:90" TD_ACTIVATE=1 srun $SLURM_PARAM_GPUS $SLURM_PARAM_CORES $SLURM_PARAM_NODES $TEST_CASE.exe 20 20 20 20 20 20 20 20 20 20 20 20 20 20
+  parallel:
+    matrix:
+      - TEST_CASE: ["00notquitehelloworld", "01MxM_load_count", "02MxM_load_count_nested", "03MxM_load_count_dependencies", "04MxM_load_count_parallel", "05MxM_load_count_advance", "06MxM_load_count_phase_progress", "07MxM_load_imbalance"]
