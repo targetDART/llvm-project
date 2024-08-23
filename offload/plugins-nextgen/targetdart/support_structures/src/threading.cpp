@@ -3,8 +3,10 @@
 #include <cstdlib>
 #include <functional>
 #include <omp.h>
+#include <unistd.h>
 #include <string>
 #include <iostream>
+#include <vector>
 
 //removes spaces from text
 template<typename T>
@@ -90,13 +92,25 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placemen
 // pins 
 void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> *work, int deviceID) {
     if (core != -1) {
-    
-        cpu_set_t cpuset;// = CPU_ALLOC(N);
-
+        
         int s;
+        cpu_set_t cpuset;// = CPU_ALLOC(N);
+        cpu_set_t old_cpuset;
+        std::vector<int> possible_cores;
 
         CPU_ZERO(&cpuset);
-        CPU_SET(core, &cpuset);
+        CPU_ZERO(&old_cpuset);
+        sched_getaffinity(getpid(), sizeof(cpu_set_t), &old_cpuset);
+
+        for (int i = 0; i < sysconf( _SC_NPROCESSORS_ONLN ); i++) {
+            if (CPU_ISSET(i, &old_cpuset)) {
+                possible_cores.push_back(i);
+            }
+        }
+
+        int assignment = possible_cores.at(core);
+
+        CPU_SET(assignment, &cpuset);
 
         // pin current thread to core
         // WARNING: Only works on Unix systems
