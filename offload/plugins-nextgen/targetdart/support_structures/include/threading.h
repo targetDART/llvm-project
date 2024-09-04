@@ -4,7 +4,6 @@
 #include "task.h"
 #include "communication.h"
 #include "scheduling.h"
-#include <__atomic/atomic.h>
 #include <functional>
 #include <thread>
 #include <vector>
