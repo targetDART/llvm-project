@@ -167,12 +167,12 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 DP("ping\n");
             }
             iter++;        
-            schedule_man->iterative_schedule(CPU);
-            schedule_man->iterative_schedule(GPU);
+            //schedule_man->iterative_schedule(CPU);
+            //schedule_man->iterative_schedule(GPU);
             schedule_man->iterative_schedule(ANY);
             std::this_thread::sleep_for(std::chrono::microseconds(100));
-            /*td_uid_t uid;
-            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
+            td_uid_t uid;
+            /*if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
             }*/
         }
@@ -183,11 +183,12 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
     receiver_thread_loop = [&] (int deviceID) {
         DP("Starting Receiver thread\n");
-        while (!scheduler_done.load() && comm_man->size > 1) {
+        while ((!scheduler_done.load() || !schedule_man->is_empty()) && comm_man->size > 1) {
             td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
             }
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
     };
 

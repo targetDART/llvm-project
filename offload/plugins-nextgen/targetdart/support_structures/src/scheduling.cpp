@@ -89,20 +89,20 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
 }
 
 void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
-    active_tasks.fetch_add(1);
+    active_tasks++;
     task->KernelArgs = copyKernelArgs(task->KernelArgs);
     affinity_queues->at(DeviceID).addTask(task);
     DP("added task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, DeviceID);
 }
 
 void TD_Scheduling_Manager::add_remote_task(td_task_t *task, device_affinity DeviceID) {
-    active_tasks.fetch_add(1);
+    active_tasks++;
     affinity_queues->at(physical_device_count + 1 + DeviceID + TD_REMOTE_OFFSET).addTask(task);
     DP("added remote task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, physical_device_count + 1 + DeviceID + TD_REMOTE_OFFSET);
 }
 
 void TD_Scheduling_Manager::add_replicated_task(td_task_t *task, device_affinity DeviceID) {
-    active_tasks.fetch_add(1);
+    active_tasks++;
     affinity_queues->at(physical_device_count + 1 + DeviceID + TD_REPLICA_OFFSET).addTask(task);
     DP("added replicated task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, physical_device_count + 1 + DeviceID + TD_REPLICA_OFFSET);
 }
@@ -133,7 +133,7 @@ tdrc TD_Scheduling_Manager::get_task(int32_t PhysicalDeviceID, td_task_t **task)
                     started_local_replica.add_task((*task)->uid);
                 } else if (sub_offset == TD_REPLICATED_OFFSET && finalized_replicated.task_exists((*task)->uid)) {
                     // TODO: clean up task
-                    active_tasks.fetch_sub(1);
+                    active_tasks--;
                     continue;
                 }
                 DP("Gotten Task for PhyscalID: %d in queue: %d device count %d device offset %d affinity offset %d\n", PhysicalDeviceID, 1+physical_device_count + device_offset + sub_offset, physical_device_count, device_offset, sub_offset);
@@ -153,8 +153,8 @@ tdrc TD_Scheduling_Manager::get_migrateable_task(device_affinity affinity, td_ta
 }
 
 void TD_Scheduling_Manager::notify_task_completion(td_uid_t taskID, bool isReplica) {
-    active_tasks.fetch_sub(1);
-
+    active_tasks--;
+    DP("completed task (%ld%ld)\n", taskID.rank, taskID.id);
     if (isReplica) {        
         finalized_replicated.add_task(taskID);
     }
@@ -415,6 +415,10 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     int64_t effective_device = Device;
 
+    // Work on copy of KernelArgs to avoid differences between MPI processes
+    KernelArgsTy *BaseArgs = task->KernelArgs;
+    task->KernelArgs = copyKernelArgs(BaseArgs);
+
     // get physical device
     auto DeviceOrErr = PM->getDevice(effective_device);
     if (!DeviceOrErr)
@@ -474,9 +478,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     void *TgtEntryPtr = TargetTable->EntriesBegin[TM->Index].addr;
     DP("Launching target execution %s with pointer " DPxMOD " (index=%d).\n",
         TargetTable->EntriesBegin[TM->Index].name, DPxPTR(TgtEntryPtr), TM->Index);
-        
-    task->KernelArgs->NumTeams[0] = 10;
-    task->KernelArgs->ThreadLimit[0] = 10;
+    
 
     DP("Running kernel for task (%ld%ld)\n", task->uid.rank, task->uid.id);
     auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs.data(), offsets.data(), *task->KernelArgs,
@@ -502,6 +504,10 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Synchronization on CPU 
     if (effective_device != total_device_count())
         DeviceOrErr->synchronize(TargetAsyncInfo);
+
+    // Restore original KernelArgs 
+    delete task->KernelArgs;
+    task->KernelArgs = BaseArgs;
 
     return TARGETDART_SUCCESS;    
 }
