@@ -73,7 +73,7 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placemen
         return TARGETDART_FAILURE;
     }
 
-    std::string management = std::getenv("TD_MANAGEMENT\n");
+    std::string management = std::getenv("TD_MANAGEMENT");
 
     std::vector<std::string> assignments = split(management);
 
