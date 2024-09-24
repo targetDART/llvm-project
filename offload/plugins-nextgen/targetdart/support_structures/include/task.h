@@ -62,6 +62,7 @@ typedef struct td_task_t{
     td_uid_t            uid;
     COST_DATA_TYPE      cached_total_sizes;
     int                 return_code;
+    device_affinity     affinity;
     bool                isReplica;
 } td_task_t;
 

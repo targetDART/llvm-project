@@ -48,7 +48,7 @@ TD_Scheduling_Manager::~TD_Scheduling_Manager(){
     delete affinity_queues;
 }
 
-td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc) {
+td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc, int32_t DeviceID) {
     td_task_t *task = (td_task_t*) malloc(sizeof(td_task_t));
     task->host_base_ptr = apply_image_base_address(hostptr, false);
     task->isReplica = false;
@@ -59,7 +59,8 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
     for (uint32_t i = 0; i < KernelArgs->NumArgs; i++) {
         task->cached_total_sizes += (COST_DATA_TYPE) KernelArgs->ArgSizes[i];
     }
-    
+
+    task->affinity = extract_device_affinity(DeviceID);    
 
     task->uid = {local_id_tracker.fetch_add(1), comm_man->rank};
 
@@ -86,6 +87,22 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
     LocalKernelArgs->ThreadLimit[1] = 0;
     LocalKernelArgs->ThreadLimit[2] = 0;
     return LocalKernelArgs;
+}
+
+
+device_affinity TD_Scheduling_Manager::extract_device_affinity(int DeviceID) {
+    int internalID = DeviceID;
+    internalID -= physical_device_count;
+    if (internalID < 0)
+        return GPU;
+    internalID -= 1 + 3; //number of addressable queues per device affinity. The first value after the initial device (CPU) is CPU.
+    if  (internalID < 0)
+        return CPU;
+    internalID -= 3; //number of addressable queues per device affinity
+    if (internalID < 0)
+        return GPU;
+    // if it is not an explicit or managed CPU/GPU only the ANY affinity remains.
+    return ANY;
 }
 
 void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
@@ -252,14 +269,14 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
             tdrc ret_code = get_migrateable_task(affinity, &task);
             if (ret_code == TARGETDART_SUCCESS) {
                 DP("Preparing send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, partner_proc);
-                comm_man->signal_task_send(partner_proc, true);
+                //comm_man->signal_task_send(partner_proc, true);
                 comm_man->send_task(partner_proc, task);
             } else {
-                comm_man->signal_task_send(partner_proc, false);
+                //comm_man->signal_task_send(partner_proc, false);
             }
         }
     } else {
-        for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
+        /*for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
             tdrc ret_code = comm_man->receive_signal_task_send(partner_proc);
             if (ret_code == TARGETDART_SUCCESS) {                
                 td_task_t *task = new td_task_t;
@@ -267,7 +284,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                 DP("Received task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, partner_proc);
                 add_remote_task(task, affinity);
             }
-        }
+        }*/
     } 
 }
 

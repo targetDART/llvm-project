@@ -61,7 +61,7 @@ public:
     * Tests if a task can be received, if yes it is received and the function returns success.
     * If not the function returns failure.
     */
-    tdrc test_and_receive_tasks(td_task_t *task);
+    tdrc test_and_receive_task(td_task_t *task);
 
     /**
     * send the flag boolean value the the process of rank target

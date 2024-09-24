@@ -79,6 +79,9 @@ private:
     * affinity: defines which kinds of tasks should be considered for a rescheduling.
     */
     void partial_global_reschedule(COST_DATA_TYPE target_load, device_affinity affinity, int offset);
+    
+    //Extracts the device affinity from a plain device ID.
+    device_affinity extract_device_affinity(int DeviceID);
 
     // Reference to the communication manager
     TD_Communicator *comm_man;
@@ -88,7 +91,7 @@ public:
     ~TD_Scheduling_Manager();
 
     // creates a new targetDART task
-    td_task_t *create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc);
+    td_task_t *create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc, int32_t DeviceID);
 
     // adds a tasks to the user defined queue
     void add_task(td_task_t *task, int32_t DeviceID);

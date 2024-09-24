@@ -138,13 +138,14 @@ tdrc TD_Communicator::declare_KernelArgs_type() {
 }
 
 tdrc TD_Communicator::declare_task_type() {
-    const int nitems = 3;
-    int blocklengths[3] = {1,1,1};
-    MPI_Datatype types[3] = {MPI_LONG, TD_TASK_UID, COST_MPI_DATA_TYPE};
-    MPI_Aint offsets[3];
+    const int nitems = 4;
+    int blocklengths[4] = {1,1,1,1};
+    MPI_Datatype types[4] = {MPI_LONG, TD_TASK_UID, COST_MPI_DATA_TYPE, MPI_INT};
+    MPI_Aint offsets[4];
     offsets[0] = (MPI_Aint) offsetof(td_task_t, host_base_ptr);
     offsets[1] = (MPI_Aint) offsetof(td_task_t, uid);
     offsets[2] = (MPI_Aint) offsetof(td_task_t, cached_total_sizes);
+    offsets[3] = (MPI_Aint) offsetof(td_task_t, affinity);
 
     MPI_Type_create_struct(nitems, blocklengths, offsets, types, &TD_MPI_Task);
     MPI_Type_commit(&TD_MPI_Task);
@@ -299,7 +300,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::test_and_receive_tasks(td_task_t *task) {
+tdrc TD_Communicator::test_and_receive_task(td_task_t *task) {
 
     //test, if a task result can be received
     MPI_Status status;

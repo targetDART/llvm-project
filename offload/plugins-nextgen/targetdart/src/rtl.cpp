@@ -182,7 +182,7 @@ struct targetDARTKernelTy: public GenericKernelTy {
     // add scheduling manager to the queue to ensure that the synchronization is performed
     AsyncInfoWrapper.setQueueAs<TD_Scheduling_Manager*>(td_sched);
 
-    td_task_t *task = td_sched->create_task(HostPtr, &KernelArgs, Loc);
+    td_task_t *task = td_sched->create_task(HostPtr, &KernelArgs, Loc, GenericDevice.getDeviceId());
     td_sched->add_task(task, GenericDevice.getDeviceId());
     
     return Plugin::success();
