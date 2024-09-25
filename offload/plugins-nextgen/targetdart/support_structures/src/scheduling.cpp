@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <thread>
 #include <vector>
 
@@ -320,8 +321,12 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     global_sched_params_t params = comm_man->global_cost_communicator(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost());
     COST_DATA_TYPE target_load = params.total_cost / comm_man->size;
 
+    if (target_load == 0) {
+        DP("Skip global reschedule with target load %ld\n", target_load);
+        return;
+    }
 
-    DP("Do global reschedule with local load %ld and target load %ld", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
+    DP("Do global reschedule with local load %ld and target load %ld\n", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
 
     COST_DATA_TYPE pre_transfer = 0;
     COST_DATA_TYPE post_transfer = 0;
@@ -332,17 +337,17 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         pre_transfer = (target_load - predecessor_load) * comm_man->rank;
     }
 
-    DP("Send a load of %ld to predecessors", pre_transfer);
+    DP("Send a load of %ld to predecessors\n", pre_transfer);
 
     //compute post_transfer
-    if (comm_man->size != comm_man->size - 1) {
+    if (comm_man->rank != comm_man->size - 1) {
         COST_DATA_TYPE successor_cost = params.total_cost - params.local_cost - params.prefix_sum;
         int num_successors = comm_man->size - 1 - comm_man->rank; //inverted rank
         COST_DATA_TYPE successor_load = successor_cost/num_successors;
         post_transfer = (target_load - successor_load) * num_successors;
     }
 
-    DP("Send a load of %ld to successors", post_transfer);
+    DP("Send a load of %ld to successors\n", post_transfer);
 
     //calculate num tasks per direktion
     if (pre_transfer < 0) {

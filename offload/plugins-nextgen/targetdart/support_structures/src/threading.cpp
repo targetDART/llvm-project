@@ -162,14 +162,14 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 iter = 0;
                 // TODO: this differentiation kann lead to a Deadlock
                 // TODO: restructure multi-schedule approaches
-                //td_global_reschedule(TD_ANY);
+                schedule_man->global_reschedule(ANY);
                 schedule_man->reset_repatition();
                 DP("ping\n");
             }
             iter++;        
-            schedule_man->iterative_schedule(CPU);
-            schedule_man->iterative_schedule(GPU);
-            schedule_man->iterative_schedule(ANY);
+            //schedule_man->iterative_schedule(CPU);
+            //schedule_man->iterative_schedule(GPU);
+            //schedule_man->iterative_schedule(ANY);
             std::this_thread::sleep_for(std::chrono::microseconds(100));
             td_uid_t uid;
             /*if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
