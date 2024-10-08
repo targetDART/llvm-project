@@ -155,6 +155,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     comm_man = comm;
 
     schedule_thread_loop = [&] (int deviceID) {
+        TRACE_START("sched_loop\n");
         int iter = 0;
         DP("Starting scheduler thread\n");
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
@@ -167,21 +168,23 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 DP("ping\n");
             }
             iter++;        
-            //schedule_man->iterative_schedule(CPU);
-            //schedule_man->iterative_schedule(GPU);
-            //schedule_man->iterative_schedule(ANY);
-            std::this_thread::sleep_for(std::chrono::microseconds(100));
-            td_uid_t uid;
-            /*if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
+            schedule_man->iterative_schedule(CPU);
+            schedule_man->iterative_schedule(GPU);
+            schedule_man->iterative_schedule(ANY);
+            //std::this_thread::sleep_for(std::chrono::microseconds(100));
+            /*td_uid_t uid;
+            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
             }*/
         }
 
         scheduler_done.store(true);
+        TRACE_END("sched_loop\n");
         DP("Scheduling thread finished\n");  
     };
 
     receiver_thread_loop = [&] (int deviceID) {
+        TRACE_START("recv_loop\n");
         DP("Starting Receiver thread\n");
         while ((!scheduler_done.load() || !schedule_man->is_empty()) && comm_man->size > 1) {
             td_uid_t uid;
@@ -195,9 +198,11 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             }
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
+        TRACE_END("recv_loop\n");
     };
 
     exec_thread_loop = [&] (int deviceID) {
+        TRACE_START("exec_loop\n");
         int iter = 0;
         int phys_device_id = deviceID;
         if (deviceID == physical_device_count) {
@@ -234,7 +239,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 }
             } 
         }    
-
+        TRACE_END("exec_loop\n");
         DP("executor thread for device %d finished\n", deviceID);
     };
 

@@ -208,6 +208,7 @@ COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE
 }
 
 void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
+    TRACE_START("fine_schedule\n");
     COST_DATA_TYPE local_cost = affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost() + 
                                 affinity_queues->at(physical_device_count + 1 + affinity + TD_LOCAL_OFFSET).getCost() + 
                                 affinity_queues->at(physical_device_count + 1 + affinity + TD_REMOTE_OFFSET).getCost() +
@@ -287,6 +288,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
             }
         }*/
     } 
+    TRACE_END("fine_schedule\n");
 }
 
 
@@ -318,11 +320,13 @@ void TD_Scheduling_Manager::partial_global_reschedule(COST_DATA_TYPE target_load
 }
 
 void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
+    TRACE_START("coarse_schedule\n");
     global_sched_params_t params = comm_man->global_cost_communicator(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost());
     COST_DATA_TYPE target_load = params.total_cost / comm_man->size;
 
     if (target_load == 0) {
         DP("Skip global reschedule with target load %ld\n", target_load);
+        TRACE_END("coarse_schedule\n");
         return;
     }
 
@@ -374,7 +378,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
     COST_DATA_TYPE post_remainder_load = post_transfer % target_load;    
     partial_global_reschedule(post_remainder_load, affinity, post_distance);
-
+    TRACE_END("coarse_schedule\n");
 }
 
 int32_t TD_Scheduling_Manager::public_device_count() {
@@ -382,10 +386,12 @@ int32_t TD_Scheduling_Manager::public_device_count() {
 }
 
 void TD_Scheduling_Manager::synchronize() {
+    TRACE_START("synchronize\n");
     while (!is_empty()) {
         // sleep for a few micro seconds to limit contention
         std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
+    TRACE_END("synchronize\n");
 }
 
 int64_t TD_Scheduling_Manager::get_active_tasks() {
@@ -435,6 +441,8 @@ int32_t TD_Scheduling_Manager::total_device_count() {
 // executes a task on a given device
 tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
+    TRACE_START("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
+
     int64_t effective_device = Device;
 
     // Work on copy of KernelArgs to avoid differences between MPI processes
@@ -463,6 +471,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     DP("Allocating %d arguments for task (%ld%ld)\n", task->KernelArgs->NumArgs, task->uid.rank, task->uid.id);
 
+    TRACE_START("H2D_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         if (effective_device == total_device_count()) {
@@ -477,9 +486,11 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
             DeviceOrErr->submitData(devicePtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
         }
     }
+    TRACE_END("H2D_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     if (checkDeviceAndCtors(effective_device, task->Loc)) {
         DP("Not offloading to device %" PRId64 "\n", effective_device);
+        TRACE_END("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
         return TARGETDART_FAILURE;
     }
 
@@ -503,13 +514,16 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     
 
     DP("Running kernel for task (%ld%ld)\n", task->uid.rank, task->uid.id);
+    TRACE_START("kernel_launch_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     auto Err = DeviceOrErr->launchKernel(TgtEntryPtr, devicePtrs.data(), offsets.data(), *task->KernelArgs,
                                TargetAsyncInfo, task->Loc, HostPtr);
+    TRACE_END("kernel_launch_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     if (Err) {
         DP("Kernel launch of task (%ld%ld) failed\n", task->uid.rank, task->uid.id);
     }
 
+    TRACE_START("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
@@ -522,6 +536,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
     }
+    TRACE_END("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     // Synchronization on CPU 
     if (effective_device != total_device_count())
@@ -530,6 +545,8 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Restore original KernelArgs 
     delete task->KernelArgs;
     task->KernelArgs = BaseArgs;
+
+    TRACE_END("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     return TARGETDART_SUCCESS;    
 }

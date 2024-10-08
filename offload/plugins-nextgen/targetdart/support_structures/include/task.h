@@ -4,18 +4,76 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <mutex>
+#include <unistd.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/syscall.h>
 #include "omptarget.h"
 
 #include "PluginInterface.h"
 #include "Shared/Environment.h"
 
+#define gettid() syscall(SYS_gettid)
+
 #define COST_DATA_TYPE int64_t
 
 #define handle_error_en(en, msg) \
            do { errno = en; DP("ERROR: %s : %s\n", msg, strerror(en)); exit(EXIT_FAILURE); } while (0)
+
+inline uint32_t getTraceLevel() {
+  static uint32_t TraceLevel = 0;
+  static std::once_flag Flag{};
+  std::call_once(Flag, []() {
+    if (char *EnvStr = getenv("TD_TRACE"))
+      TraceLevel = std::stoi(EnvStr);
+  });
+
+  return TraceLevel;
+}
+
+#ifdef TD_TRACE
+#define TRACE(prefix, ...)                                                              \
+    do {                                                                                \
+        char buffer[100];                                                               \
+        char buffer2[100];                                                              \
+        sprintf(buffer, "%s --> ", prefix);                                             \
+        sprintf(buffer2, __VA_ARGS__);                                                  \
+        fprintf(stderr, "%s%s", buffer, buffer2);                                       \
+  } while (false);
+
+#define TRACE_START(...)                                                                        \
+    if (getTraceLevel() > 0) {                                                                  \
+        char bufferl[100];                                                                       \
+        pid_t pid = gettid();                                                                   \
+        struct timeval tv;                                                                      \
+        gettimeofday(&tv,NULL);                                                                 \
+        unsigned long time = 1000000 * tv.tv_sec + tv.tv_usec;                                  \
+        sprintf(bufferl, "Starting targetDART trace on thread: %d at: %ld for type", pid, time); \
+        TRACE(bufferl, __VA_ARGS__);                                                             \
+    }
+    
+#define TRACE_END(...)                                                                          \
+    if (getTraceLevel() > 0) {                                                                  \
+        char bufferl[100];                                                                       \
+        pid_t pid = gettid();                                                                   \
+        struct timeval tv;                                                                      \
+        gettimeofday(&tv,NULL);                                                                 \
+        unsigned long time = 1000000 * tv.tv_sec + tv.tv_usec;                                  \
+        sprintf(bufferl, "Ending targetDART trace on thread: %d at: %ld for type", pid, time);   \
+        TRACE(bufferl, __VA_ARGS__);                                                             \
+    }
+
+
+#else
+#define TRACE(...) {}
+#define TRACE_START(...) {}
+#define TRACE_END(...) {}
+#endif
 
 enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
 

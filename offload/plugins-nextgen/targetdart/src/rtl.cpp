@@ -537,8 +537,11 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override {
-    if (std::getenv("TD_ACTIVATE") == NULL) 
+    TRACE_START("init_td\n");
+    if (std::getenv("TD_ACTIVATE") == NULL) {
+      TRACE_END("init_td\n");
       return 0;
+    }
 
     DP("init targetDART\n");
 
@@ -555,14 +558,19 @@ struct targetDARTPluginTy : public GenericPluginTy {
     td_comm = new TD_Communicator();
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
+
+    TRACE_END("init_td\n");
     // Add one device for direct CPU execution
     return td_sched->public_device_count() + 1;
   }
 
   /// Deinitialize the plugin and release the resources.
   Error deinitImpl() override {
-    if (std::getenv("TD_ACTIVATE") == NULL) 
+    TRACE_START("deinit_td\n");
+    if (std::getenv("TD_ACTIVATE") == NULL) {
+      TRACE_END("deinit_td\n");
       return Plugin::success();
+    }
     DP("finalize targetDART\n");
 
     finalize_task_structes();
@@ -570,6 +578,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
     delete td_thread;
     delete td_comm;
     delete td_sched;
+    TRACE_END("deinit_td\n");
     return Plugin::success();
   }
 

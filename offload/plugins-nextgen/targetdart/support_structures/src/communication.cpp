@@ -167,6 +167,7 @@ tdrc TD_Communicator::declare_uid_type() {
 }
 
 tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
+    TRACE_START("send_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
@@ -217,11 +218,13 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //For complex combinations of pointers and scalars OMP breaks without our interference
 
     DP("Send task (%ld%ld) to process %d finished\n", task->uid.rank, task->uid.id, dest);
+    TRACE_END("send_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     return TARGETDART_SUCCESS;
 }
 
 tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
+    TRACE_START("recv_task\n");
 
     //TODO: use MPI probe for complete receives
 
@@ -230,6 +233,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     //Receive Task Data
     MPI_Recv(task, 1, TD_MPI_Task, source , SEND_TASK, targetdart_comm, MPI_STATUS_IGNORE);
     DP("Recv task structure for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
+    TRACE_START("recv_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     //Receive static KernelArgs values excluding pointervalues
     task->KernelArgs = new KernelArgsTy;
@@ -295,6 +299,8 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
 
     DP("Received task (%ld%ld) from process %d, finished\n", task->uid.rank, task->uid.id, source);
+    TRACE_END("recv_task (%ld%ld)\n", task->uid.rank, task->uid.id);
+    TRACE_END("recv_task\n");
 
 
     return TARGETDART_SUCCESS;
@@ -334,6 +340,7 @@ tdrc TD_Communicator::receive_signal_task_send(int source) {
 }
 
 tdrc TD_Communicator::send_task_result(td_task_t *task) {
+    TRACE_START("send_task_res (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
@@ -361,16 +368,19 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     //TODO: free task data
 
     DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);
+    TRACE_END("send_task_res (%ld%ld)\n", task->uid.rank, task->uid.id);
     return TARGETDART_SUCCESS;
 }
 
 tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
-
+    TRACE_START("recv_task_res\n");
     DP("Start result receival\n");
     //TODO: use MPI probe for complete receives
     //Receive Task Data
     MPI_Recv(uid, 1, TD_TASK_UID, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
     DP("Receiving result for task (%ld%ld) from process %d\n", uid->rank, uid->id, source);
+
+    TRACE_START("recv_task_res (%ld%ld)\n", uid->rank, uid->id);
 
     td_task_t *task = remote_task_map[*uid];
     remote_task_map.erase(*uid);
@@ -392,6 +402,9 @@ tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
     }
 
     DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);
+
+    TRACE_END("recv_task_res (%ld%ld)\n", task->uid.rank, task->uid.id);
+    TRACE_END("recv_task_res\n");
     return TARGETDART_SUCCESS;
 }
 
@@ -411,6 +424,7 @@ tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
 }
 
 global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYPE local_cost_param) {
+    TRACE_START("coarse_cost_exchange\n");
     COST_DATA_TYPE reduce = 0;
     COST_DATA_TYPE exScan = 0;
     COST_DATA_TYPE local_cost = local_cost_param;
@@ -419,10 +433,12 @@ global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYPE l
     MPI_Allreduce((void*) &local_cost, (void*) &reduce, 1, COST_MPI_DATA_TYPE, MPI_SUM, targetdart_comm);
     MPI_Exscan((void*) &local_cost, (void*) &exScan, 1, COST_MPI_DATA_TYPE, MPI_SUM, targetdart_comm);
 
+    TRACE_END("coarse_cost_exchange\n");
     return {reduce, exScan, local_cost};
 }
 
 std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
+    TRACE_START("fine_cost_exchange\n");
     std::vector<COST_DATA_TYPE> cost_vector(size, 0);
     cost_vector[rank] = local_cost_param; 
 
@@ -479,7 +495,7 @@ std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST
         // }
 
     }*/
-
+    TRACE_END("fine_cost_exchange\n");
     return cost_vector;
 }
 

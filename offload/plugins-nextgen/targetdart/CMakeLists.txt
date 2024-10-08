@@ -18,6 +18,10 @@ if(NOT(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86_64)|(ppc64le)$" AND CMAKE_SYSTEM_NAM
   return()
 endif()
 
+if(LIBOMPTARGET_ENABLE_DEBUG)  
+  add_definitions(-DTD_TRACE)
+endif()
+
 message("Building targetDART NextGen scheduling plugin.")
 message(WARNING "Building targetDART NextGen scheduling plugin requires MPI Session support.")
 
