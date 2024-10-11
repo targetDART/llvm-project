@@ -209,11 +209,11 @@ COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE
 
 void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     TRACE_START("fine_schedule\n");
-    COST_DATA_TYPE local_cost = affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost() + 
-                                affinity_queues->at(physical_device_count + 1 + affinity + TD_LOCAL_OFFSET).getCost() + 
-                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REMOTE_OFFSET).getCost() +
-                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICA_OFFSET).getCost() +
-                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICATED_OFFSET).getCost();
+    COST_DATA_TYPE local_cost = affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getSize() + 
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_LOCAL_OFFSET).getSize() + 
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REMOTE_OFFSET).getSize() +
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICA_OFFSET).getSize() +
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICATED_OFFSET).getSize();
     std::vector<COST_DATA_TYPE> cost_vector = comm_man->global_cost_vector_propagation(local_cost);
     std::vector<td_sort_cost_tuple_t> combined_vector(cost_vector.size());
     //DP("iterative schedule: Rank 0: %lu Rank 1: %ld\n", cost_vector.at(0), cost_vector.at(1));
@@ -264,7 +264,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     //DP("Found Partner proc: %d for load: %ld\n", partner_proc, transfer_load);
     if (transfer_load == 0) {
         return;
-    } else if (transfer_load > 0) {
+    } else if (transfer_load > 2) {
         for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
             td_task_t *task;
             //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
