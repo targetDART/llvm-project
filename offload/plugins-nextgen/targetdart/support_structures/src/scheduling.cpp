@@ -196,14 +196,14 @@ void TD_Scheduling_Manager::reset_repatition() {
 * Returns the desire load to transfer from remote to local as a negative value, iff local_cost < remote_cost
 */
 COST_DATA_TYPE __compute_transfer_load(COST_DATA_TYPE local_cost, COST_DATA_TYPE remote_cost) {
-    COST_DATA_TYPE result;
-    if (local_cost == remote_cost) {
+    COST_DATA_TYPE result = local_cost - remote_cost;
+    /*if (local_cost == remote_cost) {
         result = 0;
     } else if (local_cost > remote_cost) {
         result = SIMPLE_REACTIVITY_LOAD;
     } else {
         result = -SIMPLE_REACTIVITY_LOAD;
-    }
+    }*/
     return result;
 }
 
@@ -264,7 +264,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     //DP("Found Partner proc: %d for load: %ld\n", partner_proc, transfer_load);
     if (transfer_load == 0) {
         return;
-    } else if (transfer_load > 2) {
+    } else if (transfer_load > 5) {
         for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
             td_task_t *task;
             //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration

@@ -5,6 +5,7 @@
 #include "mpi.h"
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -168,6 +169,7 @@ tdrc TD_Communicator::declare_uid_type() {
 
 tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     TRACE_START("send_task (%ld%ld)\n", task->uid.rank, task->uid.id);
+    fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
