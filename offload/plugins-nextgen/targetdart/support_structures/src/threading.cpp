@@ -159,10 +159,12 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         int iter = 0;
         DP("Starting scheduler thread\n");
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
-            if (iter == 800000 || schedule_man->do_repartition()) {
+            if (iter == 80000 || schedule_man->do_repartition()) {
                 iter = 0;
                 // TODO: this differentiation kann lead to a Deadlock
                 // TODO: restructure multi-schedule approaches
+                schedule_man->global_reschedule(CPU);
+                schedule_man->global_reschedule(GPU);
                 schedule_man->global_reschedule(ANY);
                 schedule_man->reset_repatition();
                 DP("ping\n");

@@ -264,7 +264,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
     //DP("Found Partner proc: %d for load: %ld\n", partner_proc, transfer_load);
     if (transfer_load == 0) {
         return;
-    } else if (transfer_load > 5) {
+    } else if (transfer_load > 3) {
         for (int i = 0; i < SIMPLE_REACTIVITY_LOAD; i++) {
             td_task_t *task;
             //ensure to not send an empty task, iff the queue becomes empty between the vector exchange and migration
