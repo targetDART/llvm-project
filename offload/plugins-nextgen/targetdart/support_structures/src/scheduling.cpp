@@ -222,7 +222,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
         combined_vector[i].cost = cost_vector[i];
         combined_vector[i].id = i;
     }
-    std::sort(combined_vector.begin(), combined_vector.end(), [](td_sort_cost_tuple_t a, td_sort_cost_tuple_t b) 
+    std::stable_sort(combined_vector.begin(), combined_vector.end(), [](td_sort_cost_tuple_t a, td_sort_cost_tuple_t b) 
                                                                                 {                                                                                
                                                                                     return a.cost < b.cost;
                                                                                 });
