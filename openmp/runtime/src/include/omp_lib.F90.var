@@ -226,7 +226,6 @@
 
           subroutine td_device_offset() bind(c)
             import
-            integer (kind=kmp_pointer_kind), value :: main_ptr
           end subroutine td_device_offset
 
           subroutine omp_set_num_threads(num_threads) bind(c)
