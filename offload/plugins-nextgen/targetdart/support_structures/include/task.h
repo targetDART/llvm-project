@@ -37,35 +37,44 @@ inline uint32_t getTraceLevel() {
 }
 
 #ifdef TD_TRACE
+
+extern int trace_rank; // this MPI rank
+extern FILE *trace_file; // if tracing is enabled, this will provide a handle for the tracefile (for this MPI rank)
+extern unsigned long start_of_trace; // initial time stamp in microseconds => trace time-stamps are relative to this
+
 #define TRACE(prefix, ...)                                                              \
     do {                                                                                \
         char buffer[100];                                                               \
         char buffer2[100];                                                              \
-        sprintf(buffer, "%s --> ", prefix);                                             \
-        sprintf(buffer2, __VA_ARGS__);                                                  \
-        fprintf(stderr, "%s%s", buffer, buffer2);                                       \
+        snprintf(buffer, 99, "%s --> ", prefix);                                        \
+        snprintf(buffer2, 99, __VA_ARGS__);                                             \
+        if (trace_file != NULL) {						\
+            fprintf(trace_file, "%s%s", buffer, buffer2);                       \
+        }										\
   } while (false);
 
-#define TRACE_START(...)                                                                        \
-    if (getTraceLevel() > 0) {                                                                  \
-        char bufferl[100];                                                                       \
-        pid_t pid = gettid();                                                                   \
-        struct timeval tv;                                                                      \
-        gettimeofday(&tv,NULL);                                                                 \
-        unsigned long time = 1000000 * tv.tv_sec + tv.tv_usec;                                  \
-        sprintf(bufferl, "Starting targetDART trace on thread: %d at: %ld for type", pid, time); \
-        TRACE(bufferl, __VA_ARGS__);                                                             \
+#define TRACE_START(...)                                                                          \
+    if (getTraceLevel() > 0) {                                                                    \
+        char bufferl[100];                                                                        \
+        pid_t pid = gettid();                                                                     \
+        struct timeval tv;                                                                        \
+        gettimeofday(&tv,NULL);                                                                   \
+        unsigned long usecs = (1000000 * tv.tv_sec) + tv.tv_usec;                                 \
+        usecs -= start_of_trace;						          \
+        sprintf(bufferl, "Starting targetDART trace on thread: %d at: %lu for type", pid, usecs); \
+        TRACE(bufferl, __VA_ARGS__);                                                              \
     }
     
-#define TRACE_END(...)                                                                          \
-    if (getTraceLevel() > 0) {                                                                  \
-        char bufferl[100];                                                                       \
-        pid_t pid = gettid();                                                                   \
-        struct timeval tv;                                                                      \
-        gettimeofday(&tv,NULL);                                                                 \
-        unsigned long time = 1000000 * tv.tv_sec + tv.tv_usec;                                  \
-        sprintf(bufferl, "Ending targetDART trace on thread: %d at: %ld for type", pid, time);   \
-        TRACE(bufferl, __VA_ARGS__);                                                             \
+#define TRACE_END(...)                                                                            \
+    if (getTraceLevel() > 0) {                                                                    \
+        char bufferl[100];                                                                        \
+        pid_t pid = gettid();                                                                     \
+        struct timeval tv;                                                                        \
+        gettimeofday(&tv,NULL);                                                                   \
+        unsigned long usecs = (1000000 * tv.tv_sec) + tv.tv_usec;                                 \
+        usecs -= start_of_trace;							  \
+        sprintf(bufferl, "Ending targetDART trace on thread: %d at: %lu for type", pid, usecs);   \
+        TRACE(bufferl, __VA_ARGS__);                                                              \
     }
 
 

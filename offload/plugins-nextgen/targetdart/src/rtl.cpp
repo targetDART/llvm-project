@@ -559,6 +559,53 @@ struct targetDARTPluginTy : public GenericPluginTy {
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
 
+#ifdef TD_TRACE
+    // create one trace file per MPI process if tracing is enabled
+    char const *envvar;
+    envvar = std::getenv("TD_ENABLE_TRACING");
+    if (NULL != envvar) {
+	// tracing is enabled by setting the environment variable "TD_ENABLE_TRACING" to "YES" or "1"
+        if ((0 == std::strcmp(envvar, "YES")) || (0 == std::strcmp(envvar, "1"))) {
+	    DP("tracing of targetDART events enabled\n");
+	    // we take an initial time-stamp and refer to this in order to get proper seconds since start of trace
+	    struct timeval tv;
+	    gettimeofday(&tv,NULL);
+	    unsigned long usecs = (1000000 * tv.tv_sec) + tv.tv_usec;
+	    start_of_trace = usecs;
+	    // the optional env-var "TD_TRACE_NAME" can be used to specify filenames for the traces
+	    // note: This is a format string that must contain "%d" as a placeholder for the rank number
+	    // the given filename can be preceded by a pathname (such as "SeisSol_trace_2024-11-13/"), but this path must exist
+	    envvar = std::getenv("TD_TRACE_NAME");
+	    if (NULL == envvar) {
+		envvar = "td_trace_for_rank_%d.txt"; // no name specified => use this default
+	    }
+	    // fill the placeholder in this format string with the MPI rank number
+	    char tracefilename[200];
+	    snprintf(tracefilename, 199, envvar, trace_rank);
+	    trace_file = fopen(tracefilename, "w"); // if it fails to create this file, then tracing is disabled
+	    if (NULL == trace_file) {
+	        DP("warning: failed to create trace file => tracing disabled");
+	    }
+	    // check if a buffer size (in bytes) for the tracing is given by the user
+	    envvar = std::getenv("TD_TRACE_BUFSIZE");
+	    size_t tracebufsize;
+	    if (NULL != envvar) {
+		tracebufsize = (size_t)atol(envvar);
+		if (tracebufsize < 100000) tracebufsize = 100000; // avoid too small buffers
+	    }
+	    else {
+		tracebufsize = 10485760; // default buffer size for traces is 10 MiB
+	    }
+	    if (NULL != trace_file) { 
+		// if we specify a NULL buffer for setvbuf(), it will automatically allocate and deallocate the buffer
+		setvbuf(trace_file, NULL, _IOFBF, tracebufsize);
+		// this will fully buffer the trace and thus avoid interruptions by file I/O
+		// (as long as buffer is large enough), therefore giving more accurate time measurements
+	    }
+	}
+    }
+#endif // TD_TRACE
+
     TRACE_END("init_td\n");
     // Add one device for direct CPU execution
     return td_sched->public_device_count() + 1;
@@ -574,6 +621,13 @@ struct targetDARTPluginTy : public GenericPluginTy {
     DP("finalize targetDART\n");
 
     finalize_task_structes();
+
+#ifdef TD_TRACE
+    if (trace_file != NULL) {
+        fclose(trace_file);
+        trace_file = NULL;
+    }
+#endif // TD_TRACE
 
     delete td_thread;
     delete td_comm;
@@ -676,3 +730,4 @@ llvm::omp::target::plugin::GenericPluginTy *createPlugin_targetdart() {
 } //namespace target
 } //namespace omp
 } //namespace llvm
+

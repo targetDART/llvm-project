@@ -97,3 +97,11 @@ tdrc get_base_address(void *main_ptr) {
   initialized = true;
   return TARGETDART_SUCCESS;
 }
+
+
+#ifdef TD_TRACE
+  int trace_rank = -1; // this MPI rank
+  FILE *trace_file = NULL; // if tracing is enabled, this will provide a handle for the tracefile (for this MPI rank)
+  unsigned long start_of_trace = 0ul; // initial time stamp in microseconds => trace time-stamps are relative to this
+#endif // TD_TRACE
+
