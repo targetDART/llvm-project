@@ -241,21 +241,6 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 
     // implement Chameleon based victim selection
     int partner_idx;
-    if (combined_vector.size() % 2 == 0) {
-        int half = combined_vector.size() / 2;
-        if (local_idx < half) {
-            partner_idx = combined_vector.size() + local_idx - half;
-        } else {
-            partner_idx = local_idx - half;
-        }
-    } else {
-        int half = combined_vector.size() / 2;
-        if (local_idx < half) {
-            partner_idx = combined_vector.size() + local_idx - half;
-        } else {
-            partner_idx = local_idx - half - 1;
-        }
-    }
     partner_idx = combined_vector.size() - local_idx - 1;
     int partner_proc = combined_vector.at(partner_idx).id;
 
