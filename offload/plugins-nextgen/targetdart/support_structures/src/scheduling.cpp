@@ -456,15 +456,18 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     DP("Allocating %d arguments for task (%ld%ld)\n", task->KernelArgs->NumArgs, task->uid.rank, task->uid.id);
 
+    // note: the negation here is not that nice, I know...
+    const auto noAllocation = [&](auto i) {
+        const bool IsLiteral = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL) != 0;
+        // copy literals directly; same for everything non-sized (that will fail non-locally anyways), or CPU execution
+        return effective_device == total_device_count() || IsLiteral || task->KernelArgs->ArgSizes[i] == 0;
+    };
+
     TRACE_START("H2D_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        const bool IsLiteral = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL) != 0;
-        if (effective_device == total_device_count()) {
+        if (noAllocation(i)) {
             // Avoid data ttransfers for CPU execution
-            devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
-        } else if (IsLiteral || task->KernelArgs->ArgSizes[i] == 0) {
-            // copy literal directly. Same for everything non-sized (that will fail non-locally anyways)
             devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
         } else {
             // allocate data.
@@ -525,7 +528,9 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
-        DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        if (!noAllocation(i)) {
+            DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        }
     }
     TRACE_END("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
