@@ -538,7 +538,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override {
     TRACE_START("init_td\n");
-    if (std::getenv("TD_ACTIVATE") == NULL) {
+    if (std::getenv("TD_ACTIVATE") != nullptr) {
       TRACE_END("init_td\n");
       return 0;
     }
@@ -615,7 +615,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Deinitialize the plugin and release the resources.
   Error deinitImpl() override {
     TRACE_START("deinit_td\n");
-    if (std::getenv("TD_ACTIVATE") == NULL) {
+    if (std::getenv("TD_ACTIVATE") != nullptr) {
       TRACE_END("deinit_td\n");
       return Plugin::success();
     }
