@@ -200,10 +200,15 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+        const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+        const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
         if (IsMapTo != 0) {
             MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
             DP("Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+        }
+        if (IsLiteral != 0) {
+            MPI_Send(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+            DP("Send literal for task (%ld%ld) with value " DPxMOD " to process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
         }
     }
 
@@ -266,17 +271,26 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgPtrs = new void*[task->KernelArgs->NumArgs];
     task->KernelArgs->ArgBasePtrs = new void*[task->KernelArgs->NumArgs];
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+        const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
+        const int64_t IsPrivate = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_PRIVATE;
+        const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         //TODO: look into datatype and allocation
-        task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
-        task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
 
-        
-        DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
-        int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+        if (IsLiteral == 0 && IsPrivate == 0) {
+            task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+            task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
+        }
         if (IsMapTo != 0) {
             MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
             DP("Recv mem for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+        }
+
+        if (IsLiteral != 0) {
+            MPI_Recv(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
+            task->KernelArgs->ArgBasePtrs[i] = task->KernelArgs->ArgPtrs[i];
+            DP("Recv literal for task (%ld%ld) with value " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
         }
 
         //Fill Mappers and Names with null

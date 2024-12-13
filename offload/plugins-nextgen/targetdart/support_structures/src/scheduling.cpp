@@ -459,11 +459,17 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     TRACE_START("H2D_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+        const bool IsLiteral = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL) != 0;
         if (effective_device == total_device_count()) {
             // Avoid data ttransfers for CPU execution
             devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
+        } else if (IsLiteral || task->KernelArgs->ArgSizes[i] == 0) {
+            // copy literal directly. Same for everything non-sized (that will fail non-locally anyways)
+            devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
         } else {
+            // allocate data.
             // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
+            // (only allocate, if there's something to allocate)
             devicePtrs[i] = DeviceOrErr->allocData(task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgPtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
         }
         const bool hasFlagTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
