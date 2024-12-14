@@ -199,16 +199,23 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
 
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
-        const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
-        if (IsMapTo != 0) {
-            MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
-            DP("Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+        if (task->KernelArgs->ArgSizes[i] > 0) {
+            //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
+            const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+            const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
+            if (IsMapTo != 0) {
+                MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+                DP("Arg %d: Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+            }
+            if (IsLiteral != 0) {
+                MPI_Send(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+                DP("Arg %d: Send literal for task (%ld%ld) with value " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+            }
         }
-        if (IsLiteral != 0) {
-            MPI_Send(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
-            DP("Send literal for task (%ld%ld) with value " DPxMOD " to process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+        else {
+            if (task->KernelArgs->ArgPtrs[i] != nullptr) {
+                DP("Arg %d: WARNING! The size=0 entry for task (%ld%ld) with value " DPxMOD " will be set to zero on the remote execution device on rank %d. You may have forgotten a map clause. :)\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+            }
         }
     }
 
@@ -277,20 +284,29 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
         //TODO: look into datatype and allocation
 
-        if (IsLiteral == 0 && IsPrivate == 0) {
-            task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
-            task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
-            DP("Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
-        }
-        if (IsMapTo != 0) {
-            MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
-            DP("Recv mem for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
-        }
+        // assume all pointers are zero first (mostly relevant for literals and empty maps)
+        task->KernelArgs->ArgPtrs[i] = nullptr;
+        task->KernelArgs->ArgBasePtrs[i] = nullptr;
 
-        if (IsLiteral != 0) {
-            MPI_Recv(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
-            task->KernelArgs->ArgBasePtrs[i] = task->KernelArgs->ArgPtrs[i];
-            DP("Recv literal for task (%ld%ld) with value " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+        if (task->KernelArgs->ArgSizes[i] > 0) {
+            if (IsLiteral == 0 && IsPrivate == 0) {
+                task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+                task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+                DP("Arg %d: Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
+            }
+            if (IsMapTo != 0) {
+                MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
+                DP("Arg %d: Recv mem for task (%ld%ld) at " DPxMOD " from process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+            }
+
+            if (IsLiteral != 0) {
+                MPI_Recv(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
+                task->KernelArgs->ArgBasePtrs[i] = task->KernelArgs->ArgPtrs[i];
+                DP("Arg %d: Recv literal for task (%ld%ld) with value " DPxMOD " from process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+            }
+        }
+        else {
+            DP("Arg %d: assumed to be nullptr for task (%ld%ld)\n", i, task->uid.rank, task->uid.id);
         }
 
         //Fill Mappers and Names with null
@@ -372,10 +388,12 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
-        if (IsMapFrom != 0) {
-            MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
-            DP("Sending result for task (%ld%ld) at " DPxMOD " \n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]));
+        if (task->KernelArgs->ArgSizes[i] > 0) {
+            int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+            if (IsMapFrom != 0) {
+                MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
+                DP("Sending result for task (%ld%ld) at " DPxMOD " \n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]));
+            }
         }
     }
 
@@ -410,10 +428,12 @@ tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
     //Receive all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
-        if (IsMapFrom != 0) {
-            MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
-            DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+        if (task->KernelArgs->ArgSizes[i] > 0) {
+            int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+            if (IsMapFrom != 0) {
+                MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
+                DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+            }
         }
     }
 
