@@ -477,13 +477,13 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         }
 
         // copied from the default kernel exec
-        DP("Entry %2d: Host=" DPxMOD ", Device=" DPxMOD ", Size=%" PRId64 ", Type=0x%" PRIx64 "\n",
-          i, DPxPTR(task->KernelArgs->ArgPtrs[i]), DPxPTR(devicePtrs[i]), task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgTypes[i]);
+        DP("(%ld%ld) Entry %2d: Host=" DPxMOD ", Device=" DPxMOD ", Size=%" PRId64 ", Type=0x%" PRIx64 "\n",
+          task->uid.rank, task->uid.id, i, DPxPTR(task->KernelArgs->ArgPtrs[i]), DPxPTR(devicePtrs[i]), task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgTypes[i]);
 
         const bool hasFlagTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
-        if (hasFlagTo && task->KernelArgs->ArgSizes[i] > 0) {        
+        if (hasFlagTo && task->KernelArgs->ArgSizes[i] > 0) {
+            DP("(%ld%ld) Entry %2d: H2D copy\n", task->uid.rank, task->uid.id, i);
             DeviceOrErr->submitData(devicePtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
-            DP("Entry %2d: H2D copy\n", i);
         }
     }
     TRACE_END("H2D_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
@@ -527,17 +527,17 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
-        if (hasFlagFrom && task->KernelArgs->ArgSizes[i] > 0) {        
+        if (hasFlagFrom && task->KernelArgs->ArgSizes[i] > 0) {
+            DP("(%ld%ld) Entry %2d: D2H copy\n", task->uid.rank, task->uid.id, i);
             DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
-            DP("Entry %2d: D2H copy\n", i);
         }
     }
 
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         if (!noAllocation(i)) {
+            DP("(%ld%ld) Entry %2d: data deletion\n", task->uid.rank, task->uid.id, i);
             DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
-            DP("Entry %2d: data deletion\n", i);
         }
     }
     TRACE_END("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);

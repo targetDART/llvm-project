@@ -288,12 +288,13 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
         task->KernelArgs->ArgPtrs[i] = nullptr;
         task->KernelArgs->ArgBasePtrs[i] = nullptr;
 
+        
+        if (IsLiteral == 0 && IsPrivate == 0 && task->KernelArgs->ArgSizes[i] + diff[i] > 0) {
+            task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+            task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            DP("Arg %d: Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
+        }
         if (task->KernelArgs->ArgSizes[i] > 0) {
-            if (IsLiteral == 0 && IsPrivate == 0) {
-                task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
-                task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
-                DP("Arg %d: Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
-            }
             if (IsMapTo != 0) {
                 MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
                 DP("Arg %d: Recv mem for task (%ld%ld) at " DPxMOD " from process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);

@@ -8,7 +8,6 @@
 #include "device.h"
 #include "omptarget.h"
 
-
 #include "llvm/ADT/SmallVector.h"
 
 std::vector<intptr_t> *_image_base_addresses;
@@ -33,7 +32,13 @@ tdrc delete_task(td_task_t *task, bool local) {
     if (!local) {
         DP("num args: %d\n",task->KernelArgs->NumArgs);
         for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
-            std::free(task->KernelArgs->ArgBasePtrs[i]);
+            const auto notLiteral = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL) == 0;
+            const auto notPrivate = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_PRIVATE) == 0;
+            if (notLiteral && notPrivate) {
+                // zero-size data should have a zero pointer, or hidden data near the base arg
+                DP("(%ld%ld) Entry %d: delete data at " DPxMOD " \n", task->uid.rank, task->uid.id, i, DPxPTR(task->KernelArgs->ArgBasePtrs[i]));
+                std::free(task->KernelArgs->ArgBasePtrs[i]);
+            }
         }
         delete task->Loc;
         delete task->KernelArgs->ArgBasePtrs;
