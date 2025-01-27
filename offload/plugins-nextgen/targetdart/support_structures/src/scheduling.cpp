@@ -456,18 +456,33 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     DP("Allocating %d arguments for task (%ld%ld)\n", task->KernelArgs->NumArgs, task->uid.rank, task->uid.id);
 
+    // note: the negation here is not that nice, I know...
+    const auto noAllocation = [&](auto i) {
+        const bool IsLiteral = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL) != 0;
+        // copy literals directly; same for everything non-sized (that will fail non-locally anyways), or CPU execution
+        return effective_device == total_device_count() || IsLiteral || task->KernelArgs->ArgSizes[i] == 0;
+    };
+
     TRACE_START("H2D_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        if (effective_device == total_device_count()) {
+        if (noAllocation(i)) {
             // Avoid data ttransfers for CPU execution
             devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
         } else {
+            // allocate data.
             // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
+            // (only allocate, if there's something to allocate)
             devicePtrs[i] = DeviceOrErr->allocData(task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgPtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
         }
+
+        // copied from the default kernel exec
+        DP("(%ld%ld) Entry %2d: Host=" DPxMOD ", Device=" DPxMOD ", Size=%" PRId64 ", Type=0x%" PRIx64 "\n",
+          task->uid.rank, task->uid.id, i, DPxPTR(task->KernelArgs->ArgPtrs[i]), DPxPTR(devicePtrs[i]), task->KernelArgs->ArgSizes[i], task->KernelArgs->ArgTypes[i]);
+
         const bool hasFlagTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
-        if (hasFlagTo) {        
+        if (hasFlagTo && task->KernelArgs->ArgSizes[i] > 0) {
+            DP("(%ld%ld) Entry %2d: H2D copy\n", task->uid.rank, task->uid.id, i);
             DeviceOrErr->submitData(devicePtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
         }
     }
@@ -512,20 +527,25 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
-        if (hasFlagFrom) {        
+        if (hasFlagFrom && task->KernelArgs->ArgSizes[i] > 0) {
+            DP("(%ld%ld) Entry %2d: D2H copy\n", task->uid.rank, task->uid.id, i);
             DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
         }
     }
 
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
-        DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        if (!noAllocation(i)) {
+            DP("(%ld%ld) Entry %2d: data deletion\n", task->uid.rank, task->uid.id, i);
+            DeviceOrErr->deleteData(devicePtrs[i], TARGET_ALLOC_DEVICE_NON_BLOCKING);
+        }
     }
     TRACE_END("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     // Synchronization on CPU 
-    if (effective_device != total_device_count())
+    if (effective_device != total_device_count()) {
         DeviceOrErr->synchronize(TargetAsyncInfo);
+    }
 
     // Restore original KernelArgs 
     delete task->KernelArgs;
