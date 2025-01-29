@@ -553,8 +553,6 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     init_task_stuctures();
 
-    init_task_stuctures();
-
     td_comm = new TD_Communicator();
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
