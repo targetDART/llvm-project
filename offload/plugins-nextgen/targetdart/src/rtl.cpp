@@ -16,7 +16,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <ffi.h>
-#include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
 #include "PluginManager.h"
@@ -218,6 +217,11 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       : GenericDeviceTy(Plugin, DeviceId, NumDevices, targetDARTGridValues) {
         deviceID = DeviceId;
         td_sched = sched_man;
+        if (DeviceId < PM->getPhysicalDevices()) {
+          physical_device = PM->getDevice(effective_device);
+          if (!DeviceOrErr)
+            FATAL_MESSAGE(effective_device, "%s", toString(DeviceOrErr.takeError()).c_str());
+        }
       }
 
   /// Set the context of the device if needed, before calling device-specific
@@ -320,6 +324,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Get the total device memory size
   Error getDeviceMemorySize(uint64_t &DSize)override {
     DSize = 0;
+    if (DeviceId < PM->getPhysicalDevices()) {
+      
+    }
     return Plugin::success();
   }
 
@@ -483,6 +490,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   int32_t deviceID;
 
   TD_Scheduling_Manager *td_sched;
+
+  DeviceTy &physical_device;
 
   /// Grid values for the targetDART plugin.
   static constexpr GV targetDARTGridValues = {
