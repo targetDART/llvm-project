@@ -194,9 +194,11 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 schedule_man->notify_task_completion(uid, false);
             }
 
-            td_task_t *task = new td_task_t;
-            if (comm_man->test_and_receive_task(task) == TARGETDART_SUCCESS) {
-                schedule_man->add_remote_task(task, task->affinity);
+            //td_task_t *task = new td_task_t;
+            td_task_t task;
+            if (comm_man->test_and_receive_task(&task) == TARGETDART_SUCCESS) {
+                td_task_t *new_task = new td_task_t(task);
+                schedule_man->add_remote_task(new_task, new_task->affinity);
             }
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
