@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <iostream>
 #include <omp.h>
+#include <ostream>
 #include <string.h>
 #include <unistd.h>
 #include <ffi.h>
@@ -491,6 +492,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       td_sched->remove_data_mapping(deviceID, TgtPtr);
+      std::cout << physical_device << std::endl;
       return physical_device->free(TgtPtr, Kind);
     }
     return OFFLOAD_SUCCESS;

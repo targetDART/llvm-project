@@ -467,8 +467,14 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         if (noAllocation(i)) {
-            // Avoid data transfers for CPU execution
-            devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
+            if (task->KernelArgs->ArgSizes[i] == 0) {
+                // Avoid data transfers for pre transfered data
+                devicePtrs[i] = get_data_mapping(Device, task->KernelArgs->ArgPtrs[i]);
+            } 
+            if (devicePtrs[i] == nullptr) {                
+                // Avoid data transfers for CPU execution
+                devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
+            }
         } else {
             // allocate data.
             // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
