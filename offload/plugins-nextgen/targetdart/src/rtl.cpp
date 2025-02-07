@@ -16,6 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ffi.h>
+#include "PluginInterface.h"
 #include "Shared/Environment.h"
 #include "omptarget.h"
 #include "PluginManager.h"
@@ -215,15 +216,16 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// devices in the plugin and the grid values for that kind of device.
   targetDARTDeviceTy(GenericPluginTy &Plugin, int32_t DeviceId, int32_t NumDevices, TD_Scheduling_Manager *sched_man)
       : GenericDeviceTy(Plugin, DeviceId, NumDevices, targetDARTGridValues) {
-        deviceID = DeviceId;
-        td_sched = sched_man;
-        if (deviceID < PM->getPhysicalDevices()) {
-          auto DeviceOrErr = PM->getDevice(DeviceId);
-          if (!DeviceOrErr)
-            FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
-          physical_device = &DeviceOrErr->RTL->getDevice(DeviceId);
-        }
-      }
+    deviceID = DeviceId;
+    td_sched = sched_man;
+    DP("Mapping for device: %d\n", DeviceId);
+    /* if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+    } */
+  }
 
   /// Set the context of the device if needed, before calling device-specific
   /// functions. Plugins may implement this function as a no-op if not needed.
@@ -326,6 +328,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error getDeviceMemorySize(uint64_t &DSize)override {
     DSize = 0;
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->getDeviceMemorySize(DSize);
     }
     return Plugin::success();
@@ -337,6 +343,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// requested size.
   Error memoryVAMap(void **Addr, void *VAddr, size_t *RSize)override {
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->memoryVAMap(Addr, VAddr, RSize);
     }
     return Plugin::success();
@@ -345,6 +355,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// De-allocates device memory and unmaps the virtual address \p VAddr
   Error memoryVAUnMap(void *VAddr, size_t Size) override {    
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->memoryVAUnMap(VAddr, Size);
     }
     return Plugin::success();
@@ -354,6 +368,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// API and return the device accessible pointer.
   Expected<void *> dataLockImpl(void *HstPtr, int64_t Size) override {     
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->dataLockImpl(HstPtr, Size);
     }
     return nullptr;
@@ -362,6 +380,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Unlock a previously locked host buffer starting at \p HstPtr.
   Error dataUnlockImpl(void *HstPtr) override { 
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(this->deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->dataUnlockImpl(HstPtr);
     }  
     return Plugin::success();
@@ -372,6 +394,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// the device accessible pointer and the size of the original pinned buffer.
   Expected<bool> isPinnedPtrImpl(void *HstPtr, void *&BaseHstPtr, void *&BaseDevAccessiblePtr, size_t &BaseSize) const override {
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->isPinnedPtrImpl(HstPtr, BaseHstPtr, BaseDevAccessiblePtr, BaseSize);
     } 
     return false;
@@ -383,10 +409,12 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
-        FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
-      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
+      td_sched->add_data_mapping(deviceID, TgtPtr, HstPtr);
       return res;
     } 
     return Plugin::success();
@@ -398,8 +426,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
-        FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
-      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       auto res = physical_device->dataRetrieve(HstPtr, TgtPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
       return res;
@@ -414,8 +443,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
-        FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
-      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       auto res = physical_device->dataExchange(SrcPtr, DstDev, DstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
       return res;
@@ -444,6 +474,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *ptr, TargetAllocTy Kind) override {
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       return physical_device->allocate(Size, ptr, Kind);
     }
     return nullptr;
@@ -452,6 +486,11 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
     if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      td_sched->remove_data_mapping(deviceID, TgtPtr);
       return physical_device->free(TgtPtr, Kind);
     }
     return OFFLOAD_SUCCESS;
@@ -494,7 +533,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error obtainInfoImpl(InfoQueueTy &Info) override {
     // TODO: Add more information about the device.
     Info.add("targetDART plugin\n");
-    Info.add("targetDART OpenMP Device Number\n", DeviceId);
+    Info.add("targetDART OpenMP Device Number\n", deviceID);
 
     return Plugin::success();
   }
@@ -533,8 +572,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   int32_t deviceID;
 
   TD_Scheduling_Manager *td_sched;
-
-  GenericDeviceTy *physical_device;
 
   /// Grid values for the targetDART plugin.
   static constexpr GV targetDARTGridValues = {

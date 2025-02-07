@@ -467,7 +467,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         if (noAllocation(i)) {
-            // Avoid data ttransfers for CPU execution
+            // Avoid data transfers for CPU execution
             devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
         } else {
             // allocate data.
@@ -554,4 +554,45 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     TRACE_END("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     return TARGETDART_SUCCESS;    
+}
+
+void TD_Scheduling_Manager::add_data_mapping(int32_t deviceID, void *TgtPtr, const void* HstPtr) {
+    TRACE_START("Add_data_to_mapping\n");
+    std::unique_lock<std::mutex> lock(map_mutex);
+
+    if (data_mapping.find(deviceID) == data_mapping.end()) {
+        data_mapping.insert({deviceID, {}});
+    }
+
+    data_mapping.at(deviceID).insert({HstPtr, TgtPtr});
+
+    TRACE_END("Add_data_to_mapping\n");
+}
+
+void TD_Scheduling_Manager::remove_data_mapping(int32_t deviceID, void *TgtPtr) {
+    TRACE_START("Remove_data_from_mapping\n");
+    std::unique_lock<std::mutex> lock(map_mutex);
+
+    for (auto entry : data_mapping.at(deviceID)) {
+        if (entry.second == TgtPtr) {
+            data_mapping.at(deviceID).erase(entry.first);
+            break;
+        }
+    }
+
+    TRACE_END("Remove_data_from_mapping\n");
+}
+
+void *TD_Scheduling_Manager::get_data_mapping(int32_t deviceID, const void* HstPtr) {
+    TRACE_START("Get_data_from_mapping\n");
+    std::unique_lock<std::mutex> lock(map_mutex);
+    void *res = nullptr;
+
+    if (data_mapping.find(deviceID) != data_mapping.end()) {
+        if (data_mapping.at(deviceID).find(HstPtr) != data_mapping.at(deviceID).end()) {
+            res = data_mapping.at(deviceID).at(HstPtr);
+        }
+    }
+    TRACE_END("Get_data_from_mapping\n");
+    return res;
 }
