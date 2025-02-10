@@ -195,8 +195,14 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             }
 
             td_task_t *task = new td_task_t;
+            bool keep = false;
             if (comm_man->test_and_receive_task(task) == TARGETDART_SUCCESS) {
                 schedule_man->add_remote_task(task, task->affinity);
+                keep = true;
+            }
+
+            if (!keep) {
+                delete task;
             }
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
