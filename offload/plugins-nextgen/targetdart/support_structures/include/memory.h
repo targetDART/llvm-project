@@ -39,11 +39,8 @@ class TD_Memory_Manager {
         // Get the size for a host device mapping on a given device
         size_t get_data_mapping_size(const void* HstPtr);
 
-        // Remove host device pointer pair from mapping
-        void remove_data_mapping(int32_t deviceID, void *TgtPtr);
-
         // Add device data to grouping
-        void register_allocation(void* TgtPtr_key, void* TgtPtr_payload, size_t size);
+        void register_allocation(void* TgtPtr_key, void* TgtPtr_payload, size_t size, int32_t deviceID);
 
         // Remove device data from grouping
         void register_deallocation(void *TgtPtr);

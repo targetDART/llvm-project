@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory.h>
 #include <thread>
 #include <vector>
 
@@ -43,6 +44,8 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
     repartition = false;  
+
+    memory_manager = TD_Memory_Manager(physical_device_count);
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -469,7 +472,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         if (noAllocation(i)) {
             if (task->KernelArgs->ArgSizes[i] == 0) {
                 // Avoid data transfers for pre transfered data
-                devicePtrs[i] = get_data_mapping(Device, task->KernelArgs->ArgPtrs[i]);
+                devicePtrs[i] = memory_manager.get_data_mapping(effective_device, task->KernelArgs->ArgPtrs[i]);
             } 
             if (devicePtrs[i] == nullptr) {                
                 // Avoid data transfers for CPU execution
@@ -562,43 +565,6 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     return TARGETDART_SUCCESS;    
 }
 
-void TD_Scheduling_Manager::add_data_mapping(int32_t deviceID, void *TgtPtr, const void* HstPtr) {
-    TRACE_START("Add_data_to_mapping\n");
-    std::unique_lock<std::mutex> lock(map_mutex);
-
-    if (data_mapping.find(deviceID) == data_mapping.end()) {
-        data_mapping.insert({deviceID, {}});
-    }
-
-    data_mapping.at(deviceID).insert({HstPtr, TgtPtr});
-
-    TRACE_END("Add_data_to_mapping\n");
-}
-
-void TD_Scheduling_Manager::remove_data_mapping(int32_t deviceID, void *TgtPtr) {
-    TRACE_START("Remove_data_from_mapping\n");
-    std::unique_lock<std::mutex> lock(map_mutex);
-
-    for (auto entry : data_mapping.at(deviceID)) {
-        if (entry.second == TgtPtr) {
-            data_mapping.at(deviceID).erase(entry.first);
-            break;
-        }
-    }
-
-    TRACE_END("Remove_data_from_mapping\n");
-}
-
-void *TD_Scheduling_Manager::get_data_mapping(int32_t deviceID, const void* HstPtr) {
-    TRACE_START("Get_data_from_mapping\n");
-    std::unique_lock<std::mutex> lock(map_mutex);
-    void *res = nullptr;
-
-    if (data_mapping.find(deviceID) != data_mapping.end()) {
-        if (data_mapping.at(deviceID).find(HstPtr) != data_mapping.at(deviceID).end()) {
-            res = data_mapping.at(deviceID).at(HstPtr);
-        }
-    }
-    TRACE_END("Get_data_from_mapping\n");
-    return res;
+TD_Memory_Manager &TD_Scheduling_Manager::getMemoryManager() {
+    return memory_manager;
 }

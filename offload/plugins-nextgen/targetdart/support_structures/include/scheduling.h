@@ -4,6 +4,7 @@
 #include "queue.h"
 #include "task.h"
 #include "communication.h"
+#include "memory.h"
 
 #include "PluginManager.h"
 #include <atomic>
@@ -56,11 +57,8 @@ private:
     // Stores the next id for any created task.
     std::atomic<int64_t> local_id_tracker;
 
-    // internal multi-device mapping of data, only works node local
-    std::unordered_map<int32_t, std::unordered_map<const void *, void *>> data_mapping;
-
-    // Mutex for the data mapping
-    std::mutex map_mutex;
+    // Memory manager for data mapping
+    TD_Memory_Manager memory_manager;
 
     // The uids of replicated tasks to ensure they won`t be executed twice
     // tasks in this set are defined on a remote process
@@ -146,15 +144,8 @@ public:
     // Returns the total number of devices
     int32_t total_device_count();
 
-    // Add host device pointer pair to mapping
-    void add_data_mapping(int32_t deviceID, void *TgtPtr, const void* HstPtr);
-
-    // Get a device ptr for a host device mapping on a given device
-    void *get_data_mapping(int32_t deviceID, const void* HstPtr);
-
-    // Remove host device pointer pair from mapping
-    void remove_data_mapping(int32_t deviceID, void *TgtPtr);
-
+    // Returns the memory manager
+    TD_Memory_Manager &get_memory_manager();
 };
 
 

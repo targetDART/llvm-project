@@ -415,9 +415,22 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
-      td_sched->add_data_mapping(deviceID, TgtPtr, HstPtr);
+      td_sched->get_memory_manager.add_data_mapping(TgtPtr, HstPtr);
       return res;
-    } 
+    } else {
+      td_sched->get_memory_manager.add_data_mapping(TgtPtr, HstPtr);
+      // handle other devices
+      for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+        auto DeviceOrErr = PM->getDevice(i);
+        void *real_TgtPtr = td_sched->get_memory_manager.get_data_mapping(i, HstPtr);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
+        AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+        GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
+        auto res = physical_device->dataSubmit(real_TgtPtr, HstPtr, Size, TargetAsyncInfo);
+        DeviceOrErr->synchronize(TargetAsyncInfo);
+      }
+    }
     return Plugin::success();
   }
 
@@ -479,7 +492,26 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      return physical_device->allocate(Size, ptr, Kind);
+      void *ptr = physical_device->allocate(Size, ptr, Kind);
+      td_sched->get_memory_manager().register_allocation(ptr, ptr, Size, deviceID);
+      return ptr;
+    } else {
+      // initialize base pointer + allocation
+      auto DeviceOrErr = PM->getDevice(0);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(0, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
+      void *base_ptr = physical_device->allocate(Size, ptr, Kind);
+      td_sched->get_memory_manager().register_allocation(base_ptr, base_ptr, Size, 0);  
+      // handle other devices
+      for (int i = 1; i < PM->getPhysicalDevices(); i++) {
+        DeviceOrErr = PM->getDevice(i);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+        physical_device = &DeviceOrErr->RTL->getDevice(i);
+        void *ptr = physical_device->allocate(Size, ptr, Kind);
+        td_sched->get_memory_manager().register_allocation(base_ptr, ptr, Size, i);      
+      }
     }
     return nullptr;
   }
@@ -491,9 +523,19 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      td_sched->remove_data_mapping(deviceID, TgtPtr);
+      td_sched->get_memory_manager().register_deallocation(TgtPtr);
       return physical_device->free(TgtPtr, Kind);
-    }
+    } else {
+      // handle other devices
+      for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+        auto DeviceOrErr = PM->getDevice(i);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+        GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
+        physical_device->free(TgtPtr, Kind);
+      }
+      td_sched->get_memory_manager().register_deallocation(TgtPtr);
+    } 
     return OFFLOAD_SUCCESS;
   }
 
