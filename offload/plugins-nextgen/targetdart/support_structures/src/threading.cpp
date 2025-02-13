@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <string>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 //removes spaces from text
@@ -90,7 +91,8 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placemen
 }
 
 // pins 
-void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> *work, int deviceID) {
+template<typename... Args>
+void __pin_and_workload(std::thread* thread, int core, std::function<void(Args...)> *work, Args... vargs) {
     if (core != -1) {
         
         int s;
@@ -120,7 +122,7 @@ void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> 
     }
 
     //Do work
-    (*work)(deviceID);
+    (*work)(vargs...);
 }
 
 
@@ -131,18 +133,25 @@ void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> 
 */
 tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
 
-    DP("Creating %zu Threads\n", assignments->size());
+    //DP("Creating %zu Threads\n", assignments->size());
 
-    scheduler_th = std::thread(__pin_and_workload, &scheduler_th, (*assignments)[0], &schedule_thread_loop, -1);
+    scheduler_th = std::thread(__pin_and_workload<int>, &scheduler_th, (*assignments)[0], &schedule_thread_loop, -1);
 
-    receiver_th = std::thread(__pin_and_workload, &receiver_th, (*assignments)[1], &receiver_thread_loop, -1);
+    receiver_th = std::thread(__pin_and_workload<int>, &receiver_th, (*assignments)[1], &receiver_thread_loop, -1);
 
-    executor_th.resize(physical_device_count + 1);
+    executor_th.resize(executors_per_device * (physical_device_count) + 1);
+    DP("Creating %zu Threads\n", executor_th.size() + 2);
 
-    //initialize all offloading threads
-    for (int i = 0; i <= physical_device_count; i++) {
-        executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+2], &exec_thread_loop, i);
+    //initialize all device offloading threads
+    for (int i = 0; i < (int)executor_th.size() - 1; i++) {
+        int device = i / executors_per_device;
+        executor_th.at(i) = std::thread(__pin_and_workload<int, int>, &executor_th.at(i), (*assignments)[device+2], &exec_thread_loop, device, i);
     }
+
+    // initalize cpu executor
+    int idx = executor_th.size() - 1;
+    int cpu_device = idx / executors_per_device;
+    executor_th.at(idx) = std::thread(__pin_and_workload<int, int>, &executor_th.at(idx), (*assignments)[cpu_device + 2], &exec_thread_loop, cpu_device, idx);
 
     DP("spawned management threads\n");
     return TARGETDART_SUCCESS;
@@ -153,6 +162,11 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
     schedule_man = sched;
     comm_man = comm;
+
+    if (auto env_executors_per_device = std::getenv("TD_EXECUTORS_PER_DEVICE")) {
+        executors_per_device = std::max(std::atoi(env_executors_per_device), 1);
+    }
+    DP("Starting %d executors per device\n", executors_per_device);
 
     schedule_thread_loop = [&] (int deviceID) {
         TRACE_START("sched_loop\n");
@@ -205,14 +219,14 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         TRACE_END("recv_loop\n");
     };
 
-    exec_thread_loop = [&] (int deviceID) {
+    exec_thread_loop = [&] (int deviceID, int executorID) {
         TRACE_START("exec_loop\n");
         int iter = 0;
         int phys_device_id = deviceID;
         if (deviceID == physical_device_count) {
             phys_device_id = schedule_man->total_device_count();
         }
-        DP("Starting executor thread for device %d\n", phys_device_id);
+        DP("Starting executor thread %d for device %d\n", executorID, phys_device_id);
         while (!scheduler_done.load() || !is_finalizing || !schedule_man->is_empty()) {
             td_task_t *task;
             iter++;
@@ -222,7 +236,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 DP("remaining load %ld\n", schedule_man->get_active_tasks());
             }
             if (schedule_man->get_task(deviceID, &task) == TARGETDART_SUCCESS) {
-                DP("start execution of task (%ld%ld) on device %d\n", task->uid.rank, task->uid.id, phys_device_id);
+                DP("start execution of task (%ld%ld) on device %d, executor %d\n", task->uid.rank, task->uid.id, phys_device_id, executorID);
                 //execute the task on your own device
                 int return_code = schedule_man->invoke_task(task, phys_device_id);
                 task->return_code = return_code;

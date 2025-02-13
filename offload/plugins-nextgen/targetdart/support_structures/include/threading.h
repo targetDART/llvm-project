@@ -20,6 +20,8 @@ private:
     bool is_finalizing = false;
 
     int32_t physical_device_count;
+    // Can be set with TD_EXECUTORS_PER_DEVICE env
+    int32_t executors_per_device = 1;
 
     std::atomic<bool> scheduler_done{false};
 
@@ -39,7 +41,7 @@ private:
     * The parameter ptr defines the target device this thread is assigned to. 
     * The device id defines which affinities are relevant and which queues are accessible.
     */
-    std::function<void(int)> exec_thread_loop;
+    std::function<void(int,int)> exec_thread_loop;
 
     /**
     * Reads the environment variable TD_MANAGEMENT

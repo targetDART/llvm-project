@@ -558,13 +558,16 @@ struct CUDADeviceTy : public GenericDeviceTy {
     switch (Kind) {
     case TARGET_ALLOC_DEFAULT:
     case TARGET_ALLOC_DEVICE:
+      DP("TARGET_ALLOC_DEFAULT/TARGET_ALLOC_DEVICE\n");
       Res = cuMemAlloc(&DevicePtr, Size);
       MemAlloc = (void *)DevicePtr;
       break;
     case TARGET_ALLOC_HOST:
+      DP("TARGET_ALLOC_HOST\n");
       Res = cuMemAllocHost(&MemAlloc, Size);
       break;
     case TARGET_ALLOC_SHARED:
+      DP("TARGET_ALLOC_SHARED\n");
       Res = cuMemAllocManaged(&DevicePtr, Size, CU_MEM_ATTACH_GLOBAL);
       MemAlloc = (void *)DevicePtr;
       break;
@@ -574,6 +577,9 @@ struct CUDADeviceTy : public GenericDeviceTy {
         break;
       if ((Res = cuMemAllocAsync(&DevicePtr, Size, Stream)))
         break;
+      unsigned long long stream_id;
+      cuStreamGetId(Stream, &stream_id);
+      DP("TARGET_ALLOC_DEVICE_NON_BLOCKING, stream_id: %llu\n", stream_id);
       cuStreamSynchronize(Stream);
       Res = cuStreamDestroy(Stream);
       MemAlloc = (void *)DevicePtr;
@@ -1285,6 +1291,10 @@ Error CUDAKernelTy::launchImpl(GenericDeviceTy &GenericDevice,
   CUstream Stream;
   if (auto Err = CUDADevice.getStream(AsyncInfoWrapper, Stream))
     return Err;
+
+  unsigned long long stream_id;
+  cuStreamGetId(Stream, &stream_id);
+  DP("Launching CUDA kernel with stream_id %llu\n", stream_id);
 
   uint32_t MaxDynCGroupMem =
       std::max(KernelArgs.DynCGroupMem, GenericDevice.getDynamicMemorySize());
