@@ -28,8 +28,9 @@ bool Set_Wrapper::task_exists(td_uid_t uid) {
     return false;
 }
 
-TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator) {
+TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager) {
     physical_device_count = external_device_count;
+    this->memory_manager = memory_manager;
 
     comm_man = communicator;
 
@@ -43,9 +44,7 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     // Defines the order in which the corresponding queues are accessed during task execution
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
-    repartition = false;  
-
-    memory_manager = TD_Memory_Manager(physical_device_count);
+    repartition = false;
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -472,7 +471,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         if (noAllocation(i)) {
             if (task->KernelArgs->ArgSizes[i] == 0) {
                 // Avoid data transfers for pre transfered data
-                devicePtrs[i] = memory_manager.get_data_mapping(effective_device, task->KernelArgs->ArgPtrs[i]);
+                devicePtrs[i] = memory_manager->get_data_mapping(effective_device, task->KernelArgs->ArgPtrs[i]);
             } 
             if (devicePtrs[i] == nullptr) {                
                 // Avoid data transfers for CPU execution
@@ -565,6 +564,6 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     return TARGETDART_SUCCESS;    
 }
 
-TD_Memory_Manager &TD_Scheduling_Manager::getMemoryManager() {
+TD_Memory_Manager *TD_Scheduling_Manager::get_memory_manager() {
     return memory_manager;
 }

@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <memory.h>
 #include <omp.h>
 #include <ostream>
 #include <string.h>
@@ -415,14 +416,14 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
-      td_sched->get_memory_manager.add_data_mapping(TgtPtr, HstPtr);
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       return res;
-    } else {
-      td_sched->get_memory_manager.add_data_mapping(TgtPtr, HstPtr);
+    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       // handle other devices
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
         auto DeviceOrErr = PM->getDevice(i);
-        void *real_TgtPtr = td_sched->get_memory_manager.get_data_mapping(i, HstPtr);
+        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(i, HstPtr);
         if (!DeviceOrErr)
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
         AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
@@ -487,31 +488,33 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *ptr, TargetAllocTy Kind) override {
+    DP("Num Physical devices: %d\n", PM->getPhysicalDevices());
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      void *ptr = physical_device->allocate(Size, ptr, Kind);
-      td_sched->get_memory_manager().register_allocation(ptr, ptr, Size, deviceID);
-      return ptr;
-    } else {
+      void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+      td_sched->get_memory_manager()->register_allocation(ptr_d, ptr_d, Size, deviceID);
+      return ptr_d;
+    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
       // initialize base pointer + allocation
       auto DeviceOrErr = PM->getDevice(0);
       if (!DeviceOrErr)
         FATAL_MESSAGE(0, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
       void *base_ptr = physical_device->allocate(Size, ptr, Kind);
-      td_sched->get_memory_manager().register_allocation(base_ptr, base_ptr, Size, 0);  
+      td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, 0);  
       // handle other devices
       for (int i = 1; i < PM->getPhysicalDevices(); i++) {
         DeviceOrErr = PM->getDevice(i);
         if (!DeviceOrErr)
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
         physical_device = &DeviceOrErr->RTL->getDevice(i);
-        void *ptr = physical_device->allocate(Size, ptr, Kind);
-        td_sched->get_memory_manager().register_allocation(base_ptr, ptr, Size, i);      
+        void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+        td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
       }
+      return base_ptr;
     }
     return nullptr;
   }
@@ -523,18 +526,18 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      td_sched->get_memory_manager().register_deallocation(TgtPtr);
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
       return physical_device->free(TgtPtr, Kind);
-    } else {
+    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
       // handle other devices
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
         auto DeviceOrErr = PM->getDevice(i);
         if (!DeviceOrErr)
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
         GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
-        physical_device->free(TgtPtr, Kind);
+        physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
       }
-      td_sched->get_memory_manager().register_deallocation(TgtPtr);
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
     } 
     return OFFLOAD_SUCCESS;
   }
@@ -685,8 +688,9 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     init_task_stuctures();
 
-    td_comm = new TD_Communicator();
-    td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
+    td_mem = new TD_Memory_Manager(external_devices);
+    td_comm = new TD_Communicator(td_mem);
+    td_sched = new TD_Scheduling_Manager(external_devices, td_comm, td_mem);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
 
 #ifdef TD_TRACE
@@ -761,8 +765,9 @@ struct targetDARTPluginTy : public GenericPluginTy {
 #endif // TD_TRACE
 
     delete td_thread;
-    delete td_comm;
     delete td_sched;
+    delete td_comm;
+    delete td_mem;
     TRACE_END("deinit_td\n");
     return Plugin::success();
   }
@@ -831,6 +836,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   }
 
   private:
+    TD_Memory_Manager *td_mem;
     TD_Communicator *td_comm;
     TD_Scheduling_Manager *td_sched;
     TD_Thread_Manager *td_thread;
