@@ -1321,9 +1321,10 @@ Expected<void *> GenericDeviceTy::dataAlloc(int64_t Size, void *HostPtr,
 
   switch (Kind) {
   case TARGET_ALLOC_DEFAULT:
+  case TARGET_ALLOC_DEVICE_NON_BLOCKING:
   case TARGET_ALLOC_DEVICE:
     if (MemoryManager) {
-      Alloc = MemoryManager->allocate(Size, HostPtr);
+      Alloc = MemoryManager->allocate(Size, HostPtr, Kind);
       if (!Alloc)
         return Plugin::error("Failed to allocate from memory manager");
       break;
@@ -1331,7 +1332,6 @@ Expected<void *> GenericDeviceTy::dataAlloc(int64_t Size, void *HostPtr,
     [[fallthrough]];
   case TARGET_ALLOC_HOST:
   case TARGET_ALLOC_SHARED:
-  case TARGET_ALLOC_DEVICE_NON_BLOCKING:
     Alloc = allocate(Size, HostPtr, Kind);
     if (!Alloc)
       return Plugin::error("Failed to allocate from device allocator");
@@ -1409,9 +1409,10 @@ Error GenericDeviceTy::dataDelete(void *TgtPtr, TargetAllocTy Kind) {
   int Res;
   switch (Kind) {
   case TARGET_ALLOC_DEFAULT:
+  case TARGET_ALLOC_DEVICE_NON_BLOCKING:
   case TARGET_ALLOC_DEVICE:
     if (MemoryManager) {
-      Res = MemoryManager->free(TgtPtr);
+      Res = MemoryManager->free(TgtPtr, Kind);
       if (Res)
         return Plugin::error(
             "Failure to deallocate device pointer %p via memory manager",
@@ -1421,7 +1422,6 @@ Error GenericDeviceTy::dataDelete(void *TgtPtr, TargetAllocTy Kind) {
     [[fallthrough]];
   case TARGET_ALLOC_HOST:
   case TARGET_ALLOC_SHARED:
-  case TARGET_ALLOC_DEVICE_NON_BLOCKING:
     Res = free(TgtPtr, Kind);
     if (Res)
       return Plugin::error(
