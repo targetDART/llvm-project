@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <memory.h>
 #include <omp.h>
 #include <string.h>
 #include <unistd.h>
@@ -216,9 +217,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// devices in the plugin and the grid values for that kind of device.
   targetDARTDeviceTy(GenericPluginTy &Plugin, int32_t DeviceId, int32_t NumDevices, TD_Scheduling_Manager *sched_man)
       : GenericDeviceTy(Plugin, DeviceId, NumDevices, targetDARTGridValues) {
-        deviceID = DeviceId;
-        td_sched = sched_man;
-      }
+    deviceID = DeviceId;
+    td_sched = sched_man;
+    DP("Mapping for device: %d\n", DeviceId);
+  }
 
   /// Set the context of the device if needed, before calling device-specific
   /// functions. Plugins may implement this function as a no-op if not needed.
@@ -320,6 +322,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Get the total device memory size
   Error getDeviceMemorySize(uint64_t &DSize)override {
     DSize = 0;
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      return physical_device->getDeviceMemorySize(DSize);
+    }
     return Plugin::success();
   }
 
@@ -328,26 +337,50 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// \p RSize contains the actual size which can be equal or larger than the
   /// requested size.
   Error memoryVAMap(void **Addr, void *VAddr, size_t *RSize)override {
-    DP("targetDART devices cannot perform memory management\n");    
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      return physical_device->memoryVAMap(Addr, VAddr, RSize);
+    }
     return Plugin::success();
   }
 
   /// De-allocates device memory and unmaps the virtual address \p VAddr
   Error memoryVAUnMap(void *VAddr, size_t Size) override {    
-    DP("targetDART devices cannot perform memory management\n");    
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      return physical_device->memoryVAUnMap(VAddr, Size);
+    }
     return Plugin::success();
   }
 
   /// Lock the host buffer \p HstPtr with \p Size bytes with the vendor-specific
   /// API and return the device accessible pointer.
   Expected<void *> dataLockImpl(void *HstPtr, int64_t Size) override {     
-    DP("targetDART devices cannot perform memory management providing nullptr\n");    
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      return physical_device->dataLockImpl(HstPtr, Size);
+    }
     return nullptr;
   }
 
   /// Unlock a previously locked host buffer starting at \p HstPtr.
   Error dataUnlockImpl(void *HstPtr) override { 
-    DP("targetDART devices cannot perform memory management\n");    
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(this->deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      return physical_device->dataUnlockImpl(HstPtr);
+    }  
     return Plugin::success();
   }
 
@@ -355,18 +388,59 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// underlying vendor-specific runtime (if any). Retrieve the host pointer,
   /// the device accessible pointer and the size of the original pinned buffer.
   Expected<bool> isPinnedPtrImpl(void *HstPtr, void *&BaseHstPtr, void *&BaseDevAccessiblePtr, size_t &BaseSize) const override {
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      return physical_device->isPinnedPtrImpl(HstPtr, BaseHstPtr, BaseDevAccessiblePtr, BaseSize);
+    } 
     return false;
   }
 
   /// Submit data to the device (host to device transfer).
   Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
                        AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
+      DeviceOrErr->synchronize(TargetAsyncInfo);
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      return res;
+    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      // handle other devices
+      for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+        auto DeviceOrErr = PM->getDevice(i);
+        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(i, HstPtr);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
+        AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+        GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
+        auto res = physical_device->dataSubmit(real_TgtPtr, HstPtr, Size, TargetAsyncInfo);
+        DeviceOrErr->synchronize(TargetAsyncInfo);
+      }
+    }
     return Plugin::success();
   }
 
   /// Retrieve data from the device (device to host transfer).
   Error dataRetrieveImpl(void *HstPtr, const void *TgtPtr, int64_t Size,
                          AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      auto res = physical_device->dataRetrieve(HstPtr, TgtPtr, Size, TargetAsyncInfo);
+      DeviceOrErr->synchronize(TargetAsyncInfo);
+      return res;
+    }
     return Plugin::success();
   }
 
@@ -374,7 +448,16 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// function is only valid if GenericPlugin::isDataExchangable() passing the
   /// two devices returns true.
   Error dataExchangeImpl(const void *SrcPtr, GenericDeviceTy &DstDev, void *DstPtr, int64_t Size, AsyncInfoWrapperTy &AsyncInfoWrapper) override {
-    DP("Data management not supported for targetDART devices, exchange\n");
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      auto res = physical_device->dataExchange(SrcPtr, DstDev, DstPtr, Size, TargetAsyncInfo);
+      DeviceOrErr->synchronize(TargetAsyncInfo);
+      return res;
+    }
     return Plugin::error("Data management not supported for targetDART devices, exchange\n");
   }
 
@@ -397,13 +480,58 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   }
 
   /// Allocate memory. Use std::malloc in all cases.
-  void *allocate(size_t Size, void *, TargetAllocTy Kind) override {
-
+  void *allocate(size_t Size, void *ptr, TargetAllocTy Kind) override {
+    DP("Num Physical devices: %d\n", PM->getPhysicalDevices());
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+      td_sched->get_memory_manager()->register_allocation(ptr_d, ptr_d, Size, deviceID);
+      return ptr_d;
+    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
+      // initialize base pointer + allocation
+      auto DeviceOrErr = PM->getDevice(0);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(0, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
+      void *base_ptr = physical_device->allocate(Size, ptr, Kind);
+      td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, 0);  
+      // handle other devices
+      for (int i = 1; i < PM->getPhysicalDevices(); i++) {
+        DeviceOrErr = PM->getDevice(i);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+        physical_device = &DeviceOrErr->RTL->getDevice(i);
+        void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+        td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+      }
+      return base_ptr;
+    }
     return nullptr;
   }
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
+    if (deviceID < PM->getPhysicalDevices()) {
+      auto DeviceOrErr = PM->getDevice(deviceID);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+      return physical_device->free(TgtPtr, Kind);
+    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
+      // handle other devices
+      for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+        auto DeviceOrErr = PM->getDevice(i);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+        GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
+        physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
+      }
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+    } 
     return OFFLOAD_SUCCESS;
   }
 
@@ -444,7 +572,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error obtainInfoImpl(InfoQueueTy &Info) override {
     // TODO: Add more information about the device.
     Info.add("targetDART plugin\n");
-    Info.add("targetDART OpenMP Device Number\n", DeviceId);
+    Info.add("targetDART OpenMP Device Number\n", deviceID);
 
     return Plugin::success();
   }
@@ -553,8 +681,9 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     init_task_stuctures();
 
-    td_comm = new TD_Communicator();
-    td_sched = new TD_Scheduling_Manager(external_devices, td_comm);
+    td_mem = new TD_Memory_Manager(external_devices);
+    td_comm = new TD_Communicator(td_mem);
+    td_sched = new TD_Scheduling_Manager(external_devices, td_comm, td_mem);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
 
 #ifdef TD_TRACE
@@ -629,8 +758,9 @@ struct targetDARTPluginTy : public GenericPluginTy {
 #endif // TD_TRACE
 
     delete td_thread;
-    delete td_comm;
     delete td_sched;
+    delete td_comm;
+    delete td_mem;
     TRACE_END("deinit_td\n");
     return Plugin::success();
   }
@@ -699,6 +829,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
   }
 
   private:
+    TD_Memory_Manager *td_mem;
     TD_Communicator *td_comm;
     TD_Scheduling_Manager *td_sched;
     TD_Thread_Manager *td_thread;

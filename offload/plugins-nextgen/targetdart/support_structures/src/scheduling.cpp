@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory.h>
 #include <thread>
 #include <vector>
 
@@ -27,8 +28,9 @@ bool Set_Wrapper::task_exists(td_uid_t uid) {
     return false;
 }
 
-TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator) {
+TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager) {
     physical_device_count = external_device_count;
+    this->memory_manager = memory_manager;
 
     comm_man = communicator;
 
@@ -42,7 +44,7 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     // Defines the order in which the corresponding queues are accessed during task execution
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
-    repartition = false;  
+    repartition = false;
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -467,8 +469,14 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Allocate data on the device and transfer it from host to device if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         if (noAllocation(i)) {
-            // Avoid data ttransfers for CPU execution
-            devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
+            if (task->KernelArgs->ArgSizes[i] == 0) {
+                // Avoid data transfers for pre transfered data
+                devicePtrs[i] = memory_manager->get_data_mapping(effective_device, task->KernelArgs->ArgPtrs[i]);
+            } 
+            if (devicePtrs[i] == nullptr) {                
+                // Avoid data transfers for CPU execution
+                devicePtrs[i] = task->KernelArgs->ArgPtrs[i];
+            }
         } else {
             // allocate data.
             // non blocking alloc is not non blocking but rather uses the non-blocking calls internally
@@ -554,4 +562,8 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     TRACE_END("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     return TARGETDART_SUCCESS;    
+}
+
+TD_Memory_Manager *TD_Scheduling_Manager::get_memory_manager() {
+    return memory_manager;
 }

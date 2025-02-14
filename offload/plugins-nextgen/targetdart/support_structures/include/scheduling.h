@@ -4,11 +4,13 @@
 #include "queue.h"
 #include "task.h"
 #include "communication.h"
+#include "memory.h"
 
 #include "PluginManager.h"
 #include <atomic>
 #include <cstdint>
 #include <mutex>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -55,6 +57,9 @@ private:
     // Stores the next id for any created task.
     std::atomic<int64_t> local_id_tracker;
 
+    // Memory manager for data mapping
+    TD_Memory_Manager *memory_manager;
+
     // The uids of replicated tasks to ensure they won`t be executed twice
     // tasks in this set are defined on a remote process
     Set_Wrapper finalized_replicated;
@@ -87,7 +92,7 @@ private:
     TD_Communicator *comm_man;
 
 public:
-    TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator);
+    TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager);
     ~TD_Scheduling_Manager();
 
     // creates a new targetDART task
@@ -139,6 +144,8 @@ public:
     // Returns the total number of devices
     int32_t total_device_count();
 
+    // Returns the memory manager
+    TD_Memory_Manager *get_memory_manager();
 };
 
 

@@ -4,6 +4,7 @@
 #include "mpi.h"
 #include "task.h"
 #include <cstddef>
+#include "memory.h"
 #include <unordered_map>
 
 #define COST_MPI_DATA_TYPE MPI_LONG
@@ -35,6 +36,9 @@ private:
     // stores all tasks that are migrated or replicated to simplify receiving results.
     std::unordered_map<td_uid_t, td_task_t*> remote_task_map;
 
+    // The memory manager for data mappings
+    TD_Memory_Manager *memory_manager;
+
     tdrc declare_KernelArgs_type();
 
     tdrc declare_task_type();
@@ -45,7 +49,7 @@ private:
 
 public:
     // initializes the communication and communcicator
-    TD_Communicator();
+    TD_Communicator(TD_Memory_Manager *memory_manager);
     ~TD_Communicator();
 
     int size;

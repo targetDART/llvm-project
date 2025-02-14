@@ -20,8 +20,9 @@ void TD_Communicator::transfer_setup() {
   declare_task_type();
 }
 
-TD_Communicator::TD_Communicator(){
+TD_Communicator::TD_Communicator(TD_Memory_Manager *memory_manager){
 
+  this->memory_manager = memory_manager;
   int rc, flag, valuelen;
   const char pset_name[] = "mpi://WORLD";
   const char mt_key[] = "thread_level";
@@ -171,6 +172,13 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     TRACE_START("send_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
+    //Update argument sizes and types for remote tasks
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+        if (task->KernelArgs->ArgSizes[i] == 0) {
+            task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+        }
+    }
+
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
     DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
@@ -199,16 +207,20 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
 
     //Send all parameter values
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        if (task->KernelArgs->ArgSizes[i] > 0) {
+        size_t size = task->KernelArgs->ArgSizes[i];
+        if (size == 0) {
+            size = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+        }
+        if (size > 0) {
             //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
             const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
             const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
             if (IsMapTo != 0) {
-                MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+                MPI_Send(task->KernelArgs->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
                 DP("Arg %d: Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
             }
             if (IsLiteral != 0) {
-                MPI_Send(&task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+                MPI_Send(&task->KernelArgs->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
                 DP("Arg %d: Send literal for task (%ld%ld) with value " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
             }
         }
