@@ -14,7 +14,6 @@
 #include <iostream>
 #include <memory.h>
 #include <omp.h>
-#include <ostream>
 #include <string.h>
 #include <unistd.h>
 #include <ffi.h>
@@ -221,12 +220,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     deviceID = DeviceId;
     td_sched = sched_man;
     DP("Mapping for device: %d\n", DeviceId);
-    /* if (deviceID < PM->getPhysicalDevices()) {
-      auto DeviceOrErr = PM->getDevice(deviceID);
-      if (!DeviceOrErr)
-        FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
-      physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-    } */
   }
 
   /// Set the context of the device if needed, before calling device-specific

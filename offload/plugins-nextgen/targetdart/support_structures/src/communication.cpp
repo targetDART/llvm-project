@@ -176,9 +176,6 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
         if (task->KernelArgs->ArgSizes[i] == 0) {
             task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
-            if (task->KernelArgs->ArgSizes[i] > 0) {
-                //task->KernelArgs->ArgTypes[i] = task->KernelArgs->ArgTypes[i] & ~OMP_TGT_MAPTYPE_TO;            
-            }        
         }
     }
 
