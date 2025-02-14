@@ -172,6 +172,16 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     TRACE_START("send_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
+    //Update argument sizes and types for remote tasks
+    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+        if (task->KernelArgs->ArgSizes[i] == 0) {
+            task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+            if (task->KernelArgs->ArgSizes[i] > 0) {
+                //task->KernelArgs->ArgTypes[i] = task->KernelArgs->ArgTypes[i] & ~OMP_TGT_MAPTYPE_TO;            
+            }        
+        }
+    }
+
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
     DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
