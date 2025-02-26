@@ -64,28 +64,44 @@ std::vector<std::string> split(std::string base) {
 /**
 * Reads the environment variable TD_MANAGEMENT
 */
-tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placements) {
+tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> &placements) {
+
+    // Set the number of cores that TD should use
+    // Prioritize env variable
+    size_t nprocs = 0;
+    if (auto env_nprocs = std::getenv("TD_NPROCS")) {
+        nprocs = std::max(std::atoi(env_nprocs), 1);
+        DP("nprocs assigned to %zu from environment\n", nprocs);
+    } else {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        sched_getaffinity(0, sizeof(set), &set);
+        nprocs = CPU_COUNT(&set);
+        DP("nprocs assigned to %zu\n", nprocs);
+    }
+
     if (std::getenv("TD_MANAGEMENT") == NULL) {
-        for (size_t i = 0; i < placements->size(); i++) {
-            placements->at(i) = i;
+        for (size_t i = 0; i < placements.size(); i++) {
+            placements.at(i) = i % nprocs;
+            DP("Management thread assigned core %d\n", placements[i]);
         }
-        DP("Management threads assigned cores 0-%zu, use OMP_PLACES=%zu:num_threads\n", placements->size()-1, placements->size());
+        DP("Management threads assigned cores 0-%zu\n", std::min(placements.size()-1, nprocs));
         DP("For a parallel CPU execution use OMP_NUM_TEAMS with a value as high as possible.\n");
-        return TARGETDART_FAILURE;
+        return TARGETDART_SUCCESS;
     }
 
     std::string management = std::getenv("TD_MANAGEMENT");
 
     std::vector<std::string> assignments = split(management);
 
-    placements->at(0) = std::stoi(assignments.at(0));
-    DP("Scheduling thread assiged to core %d from env\n", (*placements)[0]);
-    placements->at(1) = std::stoi(assignments.at(1));
-    DP("Receiver thread assiged to core %d from env\n", (*placements)[1]);
+    placements.at(0) = std::stoi(assignments.at(0));
+    DP("Scheduling thread assiged to core %d from env\n", placements[0]);
+    placements.at(1) = std::stoi(assignments.at(1));
+    DP("Receiver thread assiged to core %d from env\n", placements[1]);
 
-    for (size_t i = 2; i < std::min( assignments.size(), placements->size()); i++) {
-        placements->at(i) = std::stoi(assignments.at(i));
-        DP("Execution thread %zu assiged to core %d from env\n", i - 1, (*placements)[i]);
+    for (size_t i = 2; i < std::min( assignments.size(), placements.size()); i++) {
+        placements.at(i) = std::stoi(assignments.at(i));
+        DP("Execution thread %zu assiged to core %d from env\n", i - 1, placements[i]);
     }
     return TARGETDART_SUCCESS;
 }
@@ -94,7 +110,6 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placemen
 template<typename... Args>
 void __pin_and_workload(std::thread* thread, int core, std::function<void(Args...)> *work, Args... vargs) {
     if (core != -1) {
-        
         int s;
         cpu_set_t cpuset;// = CPU_ALLOC(N);
         cpu_set_t old_cpuset;
@@ -261,10 +276,10 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         DP("executor thread for device %d finished\n", deviceID);
     };
 
-    // Physical devices aka GPUs + CPU + Scheduling
-    std::vector<int> placements(physical_device_count + 3);
+    // Physical devices aka executors * GPUs + CPU + Scheduling
+    std::vector<int> placements(executors_per_device * (physical_device_count) + 3);
 
-    get_thread_placement_from_env(&placements);
+    get_thread_placement_from_env(placements);
 
     init_threads(&placements);
 }
