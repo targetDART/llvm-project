@@ -49,7 +49,7 @@ private:
     tdrc get_thread_placement_from_env(std::vector<int> &placements);
 
     // Initializes threads and starts their execution  
-    tdrc init_threads(std::vector<int> *assignments);
+    tdrc init_threads(std::vector<int> const &assignments);
 
 public: 
     TD_Thread_Manager(int32_t device_count, TD_Communicator *comm, TD_Scheduling_Manager *sched);

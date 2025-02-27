@@ -69,21 +69,27 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> &placemen
     // Set the number of cores that TD should use
     // Prioritize env variable
     size_t nprocs = 0;
-    if (auto env_nprocs = std::getenv("TD_NPROCS")) {
+    if (auto env_nprocs = std::getenv("TD_EXECUTOR_NPROCS")) {
         nprocs = std::max(std::atoi(env_nprocs), 1);
-        DP("nprocs assigned to %zu from environment\n", nprocs);
+        DP("executor nprocs assigned to %zu from env\n", nprocs);
     } else {
         cpu_set_t set;
         CPU_ZERO(&set);
         sched_getaffinity(0, sizeof(set), &set);
-        nprocs = CPU_COUNT(&set);
-        DP("nprocs assigned to %zu\n", nprocs);
+        // All available processors - 2 used for scheduler/receiver threads
+        nprocs = CPU_COUNT(&set) - 2;
+        DP("executor nprocs assigned to %zu\n", nprocs);
     }
 
     if (std::getenv("TD_MANAGEMENT") == NULL) {
-        for (size_t i = 0; i < placements.size(); i++) {
-            placements.at(i) = i % nprocs;
-            DP("Management thread assigned core %d\n", placements[i]);
+        // scheduler
+        placements[0] = 0;
+        // receiver
+        placements[1] = 1;
+        // executors
+        for (size_t i = 2; i < placements.size(); i++) {
+            placements.at(i) = (i-2) % nprocs + 2;
+            DP("Executor thread assigned core %d\n", placements[i]);
         }
         DP("Management threads assigned cores 0-%zu\n", std::min(placements.size()-1, nprocs));
         DP("For a parallel CPU execution use OMP_NUM_TEAMS with a value as high as possible.\n");
@@ -146,13 +152,13 @@ void __pin_and_workload(std::thread* thread, int core, std::function<void(Args..
 * The threads are pinned to the cores defined in the parameters.
 * the number of exec placements must be equal to the omp_get_num_devices() + 1.
 */
-tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
+tdrc TD_Thread_Manager::init_threads(std::vector<int> const &assignments) {
 
     //DP("Creating %zu Threads\n", assignments->size());
 
-    scheduler_th = std::thread(__pin_and_workload<int>, &scheduler_th, (*assignments)[0], &schedule_thread_loop, -1);
+    scheduler_th = std::thread(__pin_and_workload<int>, &scheduler_th, assignments[0], &schedule_thread_loop, -1);
 
-    receiver_th = std::thread(__pin_and_workload<int>, &receiver_th, (*assignments)[1], &receiver_thread_loop, -1);
+    receiver_th = std::thread(__pin_and_workload<int>, &receiver_th, assignments[1], &receiver_thread_loop, -1);
 
     executor_th.resize(executors_per_device * (physical_device_count) + 1);
     DP("Creating %zu Threads\n", executor_th.size() + 2);
@@ -160,13 +166,13 @@ tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
     //initialize all device offloading threads
     for (int i = 0; i < (int)executor_th.size() - 1; i++) {
         int device = i / executors_per_device;
-        executor_th.at(i) = std::thread(__pin_and_workload<int, int>, &executor_th.at(i), (*assignments)[device+2], &exec_thread_loop, device, i);
+        executor_th.at(i) = std::thread(__pin_and_workload<int, int>, &executor_th.at(i), assignments[i+2], &exec_thread_loop, device, i);
     }
 
     // initalize cpu executor
     int idx = executor_th.size() - 1;
     int cpu_device = idx / executors_per_device;
-    executor_th.at(idx) = std::thread(__pin_and_workload<int, int>, &executor_th.at(idx), (*assignments)[cpu_device + 2], &exec_thread_loop, cpu_device, idx);
+    executor_th.at(idx) = std::thread(__pin_and_workload<int, int>, &executor_th.at(idx), assignments[executor_th.size() - 1], &exec_thread_loop, cpu_device, idx);
 
     DP("spawned management threads\n");
     return TARGETDART_SUCCESS;
@@ -281,7 +287,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
     get_thread_placement_from_env(placements);
 
-    init_threads(&placements);
+    init_threads(placements);
 }
 
 
