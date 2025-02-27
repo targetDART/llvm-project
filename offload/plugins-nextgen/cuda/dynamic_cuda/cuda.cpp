@@ -60,6 +60,7 @@ DLWRAP(cuModuleGetGlobal, 4)
 
 DLWRAP(cuModuleUnload, 1)
 DLWRAP(cuStreamCreate, 2)
+DLWRAP(cuStreamGetId, 2)
 DLWRAP(cuStreamDestroy, 1)
 DLWRAP(cuStreamSynchronize, 1)
 DLWRAP(cuStreamQuery, 1)

@@ -675,9 +675,8 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     detectPhysicalDevices();
 
-    DP("detected prior devices: %d\n", getPhysicalDevices());
-
     int32_t external_devices = getPhysicalDevices();
+    DP("detected prior devices: %d\n", external_devices);
 
     init_task_stuctures();
 

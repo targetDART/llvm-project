@@ -323,6 +323,7 @@ CUresult cuModuleGetGlobal(CUdeviceptr *, size_t *, CUmodule, const char *);
 
 CUresult cuModuleUnload(CUmodule);
 CUresult cuStreamCreate(CUstream *, unsigned);
+CUresult cuStreamGetId (CUstream, unsigned long long*);
 CUresult cuStreamDestroy(CUstream);
 CUresult cuStreamSynchronize(CUstream);
 CUresult cuStreamQuery(CUstream);

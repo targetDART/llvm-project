@@ -14,6 +14,7 @@ std::vector<intptr_t> *_image_base_addresses;
 
 bool initialized = false;
 
+// TODO: typo
 tdrc init_task_stuctures(){
     _image_base_addresses = new std::vector<intptr_t>(100);
     return TARGETDART_SUCCESS;

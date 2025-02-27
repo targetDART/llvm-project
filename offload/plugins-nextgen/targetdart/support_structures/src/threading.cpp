@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <string>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 //removes spaces from text
@@ -63,36 +64,58 @@ std::vector<std::string> split(std::string base) {
 /**
 * Reads the environment variable TD_MANAGEMENT
 */
-tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> *placements) {
+tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> &placements) {
+
+    // Set the number of cores that TD should use
+    // Prioritize env variable
+    size_t nprocs = 0;
+    if (auto env_nprocs = std::getenv("TD_EXECUTOR_NPROCS")) {
+        nprocs = std::max(std::atoi(env_nprocs), 1);
+        DP("executor nprocs assigned to %zu from env\n", nprocs);
+    } else {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        sched_getaffinity(0, sizeof(set), &set);
+        // All available processors - 2 used for scheduler/receiver threads
+        nprocs = CPU_COUNT(&set) - 2;
+        DP("executor nprocs assigned to %zu\n", nprocs);
+    }
+
     if (std::getenv("TD_MANAGEMENT") == NULL) {
-        for (size_t i = 0; i < placements->size(); i++) {
-            placements->at(i) = i;
+        // scheduler
+        placements[0] = 0;
+        // receiver
+        placements[1] = 1;
+        // executors
+        for (size_t i = 2; i < placements.size(); i++) {
+            placements.at(i) = (i-2) % nprocs + 2;
+            DP("Executor thread assigned core %d\n", placements[i]);
         }
-        DP("Management threads assigned cores 0-%zu, use OMP_PLACES=%zu:num_threads\n", placements->size()-1, placements->size());
+        DP("Management threads assigned cores 0-%zu\n", std::min(placements.size()-1, nprocs));
         DP("For a parallel CPU execution use OMP_NUM_TEAMS with a value as high as possible.\n");
-        return TARGETDART_FAILURE;
+        return TARGETDART_SUCCESS;
     }
 
     std::string management = std::getenv("TD_MANAGEMENT");
 
     std::vector<std::string> assignments = split(management);
 
-    placements->at(0) = std::stoi(assignments.at(0));
-    DP("Scheduling thread assiged to core %d from env\n", (*placements)[0]);
-    placements->at(1) = std::stoi(assignments.at(1));
-    DP("Receiver thread assiged to core %d from env\n", (*placements)[1]);
+    placements.at(0) = std::stoi(assignments.at(0));
+    DP("Scheduling thread assiged to core %d from env\n", placements[0]);
+    placements.at(1) = std::stoi(assignments.at(1));
+    DP("Receiver thread assiged to core %d from env\n", placements[1]);
 
-    for (size_t i = 2; i < std::min( assignments.size(), placements->size()); i++) {
-        placements->at(i) = std::stoi(assignments.at(i));
-        DP("Execution thread %zu assiged to core %d from env\n", i - 1, (*placements)[i]);
+    for (size_t i = 2; i < std::min( assignments.size(), placements.size()); i++) {
+        placements.at(i) = std::stoi(assignments.at(i));
+        DP("Execution thread %zu assiged to core %d from env\n", i - 1, placements[i]);
     }
     return TARGETDART_SUCCESS;
 }
 
 // pins 
-void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> *work, int deviceID) {
+template<typename... Args>
+void __pin_and_workload(std::thread* thread, int core, std::function<void(Args...)> *work, Args... vargs) {
     if (core != -1) {
-        
         int s;
         cpu_set_t cpuset;// = CPU_ALLOC(N);
         cpu_set_t old_cpuset;
@@ -120,7 +143,7 @@ void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> 
     }
 
     //Do work
-    (*work)(deviceID);
+    (*work)(vargs...);
 }
 
 
@@ -129,20 +152,27 @@ void __pin_and_workload(std::thread* thread, int core, std::function<void(int)> 
 * The threads are pinned to the cores defined in the parameters.
 * the number of exec placements must be equal to the omp_get_num_devices() + 1.
 */
-tdrc TD_Thread_Manager::init_threads(std::vector<int> *assignments) {
+tdrc TD_Thread_Manager::init_threads(std::vector<int> const &assignments) {
 
-    DP("Creating %zu Threads\n", assignments->size());
+    //DP("Creating %zu Threads\n", assignments->size());
 
-    scheduler_th = std::thread(__pin_and_workload, &scheduler_th, (*assignments)[0], &schedule_thread_loop, -1);
+    scheduler_th = std::thread(__pin_and_workload<int>, &scheduler_th, assignments[0], &schedule_thread_loop, -1);
 
-    receiver_th = std::thread(__pin_and_workload, &receiver_th, (*assignments)[1], &receiver_thread_loop, -1);
+    receiver_th = std::thread(__pin_and_workload<int>, &receiver_th, assignments[1], &receiver_thread_loop, -1);
 
-    executor_th.resize(physical_device_count + 1);
+    executor_th.resize(executors_per_device * (physical_device_count) + 1);
+    DP("Creating %zu Threads\n", executor_th.size() + 2);
 
-    //initialize all offloading threads
-    for (int i = 0; i <= physical_device_count; i++) {
-        executor_th.at(i) = std::thread(__pin_and_workload, &executor_th.at(i), (*assignments)[i+2], &exec_thread_loop, i);
+    //initialize all device offloading threads
+    for (int i = 0; i < (int)executor_th.size() - 1; i++) {
+        int device = i / executors_per_device;
+        executor_th.at(i) = std::thread(__pin_and_workload<int, int>, &executor_th.at(i), assignments[i+2], &exec_thread_loop, device, i);
     }
+
+    // initalize cpu executor
+    int idx = executor_th.size() - 1;
+    int cpu_device = idx / executors_per_device;
+    executor_th.at(idx) = std::thread(__pin_and_workload<int, int>, &executor_th.at(idx), assignments[executor_th.size() - 1], &exec_thread_loop, cpu_device, idx);
 
     DP("spawned management threads\n");
     return TARGETDART_SUCCESS;
@@ -153,6 +183,11 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
     schedule_man = sched;
     comm_man = comm;
+
+    if (auto env_executors_per_device = std::getenv("TD_EXECUTORS_PER_DEVICE")) {
+        executors_per_device = std::max(std::atoi(env_executors_per_device), 1);
+    }
+    DP("Starting %d executors per device\n", executors_per_device);
 
     schedule_thread_loop = [&] (int deviceID) {
         TRACE_START("sched_loop\n");
@@ -209,14 +244,14 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         TRACE_END("recv_loop\n");
     };
 
-    exec_thread_loop = [&] (int deviceID) {
+    exec_thread_loop = [&] (int deviceID, int executorID) {
         TRACE_START("exec_loop\n");
         int iter = 0;
         int phys_device_id = deviceID;
         if (deviceID == physical_device_count) {
             phys_device_id = schedule_man->total_device_count();
         }
-        DP("Starting executor thread for device %d\n", phys_device_id);
+        DP("Starting executor thread %d for device %d\n", executorID, phys_device_id);
         while (!scheduler_done.load() || !is_finalizing || !schedule_man->is_empty()) {
             td_task_t *task;
             iter++;
@@ -226,7 +261,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 DP("remaining load %ld\n", schedule_man->get_active_tasks());
             }
             if (schedule_man->get_task(deviceID, &task) == TARGETDART_SUCCESS) {
-                DP("start execution of task (%ld%ld) on device %d\n", task->uid.rank, task->uid.id, phys_device_id);
+                DP("start execution of task (%ld%ld) on device %d, executor %d\n", task->uid.rank, task->uid.id, phys_device_id, executorID);
                 //execute the task on your own device
                 int return_code = schedule_man->invoke_task(task, phys_device_id);
                 task->return_code = return_code;
@@ -251,12 +286,12 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         DP("executor thread for device %d finished\n", deviceID);
     };
 
-    // Physical devices aka GPUs + CPU + Scheduling
-    std::vector<int> placements(physical_device_count + 3);
+    // Physical devices aka executors * GPUs + CPU + Scheduling + Receiver
+    std::vector<int> placements(executors_per_device * (physical_device_count) + 3);
 
-    get_thread_placement_from_env(&placements);
+    get_thread_placement_from_env(placements);
 
-    init_threads(&placements);
+    init_threads(placements);
 }
 
 

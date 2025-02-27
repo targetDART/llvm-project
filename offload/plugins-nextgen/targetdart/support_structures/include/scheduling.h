@@ -117,7 +117,7 @@ public:
     // returns true, iff no tasks are remaining in any queue
     bool is_empty();    
 
-    // test if repartitioning is required 
+    // test if repartitioning is required
     bool do_repartition();
 
     // reset the repartitioning state
