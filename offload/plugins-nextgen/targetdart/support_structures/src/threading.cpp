@@ -286,7 +286,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         DP("executor thread for device %d finished\n", deviceID);
     };
 
-    // Physical devices aka executors * GPUs + CPU + Scheduling
+    // Physical devices aka executors * GPUs + CPU + Scheduling + Receiver
     std::vector<int> placements(executors_per_device * (physical_device_count) + 3);
 
     get_thread_placement_from_env(placements);
