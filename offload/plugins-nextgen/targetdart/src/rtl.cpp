@@ -528,7 +528,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         if (!DeviceOrErr)
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
         GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
-        physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
+        if (td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr) != nullptr) {        
+          physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
+        }
       }
       td_sched->get_memory_manager()->register_deallocation(TgtPtr);
     } 
