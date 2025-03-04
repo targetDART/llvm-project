@@ -812,6 +812,8 @@ Error GenericDeviceTy::deinit(GenericPluginTy &Plugin) {
     if (auto Err = callGlobalDestructors(Plugin, *Image))
       return Err;
 
+  startDeinit();
+
   if (OMPX_DebugKind.get() & uint32_t(DeviceDebugKind::AllocationTracker)) {
     GenericGlobalHandlerTy &GHandler = Plugin.getGlobalHandler();
     for (auto *Image : LoadedImages) {

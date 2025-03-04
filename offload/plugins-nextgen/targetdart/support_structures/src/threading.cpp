@@ -208,7 +208,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             schedule_man->iterative_schedule(CPU);
             schedule_man->iterative_schedule(GPU);
             schedule_man->iterative_schedule(ANY);
-            //std::this_thread::sleep_for(std::chrono::microseconds(10));
+            std::this_thread::sleep_for(std::chrono::microseconds(5));
             /*td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(uid, false);
