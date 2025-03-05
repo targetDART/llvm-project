@@ -10,6 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <memory.h>
@@ -239,6 +240,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// allowed.
   Error deinitImpl() override {
     return Plugin::success();
+  }
+
+  void startDeinit() override {
+    isDeinitializing = true;
   }
 
   /// Load the binary image into the device and return the target table.
@@ -514,21 +519,26 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
+    if (isDeinitializing) {
+      return OFFLOAD_SUCCESS;
+    }
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       td_sched->get_memory_manager()->register_deallocation(TgtPtr);
-      return physical_device->free(TgtPtr, Kind);
+      return physical_device->free(TgtPtr, Kind);      
     } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
       // handle other devices
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
         auto DeviceOrErr = PM->getDevice(i);
         if (!DeviceOrErr)
-          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
         GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
-        physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
+        if (td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr) != nullptr) {        
+          physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
+        }
       }
       td_sched->get_memory_manager()->register_deallocation(TgtPtr);
     } 
@@ -611,6 +621,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   int32_t deviceID;
 
   TD_Scheduling_Manager *td_sched;
+
+  bool isDeinitializing = false;
 
   /// Grid values for the targetDART plugin.
   static constexpr GV targetDARTGridValues = {

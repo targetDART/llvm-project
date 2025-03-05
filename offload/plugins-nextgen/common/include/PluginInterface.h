@@ -701,6 +701,10 @@ struct GenericDeviceTy : public DeviceAllocatorTy {
   Error deinit(GenericPluginTy &Plugin);
   virtual Error deinitImpl() = 0;
 
+  virtual void startDeinit() {
+    return;
+  }
+
   /// Load the binary image into the device and return the target table.
   Expected<DeviceImageTy *> loadBinary(GenericPluginTy &Plugin,
                                        const __tgt_device_image *TgtImage);

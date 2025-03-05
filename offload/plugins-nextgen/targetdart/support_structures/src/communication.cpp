@@ -173,7 +173,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Update argument sizes and types for remote tasks
-    for (int i = 0; i < task->KernelArgs->NumArgs; i++) {
+    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         if (task->KernelArgs->ArgSizes[i] == 0) {
             task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
         }
