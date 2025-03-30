@@ -487,6 +487,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *ptr, TargetAllocTy Kind) override {
     DP("Num Physical devices: %d\n", PM->getPhysicalDevices());
+    DP("Allocating kind %d\n", Kind);
+    DP("Allocating on device %d\n", deviceID);
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
@@ -514,7 +516,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       }
       return base_ptr;
     }
-    return nullptr;
+    return std::malloc(Size);
   }
 
   /// Free the memory. Use std::free in all cases.
@@ -541,7 +543,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         }
       }
       td_sched->get_memory_manager()->register_deallocation(TgtPtr);
-    } 
+    } else {
+      std::free(TgtPtr);
+    }
     return OFFLOAD_SUCCESS;
   }
 
