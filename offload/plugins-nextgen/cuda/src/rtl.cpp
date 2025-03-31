@@ -846,7 +846,6 @@ struct CUDADeviceTy : public GenericDeviceTy {
     }
 
     CUresult Res = cuMemcpyDtoHAsync(HstPtr, (CUdeviceptr)TgtPtr, Size, Stream);
-    cuStreamSynchronize(Stream);
     return Plugin::check(Res, "Error in cuMemcpyDtoHAsync: %s");
   }
 

@@ -541,6 +541,11 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         }
     }
 
+    // Synchronization on CPU 
+    if (effective_device != total_device_count()) {
+        DeviceOrErr->synchronize(TargetAsyncInfo);
+    }
+
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         if (!noAllocation(i)) {
@@ -550,10 +555,6 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     }
     TRACE_END("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
-    // Synchronization on CPU 
-    if (effective_device != total_device_count()) {
-        DeviceOrErr->synchronize(TargetAsyncInfo);
-    }
 
     // Restore original KernelArgs 
     delete task->KernelArgs;
