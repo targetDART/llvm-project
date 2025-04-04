@@ -183,7 +183,10 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //TODO: Use non-blocking send
     DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
-    remote_task_map.insert({task->uid, task});
+    {
+        std::lock_guard<std::mutex> lock(task_map_mutex);
+        remote_task_map.insert({task->uid, task});
+    }
 
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
@@ -391,11 +394,11 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     //TODO: Use non-blocking send
     DP("Start result transfer of task (%ld%ld)\n", task->uid.rank, task->uid.id);
     //Send Task uid
-    MPI_Send(&task->uid, 1, TD_TASK_UID, task->uid.rank, SEND_RESULT_UID, targetdart_comm);
+    MPI_Ssend(&task->uid, 1, TD_TASK_UID, task->uid.rank, SEND_RESULT_UID, targetdart_comm);
     DP("Sending result for task (%ld%ld) to process %ld\n", task->uid.rank, task->uid.id, task->uid.rank);
 
     //Send Task returncode
-    MPI_Send(&task->return_code, 1, MPI_INT, task->uid.rank, SEND_RESULT_RETURN_CODE, targetdart_comm);
+    MPI_Ssend(&task->return_code, 1, MPI_INT, task->uid.rank, SEND_RESULT_RETURN_CODE, targetdart_comm);
     DP("Sending Return Code: %d for task (%ld%ld) in remote task map\n", task->return_code, task->uid.rank, task->uid.id);
 
     //Send all parameter values
@@ -404,7 +407,7 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
         if (task->KernelArgs->ArgSizes[i] > 0) {
             int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
             if (IsMapFrom != 0) {
-                MPI_Send(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
+                MPI_Ssend(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
                 DP("Sending result for task (%ld%ld) at " DPxMOD " \n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]));
             }
         }
@@ -429,8 +432,13 @@ tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
 
     TRACE_START("recv_task_res (%ld%ld)\n", uid->rank, uid->id);
 
-    td_task_t *task = remote_task_map[*uid];
-    remote_task_map.erase(*uid);
+    td_task_t *task;
+    // Critical section to ensure thread safety
+    {
+        std::lock_guard<std::mutex> lock(task_map_mutex);
+        task = remote_task_map[*uid];
+        remote_task_map.erase(*uid);
+    }
 
     DP("Found task (%ld%ld) in remote task map\n", task->uid.rank, task->uid.id);
 
