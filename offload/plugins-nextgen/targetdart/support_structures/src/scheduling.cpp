@@ -504,6 +504,15 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     // generate a Kernel
     llvm::SmallVector<ptrdiff_t> offsets(task->KernelArgs->NumArgs, 0);
+    /* for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+        if (!(task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL)) {
+            if (noAllocation(i)) {
+                offsets[i] = 0;
+            } else {
+                offsets[i] = (intptr_t)task->KernelArgs->ArgBasePtrs[i] - (intptr_t)task->KernelArgs->ArgPtrs[i];
+            }
+        }
+    } */
 
     // get target table.
     __tgt_target_table *TargetTable = nullptr;
