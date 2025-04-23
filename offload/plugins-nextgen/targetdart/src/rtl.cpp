@@ -694,7 +694,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
     int32_t external_devices = getPhysicalDevices();
     DP("detected prior devices: %d\n", external_devices);
 
-    init_task_stuctures();
+    init_task_structures();
 
     td_mem = new TD_Memory_Manager(external_devices);
     td_comm = new TD_Communicator(td_mem);
