@@ -33,8 +33,9 @@ private:
     // MPI Return value
     int ret = 0;
 
-    // stores all tasks that are migrated or replicated to simplify receiving results.
+    // stores all tasks that are migrated or replicated to simplify receiving results and its mutex.
     std::unordered_map<td_uid_t, td_task_t*> remote_task_map;
+    std::mutex task_map_mutex;
 
     // The memory manager for data mappings
     TD_Memory_Manager *memory_manager;
