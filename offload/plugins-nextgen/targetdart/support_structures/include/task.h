@@ -151,7 +151,7 @@ struct std::hash<td_uid_t>
 // array that holds image base addresses
 extern std::vector<intptr_t> *_image_base_addresses;
 
-tdrc init_task_stuctures();
+tdrc init_task_structures();
 tdrc finalize_task_structes();
 
 /*

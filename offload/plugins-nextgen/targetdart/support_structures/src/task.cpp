@@ -10,13 +10,30 @@
 
 #include "llvm/ADT/SmallVector.h"
 
+#include <execinfo.h>
+
 std::vector<intptr_t> *_image_base_addresses;
 
 bool initialized = false;
 
-// TODO: typo
-tdrc init_task_stuctures(){
+tdrc init_task_structures(){
+    char **strings; //every entry is an entire line of the stacktrace
+    size_t i, size;
+    const int max_size = 128;
+    void *array[max_size];
+    size = backtrace(array, max_size);
+    strings = backtrace_symbols(array, size); //returns the entire stack
+    
+
+    int target_idx = size-1;
+    std::string s(strings[target_idx]);
+    int idx = s.find("[")+1+2; // +1 to skip [, +2 to skip 0x, so first number, in char* takes 12 excluding 0x...
+    std::string main_nmb_as_str = s.substr(idx, 12);
+    long main_nmb = std::stol(main_nmb_as_str, 0, 16);
+
     _image_base_addresses = new std::vector<intptr_t>(100);
+    add_main_ptr((void*) main_nmb);
+    
     return TARGETDART_SUCCESS;
 }
 
@@ -81,7 +98,7 @@ intptr_t apply_image_base_address(intptr_t base_address, bool isBaseAddress) {
     return base_address - (*_image_base_addresses)[99];
 }
 
-int add_main_ptr(void *main_ptr) {    
+int add_main_ptr(void *main_ptr) {
     get_base_address(main_ptr);
     return 0;
 }
