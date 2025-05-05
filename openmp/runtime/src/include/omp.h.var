@@ -131,6 +131,7 @@
     extern int  __KAI_KMPC_CONVENTION   td_device_offset    (void);
     extern int  __KAI_KMPC_CONVENTION   td_advance          (int);
     extern int  __KAI_KMPC_CONVENTION   td_phase_progress   (int);
+    extern int  __KAI_KMPC_CONVENTION   td_process_deps     (int, void *);
 
     /* OpenMP 5.0  Synchronization hints*/
     typedef enum omp_sync_hint_t {

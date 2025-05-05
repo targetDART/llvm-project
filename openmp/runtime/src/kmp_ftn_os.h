@@ -155,6 +155,7 @@
 #define FTN_TD_DEVICE_OFFSET td_device_offset
 #define FTN_TD_PHASE_PROGRESS td_phase_progress
 #define FTN_TD_ADVANCE td_advance 
+#define FTN_TD_PROCESS_DEPS td_process_deps
 
 #endif /* KMP_FTN_PLAIN */
 

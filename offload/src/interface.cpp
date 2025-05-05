@@ -51,6 +51,24 @@ EXTERN int td_device_offset() {
     return PM->getPhysicalDevices();
 }
 
+EXTERN int td_process_deps(int32_t ndeps, kmp_depend_info_t *dep_list) {
+  DP("td_process_deps\n");
+  for (int i = 0; i < ndeps; i++) {
+    kmp_depend_info_t const *dep = &dep_list[i];
+    if (dep->flags.out) { // OUT or INOUT
+      DP("Base " DPxMOD ": OUT\n", DPxPTR(dep->base_addr));
+    } else if (dep->flags.in) { // Only IN
+      DP("Base " DPxMOD ": IN\n", DPxPTR(dep->base_addr));
+    } else {
+      // MTX
+      DP("Base " DPxMOD ": NOT IMPLEMENTED\n", DPxPTR(dep->base_addr));
+    }
+  }
+  // Always return 0 predecessors, so OMP schedules the task immediately,
+  // actual dependency management is done in targetDART runtime
+  return 0;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /// adds requires flags
 EXTERN void __tgt_register_requires(int64_t Flags) {

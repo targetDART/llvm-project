@@ -567,6 +567,10 @@ __kmp_process_deps(kmp_int32 gtid, kmp_depnode_t *node, kmp_dephash_t **hash,
 #define NO_DEP_BARRIER (false)
 #define DEP_BARRIER (true)
 
+extern "C" {
+  int td_process_deps(kmp_int32, kmp_depend_info_t *) __attribute__((weak));
+}
+
 // returns true if the task has any outstanding dependence
 static bool __kmp_check_deps(kmp_int32 gtid, kmp_depnode_t *node,
                              kmp_task_t *task, kmp_dephash_t **hash,
@@ -630,10 +634,11 @@ static bool __kmp_check_deps(kmp_int32 gtid, kmp_depnode_t *node,
   int npredecessors;
 
   if (!dep_all) { // regular dependences
-    npredecessors = __kmp_process_deps<true>(gtid, node, hash, dep_barrier,
-                                             ndeps, dep_list, task);
-    npredecessors += __kmp_process_deps<false>(
-        gtid, node, hash, dep_barrier, ndeps_noalias, noalias_dep_list, task);
+    //npredecessors = __kmp_process_deps<true>(gtid, node, hash, dep_barrier,
+    //                                         ndeps, dep_list, task);
+    //npredecessors += __kmp_process_deps<false>(
+    //    gtid, node, hash, dep_barrier, ndeps_noalias, noalias_dep_list, task);
+    npredecessors = td_process_deps(ndeps, dep_list);
   } else { // omp_all_memory dependence
     npredecessors = __kmp_process_dep_all(gtid, node, *hash, dep_barrier, task);
   }
@@ -657,6 +662,7 @@ static bool __kmp_check_deps(kmp_int32 gtid, kmp_depnode_t *node,
   // task...
   return npredecessors > 0 ? true : false;
 }
+
 
 /*!
 @ingroup TASKING

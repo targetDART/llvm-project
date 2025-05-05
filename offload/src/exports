@@ -78,6 +78,7 @@ VERS1.0 {
     td_advance;
     td_phase_progress;
     td_device_offset;
+    td_process_deps;
   local:
     *;
 };
