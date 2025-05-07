@@ -9,6 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <vector>
+#include <new> //used for bad_alloc
 
 
 void TD_Communicator::transfer_setup() {
@@ -191,6 +192,9 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     DP("Send task structure for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
+
+    //blocking receive
+
     //Send static KernelArgs values excluding pointervalues
     MPI_Send(task->KernelArgs, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
     DP("Send KernelArgs for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
@@ -218,6 +222,13 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
             //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
             const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
             const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
+            //blocking receive for 
+            int enoughSpace = 1;
+            MPI_Recv((void*)&enoughSpace, 1, MPI_INT, dest, 0, targetdart_comm, MPI_STATUS_IGNORE);
+            if(enoughSpace == 0) {
+                DP("Node %d has not enough free memory to receive task %d from node %d\n", dest, task->uid.id, rank);
+                return TARGETDART_FAILURE;
+            }
             if (IsMapTo != 0) {
                 MPI_Send(task->KernelArgs->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
                 DP("Arg %d: Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
@@ -305,8 +316,23 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
         
         if (IsLiteral == 0 && IsPrivate == 0 && task->KernelArgs->ArgSizes[i] + diff[i] > 0) {
-            task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+            int enoughSpace = 1;
+            //try {
+            //task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+            //task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            
+            task->KernelArgs->ArgBasePtrs[i] = (void *) malloc(sizeof(int64_t) * (task->KernelArgs->ArgSizes[i] + diff[i]));
             task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            /*} catch (std::bad_alloc& badAlloc) {
+                enoughSpace = 0;
+            }*/
+            if(task->KernelArgs->ArgBasePtrs[i] == NULL) {
+                enoughSpace = 0;
+            }
+            MPI_Ssend((void*)&enoughSpace, 1, MPI_INT, source, 0, targetdart_comm);
+            if(enoughSpace == 0) {
+                return TARGETDART_FAILURE;
+            }
             DP("Arg %d: Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
         }
         if (task->KernelArgs->ArgSizes[i] > 0) {
