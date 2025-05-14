@@ -280,7 +280,9 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                     delete_task(task, true);
                 }
-            } 
+            } else {
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
         }    
         TRACE_END("exec_loop\n");
         DP("executor thread for device %d finished\n", deviceID);
