@@ -194,20 +194,20 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         int iter = 0;
         DP("Starting scheduler thread\n");
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
-            if (iter == 80000 || schedule_man->do_repartition()) {
+            if (iter == 800 || schedule_man->do_repartition()) {
                 iter = 0;
                 // TODO: this differentiation kann lead to a Deadlock
                 // TODO: restructure multi-schedule approaches
-                //schedule_man->global_reschedule(CPU);
-                //schedule_man->global_reschedule(GPU);
-                //schedule_man->global_reschedule(ANY);
-                schedule_man->reset_repatition();
+                schedule_man->global_reschedule(CPU);
+                schedule_man->global_reschedule(GPU);
+                schedule_man->global_reschedule(ANY);
+                schedule_man->reset_repartition();
                 DP("ping\n");
             }
             iter++;        
-            schedule_man->iterative_schedule(CPU);
-            schedule_man->iterative_schedule(GPU);
-            schedule_man->iterative_schedule(ANY);
+            //schedule_man->iterative_schedule(CPU);
+            //schedule_man->iterative_schedule(GPU);
+            //schedule_man->iterative_schedule(ANY);
             std::this_thread::sleep_for(std::chrono::microseconds(5));
             /*td_uid_t uid;
             if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {

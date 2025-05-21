@@ -1,6 +1,7 @@
 #include "../include/scheduling.h"
 #include "../include/communication.h"
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -188,7 +189,7 @@ bool TD_Scheduling_Manager::do_repartition(){
     return repartition;
 }
 
-void TD_Scheduling_Manager::reset_repatition() {
+void TD_Scheduling_Manager::reset_repartition() {
     repartition = false;
 }
 
@@ -284,23 +285,22 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 * target_load: defines the load the victim should have in total after migration.
 * affinity: defines which kinds of tasks should be considered for a rescheduling.
 */
-void TD_Scheduling_Manager::partial_global_reschedule(COST_DATA_TYPE target_load, device_affinity affinity, int offset) {
+void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device_affinity affinity, int offset) {
     std::vector<td_task_t*> transferred_tasks;
-    COST_DATA_TYPE totalcost = 0;
-    while (totalcost < BALANCE_FACTOR * target_load) {
+    double totalcost = 0.0;
+    while (totalcost < target_load) {
         td_task_t *next_task;
         tdrc return_code = get_migrateable_task(affinity, &next_task);
         if (return_code == TARGETDART_FAILURE) {
             break;
-        }
-        if (next_task->cached_total_sizes >= target_load/BALANCE_FACTOR) {
-            break;
         } else {
             transferred_tasks.push_back(next_task);
+            //totalcost += 1.0;
+            //TODO: non-uniform task sizes
+            totalcost += next_task->cached_total_sizes;
         }
     }
     
-    //TODO: think about MPI_pack as well
     for (size_t t = 0; t < transferred_tasks.size(); t++) {
         comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
     }
@@ -309,16 +309,18 @@ void TD_Scheduling_Manager::partial_global_reschedule(COST_DATA_TYPE target_load
 void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     TRACE_START("coarse_schedule\n");
     global_sched_params_t params = comm_man->global_cost_communicator(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost());
-    COST_DATA_TYPE target_load = params.total_cost / comm_man->size;
+    // optimum load for each process
+    double target_load = (double) params.total_cost / (double) comm_man->size;
 
-    if (target_load == 0) {
-        DP("Skip global reschedule with target load %ld\n", target_load);
+    if (target_load <= 1) {
+        DP("Skip global reschedule with target load %f\n", target_load);
         TRACE_END("coarse_schedule\n");
         return;
     }
 
-    DP("Do global reschedule with local load %ld and target load %ld\n", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
+    DP("Do global reschedule with local load %ld and target load %f\n", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
 
+    // the amount of tasks/load to transfer to the predecessor and successor processes
     COST_DATA_TYPE pre_transfer = 0;
     COST_DATA_TYPE post_transfer = 0;
 
@@ -349,8 +351,8 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     }
 
     //compute furthest data transfer
-    int pre_distance = pre_transfer/target_load + 1;
-    int post_distance = post_transfer/target_load + 1;
+    int pre_distance = (int) std::ceil(pre_transfer/target_load);
+    int post_distance = (int) std::ceil(post_transfer/target_load);
 
     //general case transfers predecessor
     for (int i = 1; i < pre_distance; i++) {
@@ -361,9 +363,9 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         partial_global_reschedule(target_load, affinity, i);
     }
     
-    COST_DATA_TYPE pre_remainder_load = pre_transfer % target_load;    
+    double pre_remainder_load = pre_transfer - (target_load * (pre_distance - 1));    
     partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
-    COST_DATA_TYPE post_remainder_load = post_transfer % target_load;    
+    double post_remainder_load = post_transfer - (target_load * (post_distance - 1));    
     partial_global_reschedule(post_remainder_load, affinity, post_distance);
     TRACE_END("coarse_schedule\n");
 }

@@ -83,7 +83,7 @@ private:
     * target_load: defines the load the victim should have in total after migration.
     * affinity: defines which kinds of tasks should be considered for a rescheduling.
     */
-    void partial_global_reschedule(COST_DATA_TYPE target_load, device_affinity affinity, int offset);
+    void partial_global_reschedule(double target_load, device_affinity affinity, int offset);
     
     //Extracts the device affinity from a plain device ID.
     device_affinity extract_device_affinity(int DeviceID);
@@ -121,7 +121,7 @@ public:
     bool do_repartition();
 
     // reset the repartitioning state
-    void reset_repatition();
+    void reset_repartition();
 
     // implements an iterative scheduling algorithm 
     void iterative_schedule(device_affinity affinity);
