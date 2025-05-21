@@ -18,7 +18,7 @@ bool initialized = false;
 
 tdrc init_task_structures(){
     char **strings; //every entry is an entire line of the stacktrace
-    size_t i, size;
+    size_t size;
     const int max_size = 128;
     void *array[max_size];
     size = backtrace(array, max_size);

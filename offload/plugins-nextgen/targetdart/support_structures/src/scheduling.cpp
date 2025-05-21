@@ -295,9 +295,9 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
             break;
         } else {
             transferred_tasks.push_back(next_task);
-            totalcost += 1.0;
+            //totalcost += 1.0;
             //TODO: non-uniform task sizes
-            //totalcost += next_task->cached_total_sizes;
+            totalcost += next_task->cached_total_sizes;
         }
     }
     
