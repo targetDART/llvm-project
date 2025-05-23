@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -114,8 +115,8 @@ enum sub_affinity{MIGRATEABLE = TD_MIGRATABLE_OFFSET, LOCAL = TD_LOCAL_OFFSET, R
 enum device_affinity{CPU = TD_CPU_OFFSET, GPU = TD_OFFLOAD_OFFSET, ANY = TD_ANY_OFFSET};
 
 typedef struct td_uid_t{
-    int64_t      id;
-    int64_t      rank;
+    int64_t id;
+    int64_t rank;
 
     bool operator == (const td_uid_t& t) const {
         return id == t.id && rank == t.rank;
@@ -123,14 +124,17 @@ typedef struct td_uid_t{
 } td_uid_t;
 
 typedef struct td_task_t{
-    intptr_t            host_base_ptr;
-    KernelArgsTy*       KernelArgs;
-    ident_t*            Loc;
-    td_uid_t            uid;
-    COST_DATA_TYPE      cached_total_sizes;
-    int                 return_code;
-    device_affinity     affinity;
-    bool                isReplica;
+    intptr_t host_base_ptr;
+    KernelArgsTy *KernelArgs;
+    ident_t *Loc;
+    td_uid_t uid;
+    COST_DATA_TYPE cached_total_sizes;
+    int return_code;
+    device_affinity affinity;
+    bool isReplica;
+
+    size_t n_predecessors;
+    std::vector<td_task_t *> successors;
 } td_task_t;
 
 template <>

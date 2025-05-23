@@ -422,50 +422,50 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
+tdrc TD_Communicator::receive_task_result(int source, td_task_t **task) {
     TRACE_START("recv_task_res\n");
     DP("Start result receival\n");
     //TODO: use MPI probe for complete receives
     //Receive Task Data
-    MPI_Recv(uid, 1, TD_TASK_UID, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
-    DP("Receiving result for task (%ld%ld) from process %d\n", uid->rank, uid->id, source);
+    td_uid_t uid;
+    MPI_Recv(&uid, 1, TD_TASK_UID, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    DP("Receiving result for task (%ld%ld) from process %d\n", uid.rank, uid.id, source);
 
-    TRACE_START("recv_task_res (%ld%ld)\n", uid->rank, uid->id);
+    TRACE_START("recv_task_res (%ld%ld)\n", uid.rank, uid.id);
 
-    td_task_t *task;
     // Critical section to ensure thread safety
     {
         std::lock_guard<std::mutex> lock(task_map_mutex);
-        task = remote_task_map[*uid];
-        remote_task_map.erase(*uid);
+        *task = remote_task_map[uid];
+        remote_task_map.erase(uid);
     }
 
-    DP("Found task (%ld%ld) in remote task map\n", task->uid.rank, task->uid.id);
+    DP("Found task (%ld%ld) in remote task map\n", (*task)->uid.rank, (*task)->uid.id);
 
     //Receive Task return code
-    MPI_Recv(&task->return_code, 1, MPI_INT, source, SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
-    DP("Getting Return Code: %d for task (%ld%ld) in remote task map\n", task->return_code, task->uid.rank, task->uid.id);
+    MPI_Recv(&(*task)->return_code, 1, MPI_INT, source, SEND_RESULT_RETURN_CODE, targetdart_comm, MPI_STATUS_IGNORE);
+    DP("Getting Return Code: %d for task (%ld%ld) in remote task map\n", (*task)->return_code, (*task)->uid.rank, (*task)->uid.id);
 
     //Receive all parameter values
-    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+    for (uint32_t i = 0; i < (*task)->KernelArgs->NumArgs; i++) {
         //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-        if (task->KernelArgs->ArgSizes[i] > 0) {
-            int64_t IsMapFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+        if ((*task)->KernelArgs->ArgSizes[i] > 0) {
+            int64_t IsMapFrom = (*task)->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
             if (IsMapFrom != 0) {
-                MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
-                DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+                MPI_Recv((*task)->KernelArgs->ArgPtrs[i], (*task)->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
+                DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", (*task)->uid.rank, (*task)->uid.id, DPxPTR((*task)->KernelArgs->ArgPtrs[i]), source);
             }
         }
     }
 
-    DP("Result transfer of task (%ld%ld) finished\n", task->uid.rank, task->uid.id);
+    DP("Result transfer of task (%ld%ld) finished\n", (*task)->uid.rank, (*task)->uid.id);
 
-    TRACE_END("recv_task_res (%ld%ld)\n", task->uid.rank, task->uid.id);
+    TRACE_END("recv_task_res (%ld%ld)\n", (*task)->uid.rank, (*task)->uid.id);
     TRACE_END("recv_task_res\n");
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
+tdrc TD_Communicator::test_and_receive_results(td_task_t **task) {
 
     //test, if a task result can be received
     MPI_Status status;
@@ -474,7 +474,7 @@ tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
         DP("Result receival signaled\n");
-        receive_task_result(status.MPI_SOURCE, uid);
+        receive_task_result(status.MPI_SOURCE, task);
         return TARGETDART_SUCCESS;
     }
     return TARGETDART_FAILURE;

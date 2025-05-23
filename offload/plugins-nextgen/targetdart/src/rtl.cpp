@@ -29,6 +29,7 @@
 #include "../support_structures/include/threading.h"
 #include "../support_structures/include/communication.h"
 #include "../support_structures/include/scheduling.h"
+#include "../support_structures/include/dependency.h"
 
 
 
@@ -701,7 +702,8 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     td_mem = new TD_Memory_Manager(external_devices);
     td_comm = new TD_Communicator(td_mem);
-    td_sched = new TD_Scheduling_Manager(external_devices, td_comm, td_mem);
+    td_dep = new TD_Dependency_Manager();
+    td_sched = new TD_Scheduling_Manager(external_devices, td_comm, td_mem, td_dep);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);
 
 #ifdef TD_TRACE
@@ -782,6 +784,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
     delete td_sched;
     delete td_comm;
     delete td_mem;
+    delete td_dep;
     TRACE_END("deinit_td\n");
     return Plugin::success();
   }
@@ -854,6 +857,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
     TD_Communicator *td_comm;
     TD_Scheduling_Manager *td_sched;
     TD_Thread_Manager *td_thread;
+    TD_Dependency_Manager *td_dep;
 
     int physicalDeviceCount;
 

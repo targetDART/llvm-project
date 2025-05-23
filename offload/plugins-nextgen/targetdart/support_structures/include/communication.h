@@ -97,14 +97,14 @@ public:
     * Receives the output data from the process the task was migrated to.
     * returns the uid of the received task.
     */
-    tdrc receive_task_result(int source, td_uid_t *uid);
+    tdrc receive_task_result(int source, td_task_t **task);
 
     /**
     * Tests if a task result can be received, if yes it receives the result and returns success.
     * If not the function will return a failure;
     * returns the uid of the task, iff one was received.
     */
-    tdrc test_and_receive_results(td_uid_t *uid);
+    tdrc test_and_receive_results(td_task_t **task);
 
     /**
     * Returns true, iff all participating processes want to finalize

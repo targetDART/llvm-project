@@ -156,9 +156,9 @@ tdrc TD_Thread_Manager::init_threads(std::vector<int> const &assignments) {
 
     //DP("Creating %zu Threads\n", assignments->size());
 
-    scheduler_th = std::thread(__pin_and_workload<int>, &scheduler_th, assignments[0], &schedule_thread_loop, -1);
+    scheduler_th = std::thread(__pin_and_workload<>, &scheduler_th, assignments[0], &schedule_thread_loop);
 
-    receiver_th = std::thread(__pin_and_workload<int>, &receiver_th, assignments[1], &receiver_thread_loop, -1);
+    receiver_th = std::thread(__pin_and_workload<>, &receiver_th, assignments[1], &receiver_thread_loop);
 
     executor_th.resize(executors_per_device * (physical_device_count) + 1);
     DP("Creating %zu Threads\n", executor_th.size() + 2);
@@ -189,7 +189,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     }
     DP("Starting %d executors per device\n", executors_per_device);
 
-    schedule_thread_loop = [&] (int deviceID) {
+    schedule_thread_loop = [&] () {
         TRACE_START("sched_loop\n");
         int iter = 0;
         DP("Starting scheduler thread\n");
@@ -220,16 +220,17 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         DP("Scheduling thread finished\n");  
     };
 
-    receiver_thread_loop = [&] (int deviceID) {
+    receiver_thread_loop = [&] () {
         TRACE_START("recv_loop\n");
         DP("Starting Receiver thread\n");
         while ((!scheduler_done.load() || !schedule_man->is_empty()) && comm_man->size > 1) {
-            td_uid_t uid;
-            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
-                schedule_man->notify_task_completion(uid, false);
+            td_task_t *task;
+            if (comm_man->test_and_receive_results(&task) == TARGETDART_SUCCESS) {
+                // TODO: Insert a real deviceID here
+                schedule_man->notify_task_completion(task, 0, false);
             }
 
-            td_task_t *task = new td_task_t;
+            task = new td_task_t;
             bool keep = false;
             if (comm_man->test_and_receive_task(task) == TARGETDART_SUCCESS) {
                 schedule_man->add_remote_task(task, task->affinity);
@@ -272,11 +273,11 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 //finalize after the task finished
                 if (task->uid.rank != comm_man->rank) {
                     comm_man->send_task_result(task);
-                    schedule_man->notify_task_completion(task->uid, false);
+                    schedule_man->notify_task_completion(task, deviceID, false);
                     DP("finished remote execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                     delete_task(task, false);
                 } else {
-                    schedule_man->notify_task_completion(task->uid, false);
+                    schedule_man->notify_task_completion(task, deviceID, false);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                     delete_task(task, true);
                 }

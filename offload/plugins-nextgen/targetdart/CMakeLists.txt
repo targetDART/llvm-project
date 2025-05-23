@@ -55,6 +55,9 @@ target_sources(omptarget.rtl.targetdart PRIVATE
 target_sources(omptarget.rtl.targetdart PRIVATE
   support_structures/src/memory.cpp
 )
+target_sources(omptarget.rtl.targetdart PRIVATE
+  support_structures/src/dependency.cpp
+)
 
 target_link_libraries(omptarget.rtl.targetdart PRIVATE MPI::MPI_CXX)
 

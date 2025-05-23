@@ -5,6 +5,7 @@
 #include "task.h"
 #include "communication.h"
 #include "memory.h"
+#include "dependency.h"
 
 #include "PluginManager.h"
 #include <atomic>
@@ -91,8 +92,11 @@ private:
     // Reference to the communication manager
     TD_Communicator *comm_man;
 
+    // Reference to a dependency_manager
+    TD_Dependency_Manager *dep_man;
+
 public:
-    TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager);
+    TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager, TD_Dependency_Manager *dep_man);
     ~TD_Scheduling_Manager();
 
     // creates a new targetDART task
@@ -112,7 +116,7 @@ public:
     tdrc get_migrateable_task(device_affinity affinity, td_task_t **task);
 
     // notify the completion of a local task
-    void notify_task_completion(td_uid_t taskID, bool isReplica);
+    void notify_task_completion(td_task_t *task, int physicalDeviceID, bool isReplica);
 
     // returns true, iff no tasks are remaining in any queue
     bool is_empty();    

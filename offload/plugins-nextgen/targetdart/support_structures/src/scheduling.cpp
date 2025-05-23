@@ -28,7 +28,7 @@ bool Set_Wrapper::task_exists(td_uid_t uid) {
     return false;
 }
 
-TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager) {
+TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_Communicator *communicator, TD_Memory_Manager *memory_manager, TD_Dependency_Manager *dep_man) {
     physical_device_count = external_device_count;
     this->memory_manager = memory_manager;
 
@@ -45,6 +45,8 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
     repartition = false;
+
+    this->dep_man = dep_man;
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -52,7 +54,7 @@ TD_Scheduling_Manager::~TD_Scheduling_Manager(){
 }
 
 td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *KernelArgs, ident_t *Loc, int32_t DeviceID) {
-    td_task_t *task = (td_task_t*) malloc(sizeof(td_task_t));
+    td_task_t *task = new td_task_t;
     task->host_base_ptr = apply_image_base_address(hostptr, false);
     task->isReplica = false;
     task->KernelArgs = KernelArgs;
@@ -111,8 +113,12 @@ device_affinity TD_Scheduling_Manager::extract_device_affinity(int DeviceID) {
 void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
     active_tasks++;
     task->KernelArgs = copyKernelArgs(task->KernelArgs);
-    affinity_queues->at(DeviceID).addTask(task);
-    DP("added task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, DeviceID);
+    dep_man->add_task(task);
+    if (task->n_predecessors == 0) {
+        // Task is ready to run
+        affinity_queues->at(DeviceID).addTask(task);
+        DP("added task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, DeviceID);
+    }
 }
 
 void TD_Scheduling_Manager::add_remote_task(td_task_t *task, device_affinity DeviceID) {
@@ -172,11 +178,28 @@ tdrc TD_Scheduling_Manager::get_migrateable_task(device_affinity affinity, td_ta
     return TARGETDART_FAILURE;
 }
 
-void TD_Scheduling_Manager::notify_task_completion(td_uid_t taskID, bool isReplica) {
+void TD_Scheduling_Manager::notify_task_completion(td_task_t *task, int physicalDeviceID, bool isReplica) {
     active_tasks--;
-    DP("completed task (%ld%ld)\n", taskID.rank, taskID.id);
+    DP("completed task (%ld%ld)\n", task->uid.rank, task->uid.id);
     if (isReplica) {        
-        finalized_replicated.add_task(taskID);
+        finalized_replicated.add_task(task->uid);
+    }
+    dep_man->delete_task(task);
+    // iterate through successors to find new available tasks
+    for (td_task_t *successor : task->successors) {
+        if (successor->n_predecessors == 0) {
+            if (successor->affinity == task->affinity) {
+                // if the successor has the same affinity (GPU, CPU, ANY) as the completed task
+                // map the successor to the same physical device -> avoid data copies
+                // TODO: If device queue is very full it may be faster to copy data and run on another device
+                affinity_queues->at(physicalDeviceID).addTask(successor);
+            } else {
+                // otherwise add the task to its affinity queue
+                // TODO: store sub_offset in the task
+                affinity_queues->at(physical_device_count + 1 + successor->affinity + TD_MIGRATABLE_OFFSET);
+            }
+            DP("added task (%ld%ld) to device %d\n", successor->uid.rank, successor->uid.id, physicalDeviceID);
+        }
     }
 }
 

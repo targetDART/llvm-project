@@ -28,13 +28,13 @@ private:
     /**
     * Defines the routine performed by the dedicated scheduling thread.
     */
-    std::function<void(int)> schedule_thread_loop;
+    std::function<void()> schedule_thread_loop;
 
     /**
     * Defines the routine performaed the the dedicated receiver thread.
     * Receiving tasks and results.
     */
-    std::function<void(int)> receiver_thread_loop;
+    std::function<void()> receiver_thread_loop;
 
     /**
     * Defines the routine performed by the executor threads.
