@@ -5,15 +5,10 @@
 #include <vector>
 
 
-struct filtered_helper {
-  void *address;
-  size_t read;
-  size_t write;
-};
 
 // Remove duplicates from the dependency list
-void filter_addresses(KernelArgsTy const *KernelArgs, 
-                     std::vector<filtered_helper> &filtered) {
+void TD_Dependency_Manager::filter_addresses(KernelArgsTy const *KernelArgs, 
+                     std::vector<filtered_helper> &filtered) const {
   
   std::unordered_set<void *> seen;
   for (size_t i = 0; i < KernelArgs->NumArgs; i++) {
@@ -33,7 +28,7 @@ void filter_addresses(KernelArgsTy const *KernelArgs,
   }
 }
 
-void TD_Dependency_Manager::process_deps(td_task_t *task) {
+bool TD_Dependency_Manager::process_deps(td_task_t *task) {
   std::vector<filtered_helper> filtered;
   filter_addresses(task->KernelArgs, filtered);
 
@@ -107,61 +102,47 @@ void TD_Dependency_Manager::process_deps(td_task_t *task) {
     // This task has no_predeccesors and can run
     // The addresses are assigned to this task
     DP("Dependency: Task (%ld%ld) has no predecessors and can run\n", task->uid.rank, task->uid.id);
-    for (filtered_helper &helper: filtered) {
-      void *address = helper.address;
-      size_t read = helper.read;
-      size_t write = helper.write;
-      read_write_counter &counter = in_use_map[address];
-      counter.tasks.push_back(task);
-      counter.reads.push_back(read);
-      counter.writes.push_back(write);
-      counter.total_read += read;
-      counter.total_write += write;
-    }
+    add_task_dependencies(task, filtered);
+    return true;
+  }
+  return false;
+}
 
-    // add task to the ready queue
-    //{
-    //  std::lock_guard<std::mutex> queue_lock(queue_mutex);
-    //  ready_queue.push(task);
-    //}
+void TD_Dependency_Manager::add_task_dependencies(td_task_t *task, std::vector<filtered_helper> const &filtered) {
+  for (filtered_helper const &helper: filtered) {
+    void *address = helper.address;
+    size_t read = helper.read;
+    size_t write = helper.write;
+    read_write_counter &counter = in_use_map[address];
+    counter.tasks.push_back(task);
+    counter.reads.push_back(read);
+    counter.writes.push_back(write);
+    counter.total_read += read;
+    counter.total_write += write;
   }
 }
 
-void TD_Dependency_Manager::add_task(td_task_t *task) {
-  process_deps(task);
-}
-
-void TD_Dependency_Manager::delete_task(td_task_t *task) {
+void TD_Dependency_Manager::clear_task_dependencies(td_task_t *task) {
   std::vector<filtered_helper> filtered;
   filter_addresses(task->KernelArgs, filtered);
 
+  std::lock_guard<std::mutex> map_lock(map_mutex);
+
   // clear the assigned addresses
-  {
-    std::lock_guard<std::mutex> map_lock(map_mutex);
-    for (filtered_helper &helper : filtered) {
-      void *address = helper.address;
-      size_t read = helper.read;
-      size_t write = helper.write;
+  for (filtered_helper &helper : filtered) {
+    void *address = helper.address;
+    size_t read = helper.read;
+    size_t write = helper.write;
 
-      auto map_iter = in_use_map.find(address);
-      int index = std::find(map_iter->second.tasks.begin(), map_iter->second.tasks.end(), task) - map_iter->second.tasks.begin();
-      map_iter->second.tasks.erase(map_iter->second.tasks.begin() + index);
-      map_iter->second.reads.erase(map_iter->second.reads.begin() + index);
-      map_iter->second.writes.erase(map_iter->second.writes.begin() + index);
-      map_iter->second.total_read -= read;
-      map_iter->second.total_write -= write;
+    auto map_iter = in_use_map.find(address);
+    int index = std::find(map_iter->second.tasks.begin(), map_iter->second.tasks.end(), task) - map_iter->second.tasks.begin();
+    map_iter->second.tasks.erase(map_iter->second.tasks.begin() + index);
+    map_iter->second.reads.erase(map_iter->second.reads.begin() + index);
+    map_iter->second.writes.erase(map_iter->second.writes.begin() + index);
+    map_iter->second.total_read -= read;
+    map_iter->second.total_write -= write;
 
-    }
-    DP("Dependency: Task (%ld%ld) is finished and dependencies are cleared\n", task->uid.rank, task->uid.id);
   }
+  DP("Dependency: Task (%ld%ld) is finished and dependencies are cleared\n", task->uid.rank, task->uid.id);
 
-  for (td_task_t *successor : task->successors) {
-    successor->n_predecessors--;
-
-    if (successor->n_predecessors == 0) {
-      // Successor task has no other predecessors
-      // -> Check if requested addresses are available
-      process_deps(successor);
-    }
-  }
 }

@@ -4,7 +4,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <iostream>
 #include <memory.h>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -113,8 +115,7 @@ device_affinity TD_Scheduling_Manager::extract_device_affinity(int DeviceID) {
 void TD_Scheduling_Manager::add_task(td_task_t *task, int32_t DeviceID) {
     active_tasks++;
     task->KernelArgs = copyKernelArgs(task->KernelArgs);
-    dep_man->add_task(task);
-    if (task->n_predecessors == 0) {
+    if (dep_man->process_deps(task)) {
         // Task is ready to run
         affinity_queues->at(DeviceID).addTask(task);
         DP("added task (%ld%ld) to device %d\n", task->uid.rank, task->uid.id, DeviceID);
@@ -184,13 +185,19 @@ void TD_Scheduling_Manager::notify_task_completion(td_task_t *task, int physical
     if (isReplica) {        
         finalized_replicated.add_task(task->uid);
     }
-    dep_man->delete_task(task);
+    std::cout << "Task (" << task->uid.rank << task->uid.id << ") finished on device " << physicalDeviceID << std::endl;
+    dep_man->clear_task_dependencies(task);
     // iterate through successors to find new available tasks
     for (td_task_t *successor : task->successors) {
-        if (successor->n_predecessors == 0) {
-            if (successor->affinity == task->affinity) {
-                // if the successor has the same affinity (GPU, CPU, ANY) as the completed task
-                // map the successor to the same physical device -> avoid data copies
+        // Remove the current task from the predecessors
+        successor->n_predecessors--;
+        if (successor->n_predecessors == 0 && dep_man->process_deps(successor)) {
+            // task can be scheduled
+            if (successor->affinity == ANY || successor->affinity == task->affinity) {
+                // If the successor can run on any device add it to the same device that 
+                // finished the predecessor
+                // If the successor has the same affinity as the predecessor also
+                // add it to same device
                 // TODO: If device queue is very full it may be faster to copy data and run on another device
                 affinity_queues->at(physicalDeviceID).addTask(successor);
             } else {
