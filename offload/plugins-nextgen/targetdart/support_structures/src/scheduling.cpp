@@ -200,12 +200,13 @@ void TD_Scheduling_Manager::notify_task_completion(td_task_t *task, int physical
                 // add it to same device
                 // TODO: If device queue is very full it may be faster to copy data and run on another device
                 affinity_queues->at(physicalDeviceID).addTask(successor);
+                DP("added task (%ld%ld) to device %d\n", successor->uid.rank, successor->uid.id, physicalDeviceID);
             } else {
                 // otherwise add the task to its affinity queue
                 // TODO: store sub_offset in the task
-                affinity_queues->at(physical_device_count + 1 + successor->affinity + TD_MIGRATABLE_OFFSET);
+                affinity_queues->at(physical_device_count + 1 + successor->affinity + TD_MIGRATABLE_OFFSET).addTask(successor);
+                DP("added task (%ld%ld) with affinity %d\n", successor->uid.rank, successor->uid.id, successor->affinity);
             }
-            DP("added task (%ld%ld) to device %d\n", successor->uid.rank, successor->uid.id, physicalDeviceID);
         }
     }
 }
