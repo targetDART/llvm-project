@@ -123,6 +123,9 @@ public:
     // reset the repartitioning state
     void reset_repartition();
 
+    // enables a global repartitioning of tasks accross all processes
+    void enable_repartition();
+
     // implements an iterative scheduling algorithm 
     void iterative_schedule(device_affinity affinity);
 

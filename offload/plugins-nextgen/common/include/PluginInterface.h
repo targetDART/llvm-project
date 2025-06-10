@@ -1081,6 +1081,9 @@ struct GenericPluginTy {
   /// Adds additional user defined information to the plugin after initialization
   virtual Error addInfo(void *info) { return Error::success();}
 
+  /// Adds additional user defined information to the plugin after initialization
+  virtual Error phaseProgress(int phase) { return Error::success();}
+
   /// Adds the number of devices initialized by plugins before the current one
   virtual Error addPriorPhysicalDevices(int deviceCount) { return Error::success();}
 

@@ -55,6 +55,9 @@ struct PluginManager {
   // Adds additional information for the delayed initialization of a plugin
   void addInfo(void *info);
 
+  // advanced phase of the scheduling process
+  void phaseProgress(int phase);
+
   // Provides the number of physical devices available to offload
   int getPhysicalDevices();
 

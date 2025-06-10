@@ -193,6 +193,10 @@ void TD_Scheduling_Manager::reset_repartition() {
     repartition = false;
 }
 
+void TD_Scheduling_Manager::enable_repartition() {
+    repartition = true;
+}
+
 /**
 * Returns 0 iff local_cost = remote_cost
 * Returns the desire load to transfer from local to remote, iff local_cost > remote_cost
@@ -331,7 +335,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         return;
     }
 
-    DP("Do global reschedule with local load %ld and target load %f\n", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
+    DP("Do global reschedule with local load %f and target load %f\n", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
 
     // the amount of tasks/load to transfer to the predecessor and successor processes
     COST_DATA_TYPE pre_transfer = 0;
@@ -343,7 +347,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         pre_transfer = (target_load - predecessor_load) * comm_man->rank;
     }
 
-    DP("Send a load of %ld to predecessors\n", pre_transfer);
+    DP("Send a load of %f to predecessors\n", pre_transfer);
 
     //compute post_transfer
     if (comm_man->rank != comm_man->size - 1) {
@@ -353,7 +357,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         post_transfer = (target_load - successor_load) * num_successors;
     }
 
-    DP("Send a load of %ld to successors\n", post_transfer);
+    DP("Send a load of %f to successors\n", post_transfer);
 
     //calculate num tasks per direktion
     if (pre_transfer < 0) {

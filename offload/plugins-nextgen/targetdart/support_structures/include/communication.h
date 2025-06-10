@@ -110,6 +110,13 @@ public:
     * Returns true, iff all participating processes want to finalize
     */
     bool test_finalization(bool local_finalize);
+
+    /**
+    * Tests if a repartitioning is necessary and returns true, iff the local process wants to repartition.
+    * If local_repartition is true, the local process will initiate a repartitioning.
+    * If local_repartition is false, the local process will only check if a repartitioning is necessary.
+    */
+    bool test_repartitioning(bool local_repartition);
 };
 
 #endif // _TARGETDART_COMMUNICTION_H
