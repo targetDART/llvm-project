@@ -203,6 +203,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 schedule_man->global_reschedule(ANY);
                 schedule_man->reset_repartition();
                 DP("ping\n");
+                DP("remaining active tasks %ld\n", schedule_man->get_active_tasks());
             }
             iter++;        
             //schedule_man->iterative_schedule(CPU);

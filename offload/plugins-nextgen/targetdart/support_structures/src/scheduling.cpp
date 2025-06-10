@@ -290,6 +290,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 * affinity: defines which kinds of tasks should be considered for a rescheduling.
 */
 void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device_affinity affinity, int offset) {
+    DP("Start partial global reschedule with target load %f for affinity %d and offset %d\n", target_load, affinity, offset);
     std::vector<td_task_t*> transferred_tasks;
     double totalcost = 0.0;
     while (totalcost < target_load) {
@@ -365,6 +366,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     //compute furthest data transfer
     int pre_distance = (int) std::ceil(pre_transfer/target_load);
     int post_distance = (int) std::ceil(post_transfer/target_load);
+    DP("Predecessor distance: %d, Postdistance: %d\n", pre_distance, post_distance);
 
     //general case transfers predecessor
     for (int i = 1; i < pre_distance; i++) {
@@ -375,10 +377,14 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         partial_global_reschedule(target_load, affinity, i);
     }
     
-    double pre_remainder_load = pre_transfer - (target_load * (pre_distance - 1));    
-    partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
-    double post_remainder_load = post_transfer - (target_load * (post_distance - 1));    
-    partial_global_reschedule(post_remainder_load, affinity, post_distance);
+    if (pre_distance != 0) {
+        double pre_remainder_load = pre_transfer - (target_load * (pre_distance - 1));    
+        partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
+    }
+    if (post_distance != 0) {
+        double post_remainder_load = post_transfer - (target_load * (post_distance - 1));    
+        partial_global_reschedule(post_remainder_load, affinity, post_distance);
+    }
     TRACE_END("coarse_schedule\n");
 }
 

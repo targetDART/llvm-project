@@ -294,10 +294,10 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 	totalPhysMem *= memInfo.mem_unit;
 	long long physMemUsed = memInfo.totalram - memInfo.freeram;
 	physMemUsed *= memInfo.mem_unit;
-    printf("Memory Used: %lld ; Memory total: %lld\n", physMemUsed, totalPhysMem);
     if(physMemUsed > 0.9*totalPhysMem) {
         enoughSpace = 0;
-        printf("Not enough memory available\n");
+        DP("Memory Used: %lld ; Memory total: %lld\n", physMemUsed, totalPhysMem);
+        DP("Not enough memory available\n");
     }
 
     MPI_Ssend((void*)&enoughSpace, 1, MPI_INT, source, 0, targetdart_comm);
