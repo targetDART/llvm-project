@@ -260,7 +260,11 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
             if (ret_code == TARGETDART_SUCCESS) {
                 DP("Preparing send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, partner_proc);
                 //comm_man->signal_task_send(partner_proc, true);
-                comm_man->send_task(partner_proc, task);
+                tdrc ret_send_code = comm_man->send_task(partner_proc, task);
+                if(ret_send_code == TARGETDART_FAILURE) {
+                    affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).addTask(task);
+                    DP("Sending Task from %d to %d failed\n", comm_man->rank, partner_proc);
+                }
             } else {
                 //comm_man->signal_task_send(partner_proc, false);
             }
@@ -292,6 +296,7 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
         td_task_t *next_task;
         tdrc return_code = get_migrateable_task(affinity, &next_task);
         if (return_code == TARGETDART_FAILURE) {
+            DP("Can't get a migratable task from node %d for coarse scheduling\n", comm_man->rank);
             break;
         } else {
             transferred_tasks.push_back(next_task);
@@ -302,7 +307,14 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
     }
     
     for (size_t t = 0; t < transferred_tasks.size(); t++) {
-        comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
+        tdrc return_code = comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
+
+        //put task back into own queue
+        if(return_code == TARGETDART_FAILURE) {
+            affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).addTask(transferred_tasks.at(t));
+            DP("Cant't migrate task from node %d to %d for coarse scheduling, skipping transfer of remaining tasks...\n", comm_man->rank, comm_man->rank + offset);
+            break;
+        }
     }
 }
 

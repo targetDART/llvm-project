@@ -242,6 +242,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
         TRACE_END("recv_loop\n");
+        DP("receiver Thread finished\n");
     };
 
     exec_thread_loop = [&] (int deviceID, int executorID) {
@@ -279,6 +280,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                     schedule_man->notify_task_completion(task->uid, false);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                     delete_task(task, true);
+                    DP("deleted task\n");
                 }
             } else {
                 std::this_thread::sleep_for(std::chrono::microseconds(100));
