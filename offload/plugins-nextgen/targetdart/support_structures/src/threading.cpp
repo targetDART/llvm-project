@@ -194,7 +194,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         int iter = 0;
         DP("Starting scheduler thread\n");
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
-            if (iter == 8 || schedule_man->do_repartition()) {
+            if (iter == 800 || schedule_man->do_repartition()) {
                 iter = 0;
                 // TODO: this differentiation kann lead to a Deadlock
                 // TODO: restructure multi-schedule approaches
