@@ -74,6 +74,9 @@ private:
     // States if the repartitioning should be triggered
     bool repartition;
 
+    // States if the scheduling should be done in a fine-grained manner
+    bool fine_grained_schedule;
+
     /// Find the table information in the map or look it up in the translation
     /// tables.
     TableMap *getTableMap(void *HostPtr);
@@ -125,6 +128,9 @@ public:
 
     // enables a global repartitioning of tasks accross all processes
     void enable_repartition();
+
+    // returns true, iff the scheduling is done in a fine-grained manner
+    bool is_fine_grained_schedule();
 
     // implements an iterative scheduling algorithm 
     void iterative_schedule(device_affinity affinity);

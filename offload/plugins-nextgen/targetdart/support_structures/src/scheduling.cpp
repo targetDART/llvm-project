@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory.h>
 #include <thread>
 #include <vector>
@@ -46,6 +47,14 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
     repartition = false;
+
+    this->fine_grained_schedule = true;
+    if (std::getenv("SKIP_FINE_GRAINED_SCHEDULING") != NULL) {
+        this->fine_grained_schedule = false;
+        DP("Fine grained scheduling disabled\n");
+    } else {
+        DP("Fine grained scheduling enabled\n");    
+    }
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -195,6 +204,10 @@ void TD_Scheduling_Manager::reset_repartition() {
 
 void TD_Scheduling_Manager::enable_repartition() {
     repartition = true;
+}
+
+void TD_Scheduling_Manager::is_fine_grained_schedule() {
+    return this.fine_grained_schedule;
 }
 
 /**
