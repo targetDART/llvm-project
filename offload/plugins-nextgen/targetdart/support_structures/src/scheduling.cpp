@@ -206,8 +206,8 @@ void TD_Scheduling_Manager::enable_repartition() {
     repartition = true;
 }
 
-void TD_Scheduling_Manager::is_fine_grained_schedule() {
-    return this.fine_grained_schedule;
+bool TD_Scheduling_Manager::is_fine_grained_schedule() {
+    return fine_grained_schedule;
 }
 
 /**
