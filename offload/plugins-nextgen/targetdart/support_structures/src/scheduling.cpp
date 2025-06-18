@@ -544,9 +544,12 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     // Deallocate data on the device and transfer it from device to host if necessary
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+        const bool hasFlagLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
         if (hasFlagFrom && task->KernelArgs->ArgSizes[i] > 0) {
             DP("(%ld%ld) Entry %2d: D2H copy\n", task->uid.rank, task->uid.id, i);
+            DP("D2H copy from %p to %p\n", devicePtrs[i], task->KernelArgs->ArgPtrs[i]);
             DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
+            DP("Result: %f\n", *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i])))); // crashes at compile time
         }
     }
 

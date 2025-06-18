@@ -412,12 +412,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
       AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      TgtPtr = td_sched->get_memory_manager()->get_data_mapping(deviceID, HstPtr);
       auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
-      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      //td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       return res;
     } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
-      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      //td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       // handle other devices
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
         auto DeviceOrErr = PM->getDevice(i);
@@ -442,6 +443,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
       AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
+      TgtPtr = td_sched->get_memory_manager()->get_data_mapping(deviceID, HstPtr);
       auto res = physical_device->dataRetrieve(HstPtr, TgtPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
       return res;
@@ -512,7 +514,8 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
         physical_device = &DeviceOrErr->RTL->getDevice(i);
         void *ptr_d = physical_device->allocate(Size, ptr, Kind);
-        td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+        td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);
+        td_sched->get_memory_manager()->add_data_mapping(ptr_d, base_ptr); 
       }
       return base_ptr;
     }
