@@ -193,13 +193,13 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         TRACE_START("sched_loop\n");
         DP("Starting scheduler thread\n");
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
-            if (comm_man->test_repartitioning(schedule_man->do_repartition())) {
+            if (comm_man->test_repartitioning(schedule_man->do_repartition() && schedule_man->is_synchronizing())) {
                 DP("Repartitioning tasks\n");                    
                 // TODO: restructure multi-schedule approaches
                 schedule_man->global_reschedule(CPU);
                 schedule_man->global_reschedule(GPU);
                 schedule_man->global_reschedule(ANY);
-                schedule_man->reset_repartition();
+                //schedule_man->reset_repartition();
                 //DP("ping\n");
                 //DP("remaining active tasks %ld\n", schedule_man->get_active_tasks());
             }  
@@ -208,7 +208,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 schedule_man->iterative_schedule(GPU);
                 schedule_man->iterative_schedule(ANY);
             }
-            //std::this_thread::sleep_for(std::chrono::microseconds(5));
+            std::this_thread::sleep_for(std::chrono::microseconds(5));
         }
 
         scheduler_done.store(true);

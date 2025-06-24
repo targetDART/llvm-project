@@ -77,6 +77,9 @@ private:
     // States if the scheduling should be done in a fine-grained manner
     bool fine_grained_schedule;
 
+    // States if the scheduling manager is currently synchronizing
+    bool synchronizing;
+
     /// Find the table information in the map or look it up in the translation
     /// tables.
     TableMap *getTableMap(void *HostPtr);
@@ -128,6 +131,9 @@ public:
 
     // enables a global repartitioning of tasks accross all processes
     void enable_repartition();
+
+    // returns true, iff the scheduling manager is currently synchronizing
+    bool is_synchronizing();
 
     // returns true, iff the scheduling is done in a fine-grained manner
     bool is_fine_grained_schedule();
