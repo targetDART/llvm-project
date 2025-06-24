@@ -792,6 +792,12 @@ struct targetDARTPluginTy : public GenericPluginTy {
     return Plugin::success();
   }
 
+
+  Error phaseProgress(int phase) override { 
+    td_sched->enable_repartition();
+    return Plugin::success();
+  }
+
   /// Returns true, iff the plugin defines a driver for a physical device.
   bool providesPhysicalDevices() override {
     return false;

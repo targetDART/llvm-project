@@ -191,28 +191,24 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
 
     schedule_thread_loop = [&] (int deviceID) {
         TRACE_START("sched_loop\n");
-        int iter = 0;
         DP("Starting scheduler thread\n");
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
-            if (iter == 80000 || schedule_man->do_repartition()) {
-                iter = 0;
-                // TODO: this differentiation kann lead to a Deadlock
+            if (comm_man->test_repartitioning(schedule_man->do_repartition() && schedule_man->is_synchronizing())) {
+                DP("Repartitioning tasks\n");                    
                 // TODO: restructure multi-schedule approaches
-                //schedule_man->global_reschedule(CPU);
-                //schedule_man->global_reschedule(GPU);
-                //schedule_man->global_reschedule(ANY);
-                schedule_man->reset_repatition();
-                DP("ping\n");
+                schedule_man->global_reschedule(CPU);
+                schedule_man->global_reschedule(GPU);
+                schedule_man->global_reschedule(ANY);
+                //schedule_man->reset_repartition();
+                //DP("ping\n");
+                //DP("remaining active tasks %ld\n", schedule_man->get_active_tasks());
+            }  
+            if (schedule_man->is_fine_grained_schedule()) {
+                schedule_man->iterative_schedule(CPU);
+                schedule_man->iterative_schedule(GPU);
+                schedule_man->iterative_schedule(ANY);
             }
-            iter++;        
-            schedule_man->iterative_schedule(CPU);
-            schedule_man->iterative_schedule(GPU);
-            schedule_man->iterative_schedule(ANY);
             std::this_thread::sleep_for(std::chrono::microseconds(5));
-            /*td_uid_t uid;
-            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
-                schedule_man->notify_task_completion(uid, false);
-            }*/
         }
 
         scheduler_done.store(true);
@@ -242,6 +238,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
         TRACE_END("recv_loop\n");
+        DP("receiver Thread finished\n");
     };
 
     exec_thread_loop = [&] (int deviceID, int executorID) {
@@ -279,6 +276,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                     schedule_man->notify_task_completion(task->uid, false);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
                     delete_task(task, true);
+                    DP("deleted task\n");
                 }
             } else {
                 std::this_thread::sleep_for(std::chrono::microseconds(100));

@@ -70,6 +70,15 @@ void PluginManager::addInfo(void *info) {
   }
 }
 
+void PluginManager::phaseProgress(int phase) {
+  for(auto &Plugin: Plugins) {
+    auto rc = Plugin->phaseProgress(phase);
+    if (rc) {
+      DP("updating scheduling phase to %d failed.\n", phase);
+    }
+  }
+}
+
 int PluginManager::getPhysicalDevices() {
   int sum = 0;
   for(int i = 0; i < getNumDevices(); i++) {
