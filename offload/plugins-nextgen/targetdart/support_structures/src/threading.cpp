@@ -192,14 +192,23 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     schedule_thread_loop = [&] (int deviceID) {
         TRACE_START("sched_loop\n");
         DP("Starting scheduler thread\n");
+        int iter = 5;
         while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
-            if (comm_man->test_repartitioning(schedule_man->do_repartition() && schedule_man->is_synchronizing())) {
+            if (schedule_man->do_repartition()) {
+                iter = 0;
+                schedule_man->reset_repartition();
+                DP("Repartitioning tasks\n");
+            }
+            if (comm_man->test_repartitioning(iter < 5)) {
                 DP("Repartitioning tasks\n");                    
                 // TODO: restructure multi-schedule approaches
-                schedule_man->global_reschedule(CPU);
-                schedule_man->global_reschedule(GPU);
-                schedule_man->global_reschedule(ANY);
-                //schedule_man->reset_repartition();
+                bool applied = false;
+                applied |= schedule_man->global_reschedule(CPU);
+                applied |= schedule_man->global_reschedule(GPU);
+                applied |= schedule_man->global_reschedule(ANY);
+                if (applied) {
+                    iter++;
+                }
                 //DP("ping\n");
                 //DP("remaining active tasks %ld\n", schedule_man->get_active_tasks());
             }  

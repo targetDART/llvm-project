@@ -598,7 +598,7 @@ std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST
 bool TD_Communicator::test_repartitioning(bool local_repartition) {
     bool result = true;
 
-    MPI_Allreduce(&local_repartition, &result, 1, MPI_C_BOOL, MPI_LOR, targetdart_comm);
+    MPI_Allreduce(&local_repartition, &result, 1, MPI_C_BOOL, MPI_LAND, targetdart_comm);
 
     return result;
 }

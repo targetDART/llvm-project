@@ -340,7 +340,7 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
     }
 }
 
-void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
+bool TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     TRACE_START("coarse_schedule\n");
     COST_DATA_TYPE local_cost = affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getSize() + 
                                 affinity_queues->at(physical_device_count + 1 + affinity + TD_LOCAL_OFFSET).getSize() + 
@@ -355,7 +355,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     if (target_load <= 1) {
         DP("Skip global reschedule with target load %f\n", target_load);
         TRACE_END("coarse_schedule\n");
-        return;
+        return false;
     }
 
     DP("Do global reschedule with local load %f and target load %f\n", local_cost, target_load);
@@ -413,6 +413,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         partial_global_reschedule(post_remainder_load, affinity, post_distance);
     }
     TRACE_END("coarse_schedule\n");
+    return true;
 }
 
 int32_t TD_Scheduling_Manager::public_device_count() {

@@ -142,7 +142,7 @@ public:
     void iterative_schedule(device_affinity affinity);
 
     // implements a global repartitioning algorithm based on ExScan
-    void global_reschedule(device_affinity affinity);
+    bool global_reschedule(device_affinity affinity);
 
     // returns the number of user visible devices
     int32_t public_device_count();
