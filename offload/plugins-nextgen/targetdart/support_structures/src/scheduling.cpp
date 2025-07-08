@@ -314,7 +314,7 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
     DP("Start partial global reschedule with target load %f for affinity %d and offset %d\n", target_load, affinity, offset);
     std::vector<td_task_t*> transferred_tasks;
     double totalcost = 0.0;
-    while (totalcost < target_load) {
+    while (totalcost < target_load * 0.8) {
         td_task_t *next_task;
         tdrc return_code = get_migrateable_task(affinity, &next_task);
         if (return_code == TARGETDART_FAILURE) {
@@ -348,17 +348,17 @@ bool TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
                                 affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICA_OFFSET).getSize() +
                                 affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICATED_OFFSET).getSize();
     global_sched_params_t params = comm_man->global_cost_communicator(local_cost);
-    DP("Local cost: %f, Total cost: %f, Prefix sum: %f\n", params.local_cost, params.total_cost, params.prefix_sum);
+    DP("Local cost: %lu, Total cost: %lu, Prefix sum: %lu\n", params.local_cost, params.total_cost, params.prefix_sum);
     // optimum load for each process
     double target_load = (double) params.total_cost / (double) comm_man->size;
 
     if (target_load <= 1) {
-        DP("Skip global reschedule with target load %f\n", target_load);
+        DP("Skip global reschedule with target load %lu\n", target_load);
         TRACE_END("coarse_schedule\n");
         return false;
     }
 
-    DP("Do global reschedule with local load %f and target load %f\n", local_cost, target_load);
+    DP("Do global reschedule with local load %lu and target load %lu\n", local_cost, target_load);
 
     // the amount of tasks/load to transfer to the predecessor and successor processes
     COST_DATA_TYPE pre_transfer = 0;
@@ -370,7 +370,7 @@ bool TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         pre_transfer = (target_load - predecessor_load) * comm_man->rank;
     }
 
-    DP("Send a load of %f to predecessors\n", pre_transfer);
+    DP("Send a load of %lu to predecessors\n", pre_transfer);
 
     //compute post_transfer
     if (comm_man->rank != comm_man->size - 1) {

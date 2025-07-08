@@ -20,7 +20,7 @@
 
 #define gettid() syscall(SYS_gettid)
 
-#define COST_DATA_TYPE double
+#define COST_DATA_TYPE uint64_t
 
 #define handle_error_en(en, msg) \
            do { errno = en; DP("ERROR: %s : %s\n", msg, strerror(en)); exit(EXIT_FAILURE); } while (0)
