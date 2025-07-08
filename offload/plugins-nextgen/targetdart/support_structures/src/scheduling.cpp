@@ -542,6 +542,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     TRACE_START("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Deallocate data on the device and transfer it from device to host if necessary
+    double check;
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
         const bool hasFlagLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
@@ -549,7 +550,17 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
             DP("(%ld%ld) Entry %2d: D2H copy\n", task->uid.rank, task->uid.id, i);
             DP("D2H copy from %p to %p\n", devicePtrs[i], task->KernelArgs->ArgPtrs[i]);
             DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
-            DP("Result: %f\n", *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i])))); // crashes at compile time
+            check = *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i])));
+            DP("Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, check);
+        }
+    }
+    if(check == 0.0) {
+        for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
+            DP("added part in scheduling.cpp\n");
+            if(task->KernelArgs->ArgSizes[i] == 0) { //cllt besser mit >= 8 weil es dann auch wirklich ein double sein kann/ interpretiert werden kann
+                DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
+                DP("(%ld%ld) Entry %2d value: %f\n", task->uid.rank, task->uid.id, i, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
+            }
         }
     }
 

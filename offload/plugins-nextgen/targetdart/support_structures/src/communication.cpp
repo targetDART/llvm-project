@@ -172,22 +172,39 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     TRACE_START("send_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     //fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
+    DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
+    uint32_t testt1 = task->KernelArgs->NumArgs;
+    DP("1\n");
+    int64_t test2 = task->KernelArgs->ArgSizes[0];
+    DP("2\n");
+    bool test3 = task->KernelArgs->ArgTypes[0] == 0x220;
+    DP("3\n");
+    memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[0]);
+    DP("4\n");
+
     //Update argument sizes and types for remote tasks
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        if (task->KernelArgs->ArgSizes[i] == 0) {
+        DP("send task - iteration: %d\n", i);
+        //const int64_t IsImplicit = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_IMPLICIT;
+        //const int64_t IsParam = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TARGET_PARAM;
+        if (task->KernelArgs->ArgSizes[i] == 0 && task->KernelArgs->ArgTypes[i] == 0x220 /*isImplicit != 0 && IsParam != 0*/) {
+            task->KernelArgs->ArgTypes[i] = 0x21;
             task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
         }
     }
 
+    DP("5\n");
+
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
-    DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
+    
 
     {
         std::lock_guard<std::mutex> lock(task_map_mutex);
         remote_task_map.insert({task->uid, task});
     }
 
+    DP("6\n");
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     DP("Send task structure for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
@@ -409,6 +426,7 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
             if (IsMapFrom != 0) {
                 MPI_Ssend(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
                 DP("Sending result for task (%ld%ld) at " DPxMOD " \n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]));
+                DP("Before Sending Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
             }
         }
     }
@@ -454,6 +472,7 @@ tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
             if (IsMapFrom != 0) {
                 MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
                 DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
+                DP("After recv Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
             }
         }
     }
