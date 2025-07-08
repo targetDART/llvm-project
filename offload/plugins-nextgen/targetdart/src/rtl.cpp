@@ -685,9 +685,12 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Initialize the plugin and return the number of available devices.
   Expected<int32_t> initImpl() override {
     TRACE_START("init_td\n");
-    if (std::getenv("TD_ACTIVATE") != nullptr) {
-      TRACE_END("init_td\n");
-      return 0;
+    if (char *activate_ch = std::getenv("TD_ACTIVATE")) {
+      std::string activate = activate_ch;
+      if (activate == "0" || activate == "no" || activate == "false") { 
+        TRACE_END("init_td\n");
+        return 0;
+      }
     }
 
     DP("init targetDART\n");
@@ -760,9 +763,12 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Deinitialize the plugin and release the resources.
   Error deinitImpl() override {
     TRACE_START("deinit_td\n");
-    if (std::getenv("TD_ACTIVATE") != nullptr) {
-      TRACE_END("deinit_td\n");
-      return Plugin::success();
+    if (char *activate_ch = std::getenv("TD_ACTIVATE")) {
+      std::string activate = activate_ch;
+      if (activate == "0" || activate == "no" || activate == "false") {
+        TRACE_END("deinit_td\n");
+        return Plugin::success();
+      }
     }
     DP("finalize targetDART\n");
 
@@ -786,6 +792,12 @@ struct targetDARTPluginTy : public GenericPluginTy {
   /// Adds additional user defined information to the plugin after initialization
   Error addInfo(void *info) override { 
     add_main_ptr(info);
+    return Plugin::success();
+  }
+
+
+  Error phaseProgress(int phase) override { 
+    td_sched->enable_repartition();
     return Plugin::success();
   }
 

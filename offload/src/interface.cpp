@@ -43,7 +43,7 @@ EXTERN int td_advance(int phase) {
 }
 
 EXTERN int td_phase_progress(int phase) {
-    DP("Not yet implemented!\n");
+    PM->phaseProgress(phase);
     return 0;
 }
 

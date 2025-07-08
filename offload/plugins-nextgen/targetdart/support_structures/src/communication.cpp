@@ -9,6 +9,8 @@
 #include <iostream>
 #include <unordered_map>
 #include <vector>
+#include "sys/types.h"
+#include "sys/sysinfo.h"
 
 
 void TD_Communicator::transfer_setup() {
@@ -208,12 +210,23 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     DP("Send task structure for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
+
+    //blocking receive
+
     //Send static KernelArgs values excluding pointervalues
     MPI_Send(task->KernelArgs, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
     DP("Send KernelArgs for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
     //Send Argument sizes for actual data transfers
     MPI_Send(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
     DP("Send ArgSizes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
+
+    int enoughSpace = 1;
+    MPI_Recv((void*)&enoughSpace, 1, MPI_INT, dest, 0, targetdart_comm, MPI_STATUS_IGNORE);
+    if(enoughSpace == 0) {
+        DP("Node %d has not enough free memory to receive task %ld from node %d\n", dest, task->uid.id, rank);
+        return TARGETDART_FAILURE;
+    }
+
     //Send Argument types for each kernel
     MPI_Send(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
     DP("Send ArgTypes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
@@ -289,6 +302,26 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
     task->KernelArgs->ArgSizes = new int64_t[task->KernelArgs->NumArgs];
     MPI_Recv(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_SIZES, targetdart_comm, MPI_STATUS_IGNORE);
     DP("Recv ArgSizes for task (%ld%ld) from process %d\n", task->uid.rank, task->uid.id, source);
+
+    int enoughSpace = 1;
+    struct sysinfo memInfo;
+    sysinfo (&memInfo);
+
+    long long totalPhysMem = memInfo.totalram;
+	totalPhysMem *= memInfo.mem_unit;
+	long long physMemUsed = memInfo.totalram - memInfo.freeram;
+	physMemUsed *= memInfo.mem_unit;
+    if(physMemUsed > 0.9*totalPhysMem) {
+        enoughSpace = 0;
+        DP("Memory Used: %lld ; Memory total: %lld\n", physMemUsed, totalPhysMem);
+        DP("Not enough memory available\n");
+    }
+
+    MPI_Ssend((void*)&enoughSpace, 1, MPI_INT, source, 0, targetdart_comm);
+    if(enoughSpace == 0) {
+        return TARGETDART_FAILURE;
+    }
+
     //Receive Argument types for each kernel
     task->KernelArgs->ArgTypes = new int64_t[task->KernelArgs->NumArgs];
     MPI_Recv(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, source, SEND_PARAM_TYPES, targetdart_comm, MPI_STATUS_IGNORE);
@@ -322,8 +355,14 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
 
         
         if (IsLiteral == 0 && IsPrivate == 0 && task->KernelArgs->ArgSizes[i] + diff[i] > 0) {
-            task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+            //try {
+            //task->KernelArgs->ArgBasePtrs[i] = (void *) new int64_t[task->KernelArgs->ArgSizes[i] + diff[i]];
+            //task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            task->KernelArgs->ArgBasePtrs[i] = (void *) malloc(sizeof(int64_t) * (task->KernelArgs->ArgSizes[i] + diff[i]));
             task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            /*} catch (std::bad_alloc& badAlloc) {
+                enoughSpace = 0;
+            }*/
             DP("Arg %d: Allocated memory for task (%ld%ld) at" DPxMOD " with size %ld bytes\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), task->KernelArgs->ArgSizes[i]);  
         }
         if (task->KernelArgs->ArgSizes[i] > 0) {
@@ -575,6 +614,13 @@ std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST
     return cost_vector;
 }
 
+bool TD_Communicator::test_repartitioning(bool local_repartition) {
+    bool result = true;
+
+    MPI_Allreduce(&local_repartition, &result, 1, MPI_C_BOOL, MPI_LAND, targetdart_comm);
+
+    return result;
+}
 
 bool TD_Communicator::test_finalization(bool local_finalize) {
 
