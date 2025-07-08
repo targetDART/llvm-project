@@ -1,9 +1,11 @@
 #include "../include/scheduling.h"
 #include "../include/communication.h"
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <memory.h>
 #include <thread>
 #include <vector>
@@ -45,6 +47,14 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
     priorities = {TD_LOCAL_OFFSET, TD_REPLICATED_OFFSET, TD_REMOTE_OFFSET, TD_MIGRATABLE_OFFSET, TD_REPLICA_OFFSET};
 
     repartition = false;
+
+    this->fine_grained_schedule = true;
+    if (std::getenv("SKIP_FINE_GRAINED_SCHEDULING") != NULL) {
+        this->fine_grained_schedule = false;
+        DP("Fine grained scheduling disabled\n");
+    } else {
+        DP("Fine grained scheduling enabled\n");    
+    }
 }
 
 TD_Scheduling_Manager::~TD_Scheduling_Manager(){
@@ -188,8 +198,20 @@ bool TD_Scheduling_Manager::do_repartition(){
     return repartition;
 }
 
-void TD_Scheduling_Manager::reset_repatition() {
+void TD_Scheduling_Manager::reset_repartition() {
     repartition = false;
+}
+
+void TD_Scheduling_Manager::enable_repartition() {
+    repartition = true;
+}
+
+bool TD_Scheduling_Manager::is_synchronizing() {
+    return repartition;
+}
+
+bool TD_Scheduling_Manager::is_fine_grained_schedule() {
+    return fine_grained_schedule;
 }
 
 /**
@@ -259,7 +281,11 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
             if (ret_code == TARGETDART_SUCCESS) {
                 DP("Preparing send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, partner_proc);
                 //comm_man->signal_task_send(partner_proc, true);
-                comm_man->send_task(partner_proc, task);
+                tdrc ret_send_code = comm_man->send_task(partner_proc, task);
+                if(ret_send_code == TARGETDART_FAILURE) {
+                    affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).addTask(task);
+                    DP("Sending Task from %d to %d failed\n", comm_man->rank, partner_proc);
+                }
             } else {
                 //comm_man->signal_task_send(partner_proc, false);
             }
@@ -284,41 +310,57 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
 * target_load: defines the load the victim should have in total after migration.
 * affinity: defines which kinds of tasks should be considered for a rescheduling.
 */
-void TD_Scheduling_Manager::partial_global_reschedule(COST_DATA_TYPE target_load, device_affinity affinity, int offset) {
+void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device_affinity affinity, int offset) {
+    DP("Start partial global reschedule with target load %f for affinity %d and offset %d\n", target_load, affinity, offset);
     std::vector<td_task_t*> transferred_tasks;
-    COST_DATA_TYPE totalcost = 0;
-    while (totalcost < BALANCE_FACTOR * target_load) {
+    double totalcost = 0.0;
+    while (totalcost < target_load) {
         td_task_t *next_task;
         tdrc return_code = get_migrateable_task(affinity, &next_task);
         if (return_code == TARGETDART_FAILURE) {
-            break;
-        }
-        if (next_task->cached_total_sizes >= target_load/BALANCE_FACTOR) {
+            DP("Can't get a migratable task from node %d for coarse scheduling\n", comm_man->rank);
             break;
         } else {
             transferred_tasks.push_back(next_task);
+            totalcost += 1.0;
+            //TODO: non-uniform task sizes
+            //totalcost += next_task->cached_total_sizes;
         }
     }
     
-    //TODO: think about MPI_pack as well
     for (size_t t = 0; t < transferred_tasks.size(); t++) {
-        comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
+        tdrc return_code = comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
+
+        //put task back into own queue
+        if(return_code == TARGETDART_FAILURE) {
+            affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).addTask(transferred_tasks.at(t));
+            DP("Can't migrate task from node %d to %d for coarse scheduling, skipping transfer of remaining tasks...\n", comm_man->rank, comm_man->rank + offset);
+            break;
+        }
     }
 }
 
-void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
+bool TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     TRACE_START("coarse_schedule\n");
-    global_sched_params_t params = comm_man->global_cost_communicator(affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost());
-    COST_DATA_TYPE target_load = params.total_cost / comm_man->size;
+    COST_DATA_TYPE local_cost = affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getSize() + 
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_LOCAL_OFFSET).getSize() + 
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REMOTE_OFFSET).getSize() +
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICA_OFFSET).getSize() +
+                                affinity_queues->at(physical_device_count + 1 + affinity + TD_REPLICATED_OFFSET).getSize();
+    global_sched_params_t params = comm_man->global_cost_communicator(local_cost);
+    DP("Local cost: %f, Total cost: %f, Prefix sum: %f\n", params.local_cost, params.total_cost, params.prefix_sum);
+    // optimum load for each process
+    double target_load = (double) params.total_cost / (double) comm_man->size;
 
-    if (target_load == 0) {
-        DP("Skip global reschedule with target load %ld\n", target_load);
+    if (target_load <= 1) {
+        DP("Skip global reschedule with target load %f\n", target_load);
         TRACE_END("coarse_schedule\n");
-        return;
+        return false;
     }
 
-    DP("Do global reschedule with local load %ld and target load %ld\n", affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).getCost(), target_load);
+    DP("Do global reschedule with local load %f and target load %f\n", local_cost, target_load);
 
+    // the amount of tasks/load to transfer to the predecessor and successor processes
     COST_DATA_TYPE pre_transfer = 0;
     COST_DATA_TYPE post_transfer = 0;
 
@@ -328,7 +370,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         pre_transfer = (target_load - predecessor_load) * comm_man->rank;
     }
 
-    DP("Send a load of %ld to predecessors\n", pre_transfer);
+    DP("Send a load of %f to predecessors\n", pre_transfer);
 
     //compute post_transfer
     if (comm_man->rank != comm_man->size - 1) {
@@ -338,7 +380,7 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         post_transfer = (target_load - successor_load) * num_successors;
     }
 
-    DP("Send a load of %ld to successors\n", post_transfer);
+    DP("Send a load of %f to successors\n", post_transfer);
 
     //calculate num tasks per direktion
     if (pre_transfer < 0) {
@@ -349,8 +391,9 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     }
 
     //compute furthest data transfer
-    int pre_distance = pre_transfer/target_load + 1;
-    int post_distance = post_transfer/target_load + 1;
+    int pre_distance = (int) std::ceil(pre_transfer/target_load);
+    int post_distance = (int) std::ceil(post_transfer/target_load);
+    DP("Predecessor distance: %d, Postdistance: %d\n", pre_distance, post_distance);
 
     //general case transfers predecessor
     for (int i = 1; i < pre_distance; i++) {
@@ -361,11 +404,16 @@ void TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
         partial_global_reschedule(target_load, affinity, i);
     }
     
-    COST_DATA_TYPE pre_remainder_load = pre_transfer % target_load;    
-    partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
-    COST_DATA_TYPE post_remainder_load = post_transfer % target_load;    
-    partial_global_reschedule(post_remainder_load, affinity, post_distance);
+    if (pre_distance != 0) {
+        double pre_remainder_load = pre_transfer - (target_load * (pre_distance - 1));    
+        partial_global_reschedule(pre_remainder_load, affinity, -pre_distance);
+    }
+    if (post_distance != 0) {
+        double post_remainder_load = post_transfer - (target_load * (post_distance - 1));    
+        partial_global_reschedule(post_remainder_load, affinity, post_distance);
+    }
     TRACE_END("coarse_schedule\n");
+    return true;
 }
 
 int32_t TD_Scheduling_Manager::public_device_count() {
@@ -374,10 +422,12 @@ int32_t TD_Scheduling_Manager::public_device_count() {
 
 void TD_Scheduling_Manager::synchronize() {
     TRACE_START("synchronize\n");
+    synchronizing = true;
     while (!is_empty()) {
         // sleep for a few micro seconds to limit contention
         std::this_thread::sleep_for(std::chrono::microseconds(10));
     }
+    synchronizing = false;
     TRACE_END("synchronize\n");
 }
 

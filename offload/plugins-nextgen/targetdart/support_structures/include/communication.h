@@ -7,7 +7,7 @@
 #include "memory.h"
 #include <unordered_map>
 
-#define COST_MPI_DATA_TYPE MPI_INT64_T
+#define COST_MPI_DATA_TYPE MPI_DOUBLE
 
 enum MpiTaskTransferTag {SIGNAL_TASK_SEND, SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_BASE_PTRS, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE, SEND_RESULT_UID, SEND_RESULT_DATA, SEND_RESULT_RETURN_CODE};
 
@@ -110,6 +110,13 @@ public:
     * Returns true, iff all participating processes want to finalize
     */
     bool test_finalization(bool local_finalize);
+
+    /**
+    * Tests if a repartitioning is necessary and returns true, iff the local process wants to repartition.
+    * If local_repartition is true, the local process will initiate a repartitioning.
+    * If local_repartition is false, the local process will only check if a repartitioning is necessary.
+    */
+    bool test_repartitioning(bool local_repartition);
 };
 
 #endif // _TARGETDART_COMMUNICTION_H
