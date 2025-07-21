@@ -1150,22 +1150,6 @@ static void __kmp_task_finish(kmp_int32 gtid, kmp_task_t *task,
     }
   }
 
-  // Tasks with valid target async handles must be re-enqueued.
-  if (taskdata->td_target_data.async_handle != NULL) {
-    // Note: no need to translate gtid to its shadow. If the current thread is a
-    // hidden helper one, then the gtid is already correct. Otherwise, hidden
-    // helper threads are disabled, and gtid refers to a OpenMP thread.
-#if OMPT_SUPPORT
-    if (ompt) {
-      __ompt_task_finish(task, resumed_task, ompt_task_switch);
-    }
-#endif
-    __kmpc_give_task(task, __kmp_tid_from_gtid(gtid));
-    if (KMP_HIDDEN_HELPER_THREAD(gtid))
-      __kmp_hidden_helper_worker_thread_signal();
-    completed = false;
-  }
-
   if (completed) {
     taskdata->td_flags.complete = 1; // mark the task as completed
 #if OMPX_TASKGRAPH
@@ -1639,7 +1623,6 @@ kmp_task_t *__kmp_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
       parent_task->td_taskgroup; // task inherits taskgroup from the parent task
   taskdata->td_dephash = NULL;
   taskdata->td_depnode = NULL;
-  taskdata->td_target_data.async_handle = NULL;
   if (flags->tiedness == TASK_UNTIED)
     taskdata->td_last_tied = NULL; // will be set when the task is scheduled
   else
@@ -1720,8 +1703,10 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   if (__kmp_enable_hidden_helper)
     input_flags.hidden_helper = TRUE;
 
-  return __kmpc_omp_task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t,
+  kmp_task_t *task = __kmpc_omp_task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t,
                                sizeof_shareds, task_entry);
+  input_flags.detachable = 1;
+  __kmpc_task_allow_completion_event(NULL, gtid, task);
 }
 
 /*!
@@ -1898,15 +1883,6 @@ __kmp_invoke_task(kmp_int32 gtid, kmp_task_t *task,
     KMP_FSYNC_ACQUIRED(taskdata); // acquired self (new task)
 #endif
 
-#if ENABLE_LIBOMPTARGET
-    if (taskdata->td_target_data.async_handle != NULL) {
-      // If we have a valid target async handle, that means that we have already
-      // executed the task routine once. We must query for the handle completion
-      // instead of re-executing the routine.
-      KMP_ASSERT(tgt_target_nowait_query);
-      tgt_target_nowait_query(&taskdata->td_target_data.async_handle);
-    } else
-#endif
     if (task->routine != NULL) {
 #ifdef KMP_GOMP_COMPAT
       if (taskdata->td_flags.native) {
@@ -4656,6 +4632,10 @@ void __kmp_fulfill_event(kmp_event_t *event) {
   }
 }
 
+void __kmpc_fulfill_event(kmp_event_t *event) {
+  __kmpc_fulfill_event(event);
+}
+
 // __kmp_task_dup_alloc: Allocate the taskdata and make a copy of source task
 // for taskloop
 //
@@ -5426,15 +5406,13 @@ void __kmpc_taskloop_5(ident_t *loc, int gtid, kmp_task_t *task, int if_val,
   KA_TRACE(20, ("__kmpc_taskloop_5(exit): T#%d\n", gtid));
 }
 
-/*!
+/*
 @ingroup TASKING
 @param gtid Global Thread ID of current thread
-@return Returns a pointer to the thread's current task async handle. If no task
-is present or gtid is invalid, returns NULL.
-
-Acqurires a pointer to the target async handle from the current task.
+@return Returns a pointer to the thread's current task completion event. If no task
+is present or gtid is invalid, return NULL
 */
-void **__kmpc_omp_get_target_async_handle_ptr(kmp_int32 gtid) {
+kmp_event_t *__kmpc_omp_get_event(kmp_int32 gtid) {
   if (gtid == KMP_GTID_DNE)
     return NULL;
 
@@ -5444,7 +5422,7 @@ void **__kmpc_omp_get_target_async_handle_ptr(kmp_int32 gtid) {
   if (!taskdata)
     return NULL;
 
-  return &taskdata->td_target_data.async_handle;
+  return &taskdata->td_allow_completion_event;
 }
 
 /*!

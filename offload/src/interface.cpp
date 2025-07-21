@@ -377,6 +377,7 @@ int targetKernelWrapper(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
 EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                int32_t ThreadLimit, void *HostPtr,
                                KernelArgsTy *KernelArgs) {
+  KernelArgs->Event = __kmpc_omp_get_event(__kmpc_global_thread_num(NULL));
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   if (KernelArgs->Flags.NoWait)
     return targetKernel<TaskAsyncInfoWrapperTy>(
@@ -496,48 +497,4 @@ EXTERN int __tgt_print_device_info(int64_t DeviceId) {
     FATAL_MESSAGE(DeviceId, "%s", toString(DeviceOrErr.takeError()).c_str());
 
   return DeviceOrErr->printDeviceInfo();
-}
-
-EXTERN void __tgt_target_nowait_query(void **AsyncHandle) {
-  assert(PM && "Runtime not initialized");
-  OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
-
-  if (!AsyncHandle || !*AsyncHandle) {
-    FATAL_MESSAGE0(
-        1, "Receive an invalid async handle from the current OpenMP task. Is "
-           "this a target nowait region?\n");
-  }
-
-  // Exponential backoff tries to optimally decide if a thread should just query
-  // for the device operations (work/spin wait on them) or block until they are
-  // completed (use device side blocking mechanism). This allows the runtime to
-  // adapt itself when there are a lot of long-running target regions in-flight.
-  static thread_local utils::ExponentialBackoff QueryCounter(
-      Int64Envar("OMPTARGET_QUERY_COUNT_MAX", 10),
-      Int64Envar("OMPTARGET_QUERY_COUNT_THRESHOLD", 5),
-      Envar<float>("OMPTARGET_QUERY_COUNT_BACKOFF_FACTOR", 0.5f));
-
-  auto *AsyncInfo = (AsyncInfoTy *)*AsyncHandle;
-
-  // If the thread is actively waiting on too many target nowait regions, we
-  // should use the blocking sync type.
-  if (QueryCounter.isAboveThreshold())
-    AsyncInfo->SyncType = AsyncInfoTy::SyncTy::BLOCKING;
-
-  if (AsyncInfo->synchronize())
-    FATAL_MESSAGE0(1, "Error while querying the async queue for completion.\n");
-  // If there are device operations still pending, return immediately without
-  // deallocating the handle and increase the current thread query count.
-  if (!AsyncInfo->isDone()) {
-    QueryCounter.increment();
-    return;
-  }
-
-  // When a thread successfully completes a target nowait region, we
-  // exponentially backoff its query counter by the query factor.
-  QueryCounter.decrement();
-
-  // Delete the handle and unset it from the OpenMP task data.
-  delete AsyncInfo;
-  *AsyncHandle = nullptr;
 }

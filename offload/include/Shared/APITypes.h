@@ -110,12 +110,13 @@ struct KernelArgsTy {
    // The number of threads (for x,y,z dimension).
   uint32_t ThreadLimit[3] = {0, 0, 0};
   uint32_t DynCGroupMem = 0;     // Amount of dynamic cgroup memory requested.
+  void *Event = nullptr;
 };
 static_assert(sizeof(KernelArgsTy().Flags) == sizeof(uint64_t),
               "Invalid struct size");
 static_assert(sizeof(KernelArgsTy) ==
                   (8 * sizeof(int32_t) + 3 * sizeof(int64_t) +
-                   4 * sizeof(void **) + 2 * sizeof(int64_t *)),
+                   4 * sizeof(void **) + 2 * sizeof(int64_t *) + sizeof(void *)),
               "Invalid struct size");
 
 /// Flat array of kernel launch parameters and their total size.

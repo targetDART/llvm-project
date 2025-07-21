@@ -72,8 +72,8 @@ typedef struct kmp_task {
 
 int32_t __kmpc_global_thread_num(void *) __attribute__((weak));
 bool __kmpc_omp_has_task_team(int32_t gtid) __attribute__((weak));
-void **__kmpc_omp_get_target_async_handle_ptr(int32_t gtid)
-    __attribute__((weak));
+void *__kmpc_omp_get_event(int32_t gtid) __attribute__((weak));
+void __kmpc_fulfill_event(void *event) __attribute__((weak));
 
 /**
  * The argument set that is passed from asynchronous memory copy to block
