@@ -131,6 +131,7 @@ typedef struct td_task_t{
     int                 return_code;
     device_affinity     affinity;
     bool                isReplica;
+    void *Event;
 } td_task_t;
 
 template <>

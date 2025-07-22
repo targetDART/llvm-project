@@ -2749,6 +2749,7 @@ typedef struct kmp_tasking_flags { /* Total struct must be exactly 32 bits */
 } kmp_tasking_flags_t;
 
 typedef struct kmp_target_data {
+  kmp_int32 device_id;
 } kmp_target_data_t;
 
 struct kmp_taskdata { /* aligned during dynamic allocation       */

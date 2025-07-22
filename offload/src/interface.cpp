@@ -345,7 +345,9 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                     /*CodePtr=*/OMPT_GET_RETURN_ADDRESS);)
 
   int Rc = OFFLOAD_SUCCESS;
+  DP("Test\n");
   Rc = target(Loc, *DeviceOrErr, HostPtr, *KernelArgs, AsyncInfo);
+  DP("Test2\n");
   { // required to show syncronization
     TIMESCOPE_WITH_DETAILS_AND_IDENT("Runtime: syncronize", "", Loc);
     if (Rc == OFFLOAD_SUCCESS)
@@ -377,7 +379,6 @@ int targetKernelWrapper(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
 EXTERN int __tgt_target_kernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                                int32_t ThreadLimit, void *HostPtr,
                                KernelArgsTy *KernelArgs) {
-  KernelArgs->Event = __kmpc_omp_get_event(__kmpc_global_thread_num(NULL));
   OMPT_IF_BUILT(ReturnAddressSetterRAII RA(__builtin_return_address(0)));
   if (KernelArgs->Flags.NoWait)
     return targetKernel<TaskAsyncInfoWrapperTy>(

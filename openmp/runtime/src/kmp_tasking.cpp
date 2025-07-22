@@ -1699,14 +1699,15 @@ kmp_task_t *__kmpc_omp_target_task_alloc(ident_t *loc_ref, kmp_int32 gtid,
   // target task is untied defined in the specification
   input_flags.tiedness = TASK_UNTIED;
   input_flags.target = 1;
+  input_flags.detachable = TASK_DETACHABLE;
 
   if (__kmp_enable_hidden_helper)
     input_flags.hidden_helper = TRUE;
 
   kmp_task_t *task = __kmpc_omp_task_alloc(loc_ref, gtid, flags, sizeof_kmp_task_t,
                                sizeof_shareds, task_entry);
-  input_flags.detachable = 1;
   __kmpc_task_allow_completion_event(NULL, gtid, task);
+  return task;
 }
 
 /*!
@@ -4633,7 +4634,7 @@ void __kmp_fulfill_event(kmp_event_t *event) {
 }
 
 void __kmpc_fulfill_event(kmp_event_t *event) {
-  __kmpc_fulfill_event(event);
+  __kmp_fulfill_event(event);
 }
 
 // __kmp_task_dup_alloc: Allocate the taskdata and make a copy of source task

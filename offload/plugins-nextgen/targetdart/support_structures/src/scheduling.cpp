@@ -77,6 +77,9 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
 
     task->uid = {local_id_tracker.fetch_add(1), comm_man->rank};
 
+    DP("__kmpc_omp_get_event:" DPxMOD ", __kmpc_global_thread_num:" DPxMOD "\n", DPxPTR(&__kmpc_omp_get_event), DPxPTR(&__kmpc_global_thread_num) );
+    task->Event = __kmpc_omp_get_event(__kmpc_global_thread_num(NULL));
+
     return task;
 }
 
@@ -618,6 +621,8 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     delete task->KernelArgs;
     task->KernelArgs = BaseArgs;
 
+    //DP("__kmpc_fulfill_event:" DPxMOD ", Event:" DPxMOD "\n", DPxPTR(&__kmpc_fulfill_event), DPxPTR(task->Event) );
+    __kmpc_fulfill_event(task->Event);
     TRACE_END("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     return TARGETDART_SUCCESS;    

@@ -210,7 +210,6 @@ public:
   TaskAsyncInfoWrapperTy(DeviceTy &Device)
       : ExecThreadID(__kmpc_global_thread_num(NULL)), LocalAsyncInfo(Device) {
     AsyncInfo = new AsyncInfoTy(Device, AsyncInfoTy::SyncTy::NON_BLOCKING);
-    *TaskAsyncInfoPtr = (void *)AsyncInfo;
   }
 
   ~TaskAsyncInfoWrapperTy() {
