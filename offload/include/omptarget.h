@@ -204,7 +204,6 @@ class TaskAsyncInfoWrapperTy {
   const int ExecThreadID = KMP_GTID_DNE;
   AsyncInfoTy LocalAsyncInfo;
   AsyncInfoTy *AsyncInfo = &LocalAsyncInfo;
-  void **TaskAsyncInfoPtr = nullptr;
 
 public:
   TaskAsyncInfoWrapperTy(DeviceTy &Device)
@@ -224,7 +223,6 @@ public:
 
     // Delete the handle and unset it from the OpenMP task data.
     delete AsyncInfo;
-    *TaskAsyncInfoPtr = nullptr;
   }
 
   operator AsyncInfoTy &() { return *AsyncInfo; }
