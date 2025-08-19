@@ -163,5 +163,7 @@ public:
     TD_Memory_Manager *get_memory_manager();
 };
 
+KernelArgsTy *copyKernelArgs(KernelArgsTy *);
+
 
 #endif //_TARGETDART_SCHEDULING_H

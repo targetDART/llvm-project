@@ -1,5 +1,6 @@
 #include "../include/communication.h"
 #include "../include/task.h"
+#include "../include/scheduling.h"
 
 #include "Shared/Debug.h"
 #include "mpi.h"
@@ -175,27 +176,26 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
-    uint32_t testt1 = task->KernelArgs->NumArgs;
-    DP("1\n");
-    int64_t test2 = task->KernelArgs->ArgSizes[0];
-    DP("2\n");
-    bool test3 = task->KernelArgs->ArgTypes[0] == 0x220;
-    DP("3\n");
-    memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[0]);
-    DP("4\n");
+
+    // Copy KernelArgs
+    KernelArgsTy *cpyKA = copyKernelArgs(task->KernelArgs);
+
 
     //Update argument sizes and types for remote tasks
-    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+    for (uint32_t i = 0; i < cpyKA->NumArgs; i++) {
         DP("send task - iteration: %d\n", i);
-        //const int64_t IsImplicit = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_IMPLICIT;
-        //const int64_t IsParam = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TARGET_PARAM;
-        if (task->KernelArgs->ArgSizes[i] == 0 && task->KernelArgs->ArgTypes[i] == 0x220 /*isImplicit != 0 && IsParam != 0*/) {
-            task->KernelArgs->ArgTypes[i] = 0x21;
-            task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+        //const int64_t IsImplicit = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_IMPLICIT;
+        //const int64_t IsParam = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_TARGET_PARAM;
+        if (cpyKA->ArgSizes[i] == 0 && cpyKA->ArgTypes[i] == 0x220) {
+            DP("send task - into the branch\n");
+            cpyKA->ArgTypes[i] = (int64_t) 0x21;
+            DP("send task - 1. into branch\n");
+            cpyKA->ArgSizes[i] = (int64_t) memory_manager->get_data_mapping_size(cpyKA->ArgPtrs[i]);
+            DP("send task - 2. into branch\n");
         }
     }
 
-    DP("5\n");
+    DP("send task - iterations finished 5146632\n");
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
@@ -214,10 +214,10 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //blocking receive
 
     //Send static KernelArgs values excluding pointervalues
-    MPI_Send(task->KernelArgs, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
+    MPI_Send(cpyKA, 1, TD_Kernel_Args, dest, SEND_KERNEL_ARGS, targetdart_comm);
     DP("Send KernelArgs for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
     //Send Argument sizes for actual data transfers
-    MPI_Send(task->KernelArgs->ArgSizes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
+    MPI_Send(cpyKA->ArgSizes, cpyKA->NumArgs, MPI_INT64_T, dest, SEND_PARAM_SIZES, targetdart_comm);
     DP("Send ArgSizes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     int enoughSpace = 1;
@@ -228,38 +228,38 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     }
 
     //Send Argument types for each kernel
-    MPI_Send(task->KernelArgs->ArgTypes, task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
+    MPI_Send(cpyKA->ArgTypes, cpyKA->NumArgs, MPI_INT64_T, dest, SEND_PARAM_TYPES, targetdart_comm);
     DP("Send ArgTypes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Send the Base Pointer offsets for all arguments
-    std::vector<int64_t> diff(task->KernelArgs->NumArgs);
-    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        diff[i] = ((int64_t) task->KernelArgs->ArgBasePtrs[i]) - ((int64_t) task->KernelArgs->ArgPtrs[i]);
+    std::vector<int64_t> diff(cpyKA->NumArgs);
+    for (uint32_t i = 0; i < cpyKA->NumArgs; i++) {
+        diff[i] = ((int64_t) cpyKA->ArgBasePtrs[i]) - ((int64_t) cpyKA->ArgPtrs[i]);
     }
-    MPI_Send(diff.data(), task->KernelArgs->NumArgs, MPI_INT64_T, dest, SEND_BASE_PTRS, targetdart_comm);
+    MPI_Send(diff.data(), cpyKA->NumArgs, MPI_INT64_T, dest, SEND_BASE_PTRS, targetdart_comm);
 
     //Send all parameter values
-    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        size_t size = task->KernelArgs->ArgSizes[i];
+    for (uint32_t i = 0; i < cpyKA->NumArgs; i++) {
+        size_t size = cpyKA->ArgSizes[i];
         if (size == 0) {
-            size = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+            size = memory_manager->get_data_mapping_size(cpyKA->ArgPtrs[i]);
         }
         if (size > 0) {
             //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
-            const int64_t IsMapTo = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
-            const int64_t IsLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
+            const int64_t IsMapTo = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_TO;
+            const int64_t IsLiteral = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
             if (IsMapTo != 0) {
-                MPI_Send(task->KernelArgs->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
-                DP("Arg %d: Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+                MPI_Send(cpyKA->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+                DP("Arg %d: Send mem for task (%ld%ld) at " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(cpyKA->ArgPtrs[i]), dest);
             }
             if (IsLiteral != 0) {
-                MPI_Send(&task->KernelArgs->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
-                DP("Arg %d: Send literal for task (%ld%ld) with value " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+                MPI_Send(&cpyKA->ArgPtrs[i], size, MPI_BYTE, dest, SEND_PARAMS, targetdart_comm);
+                DP("Arg %d: Send literal for task (%ld%ld) with value " DPxMOD " to process %d\n", i, task->uid.rank, task->uid.id, DPxPTR(cpyKA->ArgPtrs[i]), dest);
             }
         }
         else {
-            if (task->KernelArgs->ArgPtrs[i] != nullptr) {
-                DP("Arg %d: WARNING! The size=0 entry for task (%ld%ld) with value " DPxMOD " will be set to zero on the remote execution device on rank %d. You may have forgotten a map clause. :)\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+            if (cpyKA->ArgPtrs[i] != nullptr) {
+                DP("Arg %d: WARNING! The size=0 entry for task (%ld%ld) with value " DPxMOD " will be set to zero on the remote execution device on rank %d. You may have forgotten a map clause. :)\n", i, task->uid.rank, task->uid.id, DPxPTR(cpyKA->ArgPtrs[i]), dest);
             }
         }
     }
