@@ -97,9 +97,10 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
         LocalKernelArgs->ArgSizes[i] = KernelArgs->ArgSizes[i];
         DP("custom CopyKernelArgs iter: %d - 2\n", i);
         LocalKernelArgs->ArgTypes[i] = KernelArgs->ArgSizes[i];
-        DP("custom CopyKernelArgs iter: %d - 3\n", i);
+        DP("custom CopyKernelArgs iter: %d - 3 - ArgsPtrs: %d - ArgBasePtr: %d\n", i, (int64_t)KernelArgs->ArgPtrs[i], (int64_t)KernelArgs->ArgBasePtrs[i]);
         int64_t diff = (int64_t)KernelArgs->ArgPtrs[i] - (int64_t)KernelArgs->ArgBasePtrs[i];
         DP("custom CopyKernelArgs iter: %d - 4\n", i);
+        DP("custom CopyKernelArgs iter: %d - 4 - Argsizes: %d, diff: %d\n", i, KernelArgs->ArgSizes[i],diff);
         LocalKernelArgs->ArgBasePtrs[i] = (void *) malloc(KernelArgs->ArgSizes[i] + diff);
         DP("custom CopyKernelArgs iter: %d - 5\n", i);
         LocalKernelArgs->ArgPtrs[i] = (void *) (((int64_t) KernelArgs->ArgBasePtrs[i]) + diff);
