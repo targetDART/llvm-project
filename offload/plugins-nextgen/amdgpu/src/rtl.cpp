@@ -2448,6 +2448,11 @@ struct AMDGPUDeviceTy : public GenericDeviceTy, AMDGenericDeviceTy {
                                           getAgent(), (uint64_t)Size);
   }
 
+  Error fulfillEventImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    return Plugin::error("AMDGPU backend does not implement event handling, yet");
+  }
+
+
   /// Initialize the async info for interoperability purposes.
   Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     // TODO: Implement this function.

@@ -292,6 +292,10 @@ struct GenELF64DeviceTy : public GenericDeviceTy {
     return Plugin::error("initAsyncInfoImpl not supported");
   }
 
+  Error fulfillEventImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    return Plugin::error("Host backend does not implement event handling, yet");
+  }
+
   /// This plugin does not support interoperability
   Error initDeviceInfoImpl(__tgt_device_info *DeviceInfo) override {
     return Plugin::error("initDeviceInfoImpl not supported");

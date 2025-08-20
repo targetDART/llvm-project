@@ -230,6 +230,11 @@ int32_t DeviceTy::launchKernel(void *TgtEntryPtr, void **TgtVarsPtr,
                             &KernelArgs, AsyncInfo);
 }
 
+int32_t DeviceTy::fulfillEvent(AsyncInfoTy &AsyncInfo) {
+  return RTL->fulfill_event(RTLDeviceID, AsyncInfo);
+}
+
+
 // Run region on device
 bool DeviceTy::printDeviceInfo() {
   RTL->print_device_info(RTLDeviceID);

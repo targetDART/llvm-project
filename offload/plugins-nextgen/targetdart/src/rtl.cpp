@@ -466,6 +466,10 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     return Plugin::error("Data management not supported for targetDART devices, exchange\n");
   }
 
+  Error fulfillEventImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    return Plugin::error("targetDART backend does not implement event handling, yet");
+  }
+
   /// Initialize a __tgt_async_info structure. Related to interop features.
   Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     DP("Init Async\n");

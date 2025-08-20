@@ -114,6 +114,8 @@ struct DeviceTy {
                        ptrdiff_t *TgtOffsets, KernelArgsTy &KernelArgs,
                        AsyncInfoTy &AsyncInfo, ident_t *Loc, void *HostPtr);
 
+  int32_t fulfillEvent(AsyncInfoTy &AsyncInfo);
+
   /// Synchronize device/queue/event based on \p AsyncInfo and return
   /// OFFLOAD_SUCCESS/OFFLOAD_FAIL when succeeds/fails.
   int32_t synchronize(AsyncInfoTy &AsyncInfo);

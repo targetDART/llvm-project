@@ -1700,6 +1700,13 @@ int target(ident_t *Loc, DeviceTy &Device, void *HostPtr,
     }
   }
 
+  Ret = Device.fulfillEvent(AsyncInfo);
+  if (Ret != OFFLOAD_SUCCESS) {
+    REPORT("Failed to fulfill the event.\n");
+    return OFFLOAD_FAIL;
+  }
+
+
   return OFFLOAD_SUCCESS;
 }
 

@@ -837,6 +837,11 @@ struct GenericDeviceTy : public DeviceAllocatorTy {
   Error launchKernel(void *EntryPtr, void **ArgPtrs, ptrdiff_t *ArgOffsets,
                      KernelArgsTy &KernelArgs, __tgt_async_info *AsyncInfo);
 
+  // Fulfill the offloading event
+  Error fulfillEvent(__tgt_async_info *AsyncInfo);
+  virtual Error fulfillEventImpl(AsyncInfoWrapperTy &AsyncInfoWrapperTy) = 0;
+
+
   /// Initialize a __tgt_async_info structure. Related to interop features.
   Error initAsyncInfo(__tgt_async_info **AsyncInfoPtr);
   virtual Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) = 0;
@@ -1276,6 +1281,8 @@ public:
   int32_t launch_kernel(int32_t DeviceId, void *TgtEntryPtr, void **TgtArgs,
                         ptrdiff_t *TgtOffsets, KernelArgsTy *KernelArgs,
                         __tgt_async_info *AsyncInfoPtr);
+
+  int32_t fulfill_event(int32_t DeviceId, AsyncInfoTy &AsyncInfo);
 
   /// Synchronize an asyncrhonous queue with the plugin runtime.
   int32_t synchronize(int32_t DeviceId, __tgt_async_info *AsyncInfoPtr);

@@ -856,6 +856,10 @@ struct CUDADeviceTy : public GenericDeviceTy {
                          void *DstPtr, int64_t Size,
                          AsyncInfoWrapperTy &AsyncInfoWrapper) override;
 
+  Error fulfillEventImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
+    return Plugin::error("CUDA backend does not implement event handling, yet");
+  }
+
   /// Initialize the async info for interoperability purposes.
   Error initAsyncInfoImpl(AsyncInfoWrapperTy &AsyncInfoWrapper) override {
     if (auto Err = setContext())

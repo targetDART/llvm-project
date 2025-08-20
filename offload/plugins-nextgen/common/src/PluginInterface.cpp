@@ -1503,6 +1503,14 @@ Error GenericDeviceTy::launchKernel(void *EntryPtr, void **ArgPtrs,
   return Err;
 }
 
+Error GenericDeviceTy::fulfillEvent(__tgt_async_info *AsyncInfo) {
+  AsyncInfoWrapperTy AsyncInfoWrapper(*this, AsyncInfo);
+
+  auto Err = fulfillEventImpl(AsyncInfoWrapper);
+  AsyncInfoWrapper.finalize(Err);
+  return Err;
+}
+
 Error GenericDeviceTy::initAsyncInfo(__tgt_async_info **AsyncInfoPtr) {
   assert(AsyncInfoPtr && "Invalid async info");
 
@@ -1982,6 +1990,18 @@ int32_t GenericPluginTy::launch_kernel(int32_t DeviceId, void *TgtEntryPtr,
 
   return OFFLOAD_SUCCESS;
 }
+
+int32_t GenericPluginTy::fulfill_event(int32_t DeviceId, AsyncInfoTy &AsyncInfo) {
+  auto Err = getDevice(DeviceId).fulfillEvent(AsyncInfo);
+  if (Err) {
+    REPORT("Failure to fulfill event in device %d: %s\n",
+           DeviceId, toString(std::move(Err)).data());
+    return OFFLOAD_FAIL;
+  }
+
+  return OFFLOAD_SUCCESS;
+}
+
 
 int32_t GenericPluginTy::synchronize(int32_t DeviceId,
                                      __tgt_async_info *AsyncInfoPtr) {
