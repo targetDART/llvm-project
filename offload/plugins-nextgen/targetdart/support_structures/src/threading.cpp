@@ -229,21 +229,19 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         TRACE_START("recv_loop\n");
         DP("Starting Receiver thread\n");
         while ((!scheduler_done.load() || !schedule_man->is_empty()) && comm_man->size > 1) {
-            td_uid_t uid;
-            if (comm_man->test_and_receive_results(&uid) == TARGETDART_SUCCESS) {
-                schedule_man->notify_task_completion(uid, false);
+            td_task_t task;
+            if (comm_man->test_and_receive_results(&task) == TARGETDART_SUCCESS) {
+                schedule_man->notify_task_completion(task.uid, false);
+                // Fulfill the task run on a remote executor
+                schedule_man->fulfill_event(&task);
             }
 
-            td_task_t *task = new td_task_t;
-            bool keep = false;
-            if (comm_man->test_and_receive_task(task) == TARGETDART_SUCCESS) {
-                schedule_man->add_remote_task(task, task->affinity);
-                keep = true;
+            if (comm_man->test_and_receive_task(&task) == TARGETDART_SUCCESS) {
+                // Move the remote task to the heap so it does not get deallocated
+                td_task_t *heap_task = new td_task_t(std::move(task));
+                schedule_man->add_remote_task(heap_task, heap_task->affinity);
             }
 
-            if (!keep) {
-                delete task;
-            }
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
         TRACE_END("recv_loop\n");
@@ -284,6 +282,8 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 } else {
                     schedule_man->notify_task_completion(task->uid, false);
                     DP("finished local execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);
+                    // Only fulfill local tasks
+                    schedule_man->fulfill_event(task);
                     delete_task(task, true);
                     DP("deleted task\n");
                 }

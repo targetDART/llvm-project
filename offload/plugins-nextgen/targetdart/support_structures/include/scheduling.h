@@ -156,6 +156,8 @@ public:
     // executes a task on a given device;
     tdrc invoke_task(td_task_t *task, int64_t Device);
 
+    tdrc fulfill_event(td_task_t *task);
+
     // Returns the total number of devices
     int32_t total_device_count();
 

@@ -47,6 +47,7 @@ tdrc finalize_task_structes() {
 * This should onle be used to free data structures explicitly allocated on remote nodes
 */
 tdrc delete_task(td_task_t *task, bool local) {
+    DP("Deleting task (%ld%ld) Local=%d\n", task->uid.rank, task->uid.id, local);
     if (!local) {
         DP("num args: %d\n",task->KernelArgs->NumArgs);
         for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {

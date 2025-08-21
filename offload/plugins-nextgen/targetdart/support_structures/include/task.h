@@ -131,7 +131,35 @@ typedef struct td_task_t{
     int                 return_code;
     device_affinity     affinity;
     bool                isReplica;
+    // We do not need to send Event to remote
+    // since it only needs to be fulfilled locally
     void *Event;
+
+    td_task_t() = default;
+    td_task_t(td_task_t const &task) = default;
+    td_task_t &operator=(td_task_t const &task) = default;
+    // Move constructor/Assignment to avoid deep copies
+    td_task_t(td_task_t &&task) {
+        (*this) = task;
+    }
+    td_task_t &operator=(td_task_t &&task) {
+        this->host_base_ptr         = task.host_base_ptr;
+        this->KernelArgs            = task.KernelArgs;
+        this->Loc                   = task.Loc;
+        this->uid                   = std::move(task.uid);
+        this->cached_total_sizes    = std::move(task.cached_total_sizes);
+        this->return_code           = task.return_code;
+        this->affinity              = std::move(task.affinity);
+        this->isReplica             = task.isReplica;
+        this->Event                 = task.Event;
+
+        task.KernelArgs = nullptr;
+        task.Loc = nullptr;
+        task.Event = nullptr;
+
+        return *this;
+    }
+            
 } td_task_t;
 
 template <>

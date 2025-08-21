@@ -461,22 +461,24 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
+tdrc TD_Communicator::receive_task_result(int source, td_task_t *task) {
     TRACE_START("recv_task_res\n");
     DP("Start result receival\n");
     //TODO: use MPI probe for complete receives
     //Receive Task Data
-    MPI_Recv(uid, 1, TD_TASK_UID, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
-    DP("Receiving result for task (%ld%ld) from process %d\n", uid->rank, uid->id, source);
+  
+    td_uid_t uid;
 
-    TRACE_START("recv_task_res (%ld%ld)\n", uid->rank, uid->id);
+    MPI_Recv(&uid, 1, TD_TASK_UID, source, SEND_RESULT_UID, targetdart_comm, MPI_STATUS_IGNORE);
+    DP("Receiving result for task (%ld%ld) from process %d\n", uid.rank, uid.id, source);
 
-    td_task_t *task;
+    TRACE_START("recv_task_res (%ld%ld)\n", uid.rank, uid.id);
+
     // Critical section to ensure thread safety
     {
         std::lock_guard<std::mutex> lock(task_map_mutex);
-        task = remote_task_map[*uid];
-        remote_task_map.erase(*uid);
+        *task = std::move(*remote_task_map[uid]);
+        remote_task_map.erase(uid);
     }
 
     DP("Found task (%ld%ld) in remote task map\n", task->uid.rank, task->uid.id);
@@ -504,7 +506,7 @@ tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
     return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
+tdrc TD_Communicator::test_and_receive_results(td_task_t *task) {
 
     //test, if a task result can be received
     MPI_Status status;
@@ -513,7 +515,7 @@ tdrc TD_Communicator::test_and_receive_results(td_uid_t *uid) {
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_RESULT_UID, targetdart_comm, &flag, &status);
     if (flag == true) {
         DP("Result receival signaled\n");
-        receive_task_result(status.MPI_SOURCE, uid);
+        receive_task_result(status.MPI_SOURCE, task);
         return TARGETDART_SUCCESS;
     }
     return TARGETDART_FAILURE;

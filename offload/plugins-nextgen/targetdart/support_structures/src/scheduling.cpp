@@ -621,11 +621,15 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
     delete task->KernelArgs;
     task->KernelArgs = BaseArgs;
 
-    //DP("__kmpc_fulfill_event:" DPxMOD ", Event:" DPxMOD "\n", DPxPTR(&__kmpc_fulfill_event), DPxPTR(task->Event) );
-    __kmpc_fulfill_event(task->Event);
     TRACE_END("invoke_task (%ld%ld)\n", task->uid.rank, task->uid.id);
 
     return TARGETDART_SUCCESS;    
+}
+
+tdrc TD_Scheduling_Manager::fulfill_event(td_task_t *task) {
+    DP("Fulfilling Event " DPxMOD " of task (%ld%ld)\n", DPxPTR(task->Event), task->uid.rank, task->uid.id);
+    __kmpc_fulfill_event(task->Event);
+    return TARGETDART_SUCCESS;
 }
 
 TD_Memory_Manager *TD_Scheduling_Manager::get_memory_manager() {
