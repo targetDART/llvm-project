@@ -178,7 +178,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     // Copy KernelArgs
-    KernelArgsTy *cpyKA = copyKernelArgs(task->KernelArgs);
+    KernelArgsTy *cpyKA = deepcopyKernelArgs(task->KernelArgs, task);
 
 
     //Update argument sizes and types for remote tasks

@@ -84,36 +84,62 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
     KernelArgsTy *LocalKernelArgs = new KernelArgsTy();
     LocalKernelArgs->Version = KernelArgs-> Version;
     LocalKernelArgs->NumArgs = KernelArgs->NumArgs;
+    LocalKernelArgs->ArgBasePtrs = KernelArgs->ArgBasePtrs;
+    LocalKernelArgs->ArgPtrs = KernelArgs->ArgPtrs;
+    LocalKernelArgs->ArgSizes = KernelArgs->ArgSizes;
+    LocalKernelArgs->ArgTypes = KernelArgs->ArgTypes;
+    LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
+    LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;
+    LocalKernelArgs->Tripcount = KernelArgs->Tripcount;
+    LocalKernelArgs->Flags = KernelArgs->Flags;
+    LocalKernelArgs->DynCGroupMem = 0;
+    LocalKernelArgs->NumTeams[0] = KernelArgs->NumTeams[0];
+    LocalKernelArgs->NumTeams[1] = 0;
+    LocalKernelArgs->NumTeams[2] = 0;
+    LocalKernelArgs->ThreadLimit[0] = KernelArgs->ThreadLimit[0];
+    LocalKernelArgs->ThreadLimit[1] = 0;
+    LocalKernelArgs->ThreadLimit[2] = 0;
+    return LocalKernelArgs;
+}
+
+KernelArgsTy *deepcopyKernelArgs(KernelArgsTy *KernelArgs, td_task_t task) {
+    KernelArgsTy *LocalKernelArgs = new KernelArgsTy();
+    LocalKernelArgs->Version = KernelArgs-> Version;
+    LocalKernelArgs->NumArgs = KernelArgs->NumArgs;
     // deep copy
     DP("custom CopyKernelArgs 0\n");
     LocalKernelArgs->ArgSizes = new int64_t[LocalKernelArgs->NumArgs];
     LocalKernelArgs->ArgTypes = new int64_t[LocalKernelArgs->NumArgs];
-    DP("custom CopyKernelArgs 1\n");
+    DP("custom CopyKernelArgs 1 (%d%d)\n", task->uid.rank, task->uid.id);
     KernelArgs->ArgPtrs = new void*[KernelArgs->NumArgs];
     KernelArgs->ArgBasePtrs = new void*[KernelArgs->NumArgs];
-    DP("custom CopyKernelArgs 2 \n");
+    DP("custom CopyKernelArgs 2 (%d%d) \n", task->uid.rank, task->uid.id);
     for(int i = 0; i < LocalKernelArgs->NumArgs; i++) {
-        DP("custom CopyKernelArgs iter: %d - 1\n", i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 1\n", task->uid.rank, task->uid.id, i);
         LocalKernelArgs->ArgSizes[i] = KernelArgs->ArgSizes[i];
-        DP("custom CopyKernelArgs iter: %d - 2\n", i);
-        LocalKernelArgs->ArgTypes[i] = KernelArgs->ArgSizes[i];
-        DP("custom CopyKernelArgs iter: %d - 3 - ArgsPtrs: %d - ArgBasePtr: %d\n", i, (int64_t)KernelArgs->ArgPtrs[i], (int64_t)KernelArgs->ArgBasePtrs[i]);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 2\n", task->uid.rank, task->uid.id, i);
+        LocalKernelArgs->ArgTypes[i] = KernelArgs->ArgTypes[i];
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 3 - ArgsPtrs: %d - ArgBasePtr: %d\n", task->uid.rank, task->uid.id, i, (int64_t)KernelArgs->ArgPtrs[i], (int64_t)KernelArgs->ArgBasePtrs[i]);
         int64_t diff = (int64_t)KernelArgs->ArgPtrs[i] - (int64_t)KernelArgs->ArgBasePtrs[i];
-        DP("custom CopyKernelArgs iter: %d - 4\n", i);
-        DP("custom CopyKernelArgs iter: %d - 4 - Argsizes: %d, diff: %d\n", i, KernelArgs->ArgSizes[i],diff);
-        LocalKernelArgs->ArgBasePtrs[i] = (void *) malloc(KernelArgs->ArgSizes[i] + diff);
-        DP("custom CopyKernelArgs iter: %d - 5\n", i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 4\n", task->uid.rank, task->uid.id, i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 4 - Argsizes: %d, diff: %d\n", task->uid.rank, task->uid.id, i, KernelArgs->ArgSizes[i],diff);
+        if(KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL > 0) {
+            LocalKernelArgs->ArgBasePtrs[i] = malloc((size_t) (KernelArgs->ArgSizes[i] + diff));
+        } else {
+            LocalKernelArgs->ArgBasePtrs[i] = KernelArgs->ArgBasePtrs[i];
+        }
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 5\n", task->uid.rank, task->uid.id, i);
         LocalKernelArgs->ArgPtrs[i] = (void *) (((int64_t) KernelArgs->ArgBasePtrs[i]) + diff);
-        DP("custom CopyKernelArgs iter: %d - 6\n", i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 6\n", task->uid.rank, task->uid.id, i);
         int8_t *src_ptr = (int8_t *) KernelArgs->ArgBasePtrs[i];
-        DP("custom CopyKernelArgs iter: %d - 7\n", i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 7\n", task->uid.rank, task->uid.id, i);
         int8_t *dst_ptr = (int8_t *) LocalKernelArgs->ArgBasePtrs[i];
-        DP("custom CopyKernelArgs iter: %d - 8\n", i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 8\n", task->uid.rank, task->uid.id, i);
         for(int j = 0; j < LocalKernelArgs->ArgSizes[i] + diff; j++) {
-            DP("custom CopyKernelArgs iter: %d - %d - 1\n", i, j);
+            DP("custom CopyKernelArgs iter: (%d%d) %d - %d - 1\n", task->uid.rank, task->uid.id, i, j);
             src_ptr[j] = dst_ptr[j];
         }
-        DP("custom CopyKernelArgs iter: %d - 9\n", i);
+        DP("custom CopyKernelArgs iter: (%d%d) %d - 9\n", task->uid.rank, task->uid.id, i);
     }
     LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
     LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;
