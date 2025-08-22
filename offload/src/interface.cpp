@@ -345,9 +345,7 @@ static inline int targetKernel(ident_t *Loc, int64_t DeviceId, int32_t NumTeams,
                     /*CodePtr=*/OMPT_GET_RETURN_ADDRESS);)
 
   int Rc = OFFLOAD_SUCCESS;
-  DP("Test\n");
   Rc = target(Loc, *DeviceOrErr, HostPtr, *KernelArgs, AsyncInfo);
-  DP("Test2\n");
   { // required to show syncronization
     TIMESCOPE_WITH_DETAILS_AND_IDENT("Runtime: syncronize", "", Loc);
     if (Rc == OFFLOAD_SUCCESS)
