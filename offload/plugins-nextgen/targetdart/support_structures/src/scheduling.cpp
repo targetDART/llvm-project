@@ -124,9 +124,11 @@ KernelArgsTy *deepcopyKernelArgs(KernelArgsTy *KernelArgs, td_task_t *task) {
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4\n", task->uid.rank, task->uid.id, i);
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - Argsizes: %d, diff: %d\n", task->uid.rank, task->uid.id, i, KernelArgs->ArgSizes[i],diff);
         if(KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL > 0) {
-            LocalKernelArgs->ArgBasePtrs[i] = malloc((size_t) (KernelArgs->ArgSizes[i] + diff));
+            DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - no literal\n", task->uid.rank, task->uid.id, i);
+            LocalKernelArgs->ArgBasePtrs[i] = (void *) malloc((size_t) (KernelArgs->ArgSizes[i] + diff));
         } else {
-            LocalKernelArgs->ArgBasePtrs[i] = KernelArgs->ArgBasePtrs[i];
+            DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - literal\n", task->uid.rank, task->uid.id, i);
+            LocalKernelArgs->ArgBasePtrs[i] = (void *) KernelArgs->ArgBasePtrs[i];
         }
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 5\n", task->uid.rank, task->uid.id, i);
         LocalKernelArgs->ArgPtrs[i] = (void *) (((int64_t) KernelArgs->ArgBasePtrs[i]) + diff);
