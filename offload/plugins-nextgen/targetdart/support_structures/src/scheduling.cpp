@@ -123,25 +123,10 @@ KernelArgsTy *deepcopyKernelArgs(KernelArgsTy *KernelArgs, td_task_t *task) {
         int64_t diff = (int64_t)KernelArgs->ArgPtrs[i] - (int64_t)KernelArgs->ArgBasePtrs[i];
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4\n", task->uid.rank, task->uid.id, i);
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - Argsizes: %d, diff: %d\n", task->uid.rank, task->uid.id, i, KernelArgs->ArgSizes[i],diff);
-        if(KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL > 0) {
-            DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - no literal\n", task->uid.rank, task->uid.id, i);
-            LocalKernelArgs->ArgBasePtrs[i] = (void *) malloc((size_t) (KernelArgs->ArgSizes[i] + diff));
-        } else {
-            DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - literal\n", task->uid.rank, task->uid.id, i);
-            LocalKernelArgs->ArgBasePtrs[i] = (void *) KernelArgs->ArgBasePtrs[i];
-        }
+        LocalKernelArgs->ArgBasePtrs = KernelArgs->ArgBasePtrs;
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 5\n", task->uid.rank, task->uid.id, i);
-        LocalKernelArgs->ArgPtrs[i] = (void *) (((int64_t) KernelArgs->ArgBasePtrs[i]) + diff);
+        LocalKernelArgs->ArgPtrs = KernelArgs->ArgPtrs;
         DP("custom CopyKernelArgs iter: (%ld%ld) %d - 6\n", task->uid.rank, task->uid.id, i);
-        int8_t *src_ptr = (int8_t *) KernelArgs->ArgBasePtrs[i];
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 7\n", task->uid.rank, task->uid.id, i);
-        int8_t *dst_ptr = (int8_t *) LocalKernelArgs->ArgBasePtrs[i];
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 8\n", task->uid.rank, task->uid.id, i);
-        for(int j = 0; j < LocalKernelArgs->ArgSizes[i] + diff; j++) {
-            DP("custom CopyKernelArgs iter: (%ld%ld) %d - %d - 1\n", task->uid.rank, task->uid.id, i, j);
-            src_ptr[j] = dst_ptr[j];
-        }
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 9\n", task->uid.rank, task->uid.id, i);
     }
     LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
     LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;
