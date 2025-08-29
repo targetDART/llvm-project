@@ -185,9 +185,11 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     for (uint32_t i = 0; i < cpyKA->NumArgs; i++) {
         //const int64_t IsImplicit = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_IMPLICIT;
         //const int64_t IsParam = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_TARGET_PARAM;
-        if (cpyKA->ArgSizes[i] == 0 && cpyKA->ArgTypes[i] == 0x220) {
-            cpyKA->ArgTypes[i] = (int64_t) 0x21;
-            cpyKA->ArgSizes[i] = (int64_t) memory_manager->get_data_mapping_size(cpyKA->ArgPtrs[i]);
+        if (cpyKA->ArgSizes[i] == 0) {
+            cpyKA->ArgSizes[i] = (int64_t) memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+            if(cpyKA->ArgTypes[i] == 0x220) {
+                cpyKA->ArgTypes[i] = (int64_t) 0x21;
+            }
         }
     }
 
