@@ -102,31 +102,20 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
     return LocalKernelArgs;
 }
 
-KernelArgsTy *deepcopyKernelArgs(KernelArgsTy *KernelArgs, td_task_t *task) {
+KernelArgsTy *partialcopyKernelArgs(KernelArgsTy *KernelArgs) {
     KernelArgsTy *LocalKernelArgs = new KernelArgsTy();
     LocalKernelArgs->Version = KernelArgs-> Version;
     LocalKernelArgs->NumArgs = KernelArgs->NumArgs;
-    // deep copy
-    DP("custom CopyKernelArgs 0\n");
     LocalKernelArgs->ArgSizes = new int64_t[LocalKernelArgs->NumArgs];
     LocalKernelArgs->ArgTypes = new int64_t[LocalKernelArgs->NumArgs];
-    DP("custom CopyKernelArgs 1 (%ld%ld)\n", task->uid.rank, task->uid.id);
     KernelArgs->ArgPtrs = new void*[KernelArgs->NumArgs];
     KernelArgs->ArgBasePtrs = new void*[KernelArgs->NumArgs];
-    DP("custom CopyKernelArgs 2 (%ld%ld) \n", task->uid.rank, task->uid.id);
     for(int i = 0; i < LocalKernelArgs->NumArgs; i++) {
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 1\n", task->uid.rank, task->uid.id, i);
         LocalKernelArgs->ArgSizes[i] = KernelArgs->ArgSizes[i];
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 2\n", task->uid.rank, task->uid.id, i);
         LocalKernelArgs->ArgTypes[i] = KernelArgs->ArgTypes[i];
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 3 - ArgsPtrs: %d - ArgBasePtr: %d\n", task->uid.rank, task->uid.id, i, (int64_t)KernelArgs->ArgPtrs[i], (int64_t)KernelArgs->ArgBasePtrs[i]);
         int64_t diff = (int64_t)KernelArgs->ArgPtrs[i] - (int64_t)KernelArgs->ArgBasePtrs[i];
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4\n", task->uid.rank, task->uid.id, i);
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 4 - Argsizes: %d, diff: %d\n", task->uid.rank, task->uid.id, i, KernelArgs->ArgSizes[i],diff);
         LocalKernelArgs->ArgBasePtrs = KernelArgs->ArgBasePtrs;
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 5\n", task->uid.rank, task->uid.id, i);
         LocalKernelArgs->ArgPtrs = KernelArgs->ArgPtrs;
-        DP("custom CopyKernelArgs iter: (%ld%ld) %d - 6\n", task->uid.rank, task->uid.id, i);
     }
     LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
     LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;

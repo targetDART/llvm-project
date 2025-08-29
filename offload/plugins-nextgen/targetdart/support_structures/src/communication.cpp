@@ -178,24 +178,19 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     DP("Send task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     // Copy KernelArgs
-    KernelArgsTy *cpyKA = deepcopyKernelArgs(task->KernelArgs, task);
+    KernelArgsTy *cpyKA = partialcopyKernelArgs(task->KernelArgs);
 
 
     //Update argument sizes and types for remote tasks
     for (uint32_t i = 0; i < cpyKA->NumArgs; i++) {
-        DP("send task - iteration: %d\n", i);
         //const int64_t IsImplicit = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_IMPLICIT;
         //const int64_t IsParam = cpyKA->ArgTypes[i] & OMP_TGT_MAPTYPE_TARGET_PARAM;
         if (cpyKA->ArgSizes[i] == 0 && cpyKA->ArgTypes[i] == 0x220) {
-            DP("send task - into the branch\n");
             cpyKA->ArgTypes[i] = (int64_t) 0x21;
-            DP("send task - 1. into branch\n");
             cpyKA->ArgSizes[i] = (int64_t) memory_manager->get_data_mapping_size(cpyKA->ArgPtrs[i]);
-            DP("send task - 2. into branch\n");
         }
     }
 
-    DP("send task - iterations finished 5146632\n");
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
@@ -206,7 +201,6 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
         remote_task_map.insert({task->uid, task});
     }
 
-    DP("6\n");
     //Send Task Data
     MPI_Send(task, 1, TD_MPI_Task, dest, SEND_TASK, targetdart_comm);
     DP("Send task structure for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);

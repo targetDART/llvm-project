@@ -165,6 +165,6 @@ public:
 
 KernelArgsTy *copyKernelArgs(KernelArgsTy *);
 
-KernelArgsTy *deepcopyKernelArgs(KernelArgsTy *, td_task_t *);
+KernelArgsTy *partialcopyKernelArgs(KernelArgsTy *);
 
 #endif //_TARGETDART_SCHEDULING_H
