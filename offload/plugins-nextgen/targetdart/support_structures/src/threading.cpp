@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <functional>
 #include <omp.h>
+#include <sched.h>
 #include <unistd.h>
 #include <string>
 #include <iostream>
@@ -68,30 +69,57 @@ tdrc TD_Thread_Manager::get_thread_placement_from_env(std::vector<int> &placemen
 
     // Set the number of cores that TD should use
     // Prioritize env variable
+    //  TD_MANAGEMENT=x,y,z_1,...,z_n,w1,...,w_n,v with n = TD_EXECUTORS_PER_DEVICE
+    //      x = core of scheduler
+    //      y = core of receiver
+    //      z_1,...z_n = executor cores of device 0
+    //      w_1,...w_n = executor cores of device 1
+    //      v = executor core of CPU
+    // Per default thread placement assuming nproc > 2:
+    //  Core 0: Scheduler
+    //  Core 1: Receiver
+    //  Core 2 - nproc: Executor Threads depending on how many are spawned
+    //                  distributed in round robin
+    // Default thread placement assuming nproc = 2:
+    //  Core 0: Scheduler
+    //  Core 1: Receiver
+    //  Core 0 & 1: Executors in round robin
+    //
+    // Default thread placement assuming nproc = 1:
+    //  Core 0: All threads
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    sched_getaffinity(0, sizeof(set), &set);
+    size_t cpu_count = CPU_COUNT(&set);
+    // Number of cores executors are allowed to be run on
     size_t nprocs = 0;
-    if (auto env_nprocs = std::getenv("TD_EXECUTOR_NPROCS")) {
-        nprocs = std::max(std::atoi(env_nprocs), 1);
-        DP("executor nprocs assigned to %zu from env\n", nprocs);
-    } else {
-        cpu_set_t set;
-        CPU_ZERO(&set);
-        sched_getaffinity(0, sizeof(set), &set);
-        // All available processors - 2 used for scheduler/receiver threads
-        nprocs = CPU_COUNT(&set) - 2;
-        DP("executor nprocs assigned to %zu\n", nprocs);
-    }
+    // Offset of the cores reserved for executors
+    size_t nprocs_offset = 0;
 
     if (std::getenv("TD_MANAGEMENT") == NULL) {
+        // TD_MANAGEMENT not set -> go to default placements
+        if (cpu_count > 2) {
+            // If we have more than two cpus available, 
+            // reserve 0 and 1 for scheduler and receiver
+            nprocs = cpu_count - 2;
+            nprocs_offset = 2;
+        } else {
+            // If we have at most 2 cpus available, 
+            // share all management threads on these
+            nprocs = cpu_count;
+            nprocs_offset = 0;
+        }
+
         // scheduler
         placements[0] = 0;
         // receiver
-        placements[1] = 1;
+        placements[1] = 1 % cpu_count;
         // executors
         for (size_t i = 2; i < placements.size(); i++) {
-            placements.at(i) = (i-2) % nprocs + 2;
+            placements.at(i) = (i-2) % nprocs + nprocs_offset;
             DP("Executor thread assigned core %d\n", placements[i]);
         }
-        DP("Management threads assigned cores 0-%zu\n", std::min(placements.size()-1, nprocs));
+        DP("Scheduler running on core %d, Receiver running on core %d\n", placements[0], placements[1]);
         DP("For a parallel CPU execution use OMP_NUM_TEAMS with a value as high as possible.\n");
         return TARGETDART_SUCCESS;
     }
