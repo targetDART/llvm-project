@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <iostream>
 #include <memory.h>
 #include <omp.h>
@@ -406,25 +407,41 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   /// Submit data to the device (host to device transfer).
   Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
                        AsyncInfoWrapperTy &AsyncInfoWrapper) override {
-    if (deviceID < PM->getPhysicalDevices()) {
+
+    static int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+
+    if (deviceID == CPU_DEVICE) {
+      // In this case no data has to be copied
+
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      return Plugin::success();
+    } else if (deviceID < PM->getPhysicalDevices()) {
+      // Physical offload device
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
-      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+      AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
-      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+
+      if (res)
+        td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       return res;
-    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
+    } 
+
+    if (deviceID >= PM->getPhysicalDevices() + 3) {
       td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       // handle other devices
+      // CPU device can be skipped for now
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
-        auto DeviceOrErr = PM->getDevice(i);
         void *real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(i, HstPtr);
+        if (!real_TgtPtr)
+          continue;
+        auto DeviceOrErr = PM->getDevice(i);
         if (!DeviceOrErr)
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
-        AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
+        AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
         GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
         auto res = physical_device->dataSubmit(real_TgtPtr, HstPtr, Size, TargetAsyncInfo);
         DeviceOrErr->synchronize(TargetAsyncInfo);
@@ -491,37 +508,110 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Allocate memory. Use std::malloc in all cases.
   void *allocate(size_t Size, void *ptr, TargetAllocTy Kind) override {
+
     DP("Num Physical devices: %d\n", PM->getPhysicalDevices());
     DP("Allocating kind %d\n", Kind);
     DP("Allocating on device %d\n", deviceID);
-    if (deviceID < PM->getPhysicalDevices()) {
+
+    // The last device is always the CPU
+    static int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+
+    if (deviceID == CPU_DEVICE) {
+      // Data is allocated on the physical CPU device
+      void *ptr_d = std::malloc(Size);
+      if (ptr_d == nullptr)
+        return nullptr;
+      td_sched->get_memory_manager()->register_allocation(ptr_d, ptr_d, Size, deviceID);
+      return ptr_d;
+    } else if (deviceID < PM->getPhysicalDevices()) {
+      // Data is allocated to a Physical Offload Device
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+      if (ptr_d == nullptr)
+        return nullptr;
       td_sched->get_memory_manager()->register_allocation(ptr_d, ptr_d, Size, deviceID);
       return ptr_d;
-    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
-      // initialize base pointer + allocation
+    }
+
+    void *base_ptr = nullptr;
+
+    if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
+      // TARGETDART_DEVICE_CPU
+      DP("Allocating on local CPU device\n");
+      base_ptr = std::malloc(Size);
+      if (base_ptr) {
+        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, CPU_DEVICE);
+
+        if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
+          DP("Additionally allocating on all remote CPU devices\n");
+          // TODO:
+        }
+      }
+
+    } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET) {
+      // TARGETDART_DEVICE_OFFLOAD
+      DP("Allocating on all local GPU devices\n");
       auto DeviceOrErr = PM->getDevice(0);
       if (!DeviceOrErr)
         FATAL_MESSAGE(0, "%s", toString(DeviceOrErr.takeError()).c_str());      
+
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
-      void *base_ptr = physical_device->allocate(Size, ptr, Kind);
-      td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, 0);  
-      // handle other devices
-      for (int i = 1; i < PM->getPhysicalDevices(); i++) {
-        DeviceOrErr = PM->getDevice(i);
-        if (!DeviceOrErr)
-          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
-        physical_device = &DeviceOrErr->RTL->getDevice(i);
-        void *ptr_d = physical_device->allocate(Size, ptr, Kind);
-        td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+      base_ptr = physical_device->allocate(Size, ptr, Kind);
+      if (base_ptr) {
+        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, 0);
+
+        // handle other devices
+        for (int i = 1; i < PM->getPhysicalDevices(); i++) {
+          DeviceOrErr = PM->getDevice(i);
+          if (!DeviceOrErr)
+            FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+          physical_device = &DeviceOrErr->RTL->getDevice(i);
+          void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+          if (ptr_d)
+            td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+        }
+
+        if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
+          DP("Additionally allocating on all remote GPU devices\n");
+          // TODO:
+        }
       }
-      return base_ptr;
+
+    } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET) {
+      // TARGETDART_DEVICE_ANY
+      DP("Allocating on all local devices\n");
+
+      base_ptr = std::malloc(Size);
+      if (base_ptr) {
+        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, CPU_DEVICE);
+
+        for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+          auto DeviceOrErr = PM->getDevice(i);
+          if (!DeviceOrErr)
+            FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+          auto physical_device = &DeviceOrErr->RTL->getDevice(i);
+          void *ptr_d = physical_device->allocate(Size, ptr, Kind);
+          if (ptr_d)
+            td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+        }
+
+        if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET) {
+          DP("Additionally allocating on all remote devices\n");
+          // TODO:
+        }
+      }
+
+    } else {
+      // Only CPU should come after this but should be handled with physical devices
+      FATAL_MESSAGE(0, "%s", "Error: Unknown Device");
+
+      
     }
-    return std::malloc(Size);
+   
+    return base_ptr;
   }
 
   /// Free the memory. Use std::free in all cases.
@@ -529,6 +619,15 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     if (isDeinitializing) {
       return OFFLOAD_SUCCESS;
     }
+
+    static int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+
+    if (deviceID == CPU_DEVICE) {
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+      std::free(TgtPtr);
+      return OFFLOAD_SUCCESS;
+    }
+
     if (deviceID < PM->getPhysicalDevices()) {
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
@@ -536,21 +635,81 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
       td_sched->get_memory_manager()->register_deallocation(TgtPtr);
       return physical_device->free(TgtPtr, Kind);      
-    } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
+    } 
+
+    // TARGETDART Group devices
+    if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
+      // TARGETDART_DEVICE_CPU
+      DP("Freeing on local CPU device\n");
+      std::free(TgtPtr);
+
+      if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
+        DP("Additionally freeing on all remote CPU devices\n");
+        // TODO:
+      }
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+
+    } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET) {
+      // TARGETDART_DEVICE_OFFLOAD
+      DP("Freeing on all local GPU devices\n");
+      auto DeviceOrErr = PM->getDevice(0);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(0, "%s", toString(DeviceOrErr.takeError()).c_str());      
+
+      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
+      physical_device->free(TgtPtr);
       // handle other devices
+      for (int i = 1; i < PM->getPhysicalDevices(); i++) {
+        DeviceOrErr = PM->getDevice(i);
+        if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+        physical_device = &DeviceOrErr->RTL->getDevice(i);
+
+        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr);
+        if (real_TgtPtr == nullptr)
+          continue;
+
+        physical_device->free(real_TgtPtr);
+
+        if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
+          DP("Additionally freeing on all remote GPU devices\n");
+          // TODO:
+        }
+
+        td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+      }
+
+    } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET) {
+      // TARGETDART_DEVICE_ANY
+      DP("Freeing on all local devices\n");
+
+      std::free(TgtPtr);
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
         auto DeviceOrErr = PM->getDevice(i);
         if (!DeviceOrErr)
-          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
-        GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
-        if (td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr) != nullptr) {        
-          physical_device->free(td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr), Kind);
-        }
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+        auto physical_device = &DeviceOrErr->RTL->getDevice(i);
+
+        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr);
+        if (real_TgtPtr == nullptr)
+          continue;
+
+        physical_device->free(real_TgtPtr);
+      }
+
+      if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET) {
+        DP("Additionally freeing on all remote devices\n");
+        // TODO:
       }
       td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+
     } else {
-      std::free(TgtPtr);
+      // Only CPU should come after this but should be handled with physical devices
+      FATAL_MESSAGE(0, "%s", "Error: Unknown Device");
+
+      
     }
+
     return OFFLOAD_SUCCESS;
   }
 

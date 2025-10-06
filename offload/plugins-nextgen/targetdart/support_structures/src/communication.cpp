@@ -215,6 +215,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     DP("Send ArgTypes for task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Send the Base Pointer offsets for all arguments
+    DP("NumArgs: %d\n", task->KernelArgs->NumArgs);
     std::vector<int64_t> diff(task->KernelArgs->NumArgs);
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         diff[i] = ((int64_t) task->KernelArgs->ArgBasePtrs[i]) - ((int64_t) task->KernelArgs->ArgPtrs[i]);
