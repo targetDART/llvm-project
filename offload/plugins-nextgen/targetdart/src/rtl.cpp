@@ -548,6 +548,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
           DP("Additionally allocating on all remote CPU devices\n");
           // TODO:
+          td_sched->get_communication_manager()->send_allocation_request(base_ptr, Size, TD_CPU);
         }
       }
 
@@ -890,7 +891,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
 	    }
 	    // fill the placeholder in this format string with the MPI rank number
 	    char tracefilename[200];
-      trace_rank = td_comm->rank;
+      trace_rank = td_comm->comm_rank;
 	    snprintf(tracefilename, 199, envvar, trace_rank);
 	    trace_file = fopen(tracefilename, "w"); // if it fails to create this file, then tracing is disabled
 	    if (NULL == trace_file) {

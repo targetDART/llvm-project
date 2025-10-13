@@ -85,6 +85,11 @@ extern unsigned long start_of_trace; // initial time stamp in microseconds => tr
 #endif
 
 enum tdrc {TARGETDART_FAILURE, TARGETDART_SUCCESS};
+enum tddev {
+    TD_CPU      = 0x01,
+    TD_OFFLOAD  = 0x02,
+    TD_ANY      = 0x03
+};
 
 // Main affinities
 #define TD_CPU_OFFSET 2  // Task that should only run on the CPU

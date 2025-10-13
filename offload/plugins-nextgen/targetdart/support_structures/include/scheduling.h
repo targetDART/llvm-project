@@ -163,6 +163,7 @@ public:
 
     // Returns the memory manager
     TD_Memory_Manager *get_memory_manager();
+    TD_Communicator *get_communication_manager();
 };
 
 

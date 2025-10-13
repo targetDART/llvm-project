@@ -14,8 +14,8 @@
 
 
 void TD_Communicator::transfer_setup() {
-  MPI_Comm_rank(targetdart_comm, &rank);
-  MPI_Comm_size(targetdart_comm, &size);
+  MPI_Comm_rank(targetdart_comm, &comm_rank);
+  MPI_Comm_size(targetdart_comm, &comm_size);
 
   declare_KernelArgs_type();
   declare_uid_type();
@@ -206,7 +206,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     int enoughSpace = 1;
     MPI_Recv((void*)&enoughSpace, 1, MPI_INT, dest, 0, targetdart_comm, MPI_STATUS_IGNORE);
     if(enoughSpace == 0) {
-        DP("Node %d has not enough free memory to receive task %ld from node %d\n", dest, task->uid.id, rank);
+        DP("Node %d has not enough free memory to receive task %ld from node %d\n", dest, task->uid.id, comm_rank);
         return TARGETDART_FAILURE;
     }
 
@@ -538,8 +538,8 @@ global_sched_params_t TD_Communicator::global_cost_communicator(COST_DATA_TYPE l
 
 std::vector<COST_DATA_TYPE> TD_Communicator::global_cost_vector_propagation(COST_DATA_TYPE local_cost_param) {
     TRACE_START("fine_cost_exchange\n");
-    std::vector<COST_DATA_TYPE> cost_vector(size, 0);
-    cost_vector[rank] = local_cost_param; 
+    std::vector<COST_DATA_TYPE> cost_vector(comm_size, 0);
+    cost_vector[comm_rank] = local_cost_param; 
 
     MPI_Allgather(&local_cost_param, 1, COST_MPI_DATA_TYPE, &cost_vector[0], 1, COST_MPI_DATA_TYPE, targetdart_comm);
 
@@ -613,4 +613,55 @@ bool TD_Communicator::test_finalization(bool local_finalize) {
     MPI_Allreduce(&local_finalize, &result, 1, MPI_C_BOOL, MPI_LAND, targetdart_comm);
 
     return result;
+}
+
+tdrc TD_Communicator::send_allocation_request(void *base_ptr, size_t size, tddev device)  {
+  if (comm_size <= 1) {
+    DP("No remote ranks registered\n");
+    return  TARGETDART_SUCCESS;
+  }
+
+  DP("RANK %d - Sending allocation requests: base_ptr: " DPxMOD ", size: %lu, device: %d\n", comm_rank, DPxPTR(base_ptr), size, device);
+  MPI_Request reqs[(comm_size - 1) * 3];
+  int idx = 0;
+  MPI_Aint addr = (MPI_Aint)base_ptr;
+
+  for (int dest = 0; dest < comm_size; dest++) {
+    if (dest != comm_rank) {
+      MPI_Isend(&addr, 1, MPI_AINT, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs[idx++]);
+      MPI_Isend(&size, 1, MPI_UNSIGNED_LONG, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs[idx++]);
+      MPI_Isend(&device, 1, MPI_INT, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs[idx++]);
+    }
+  }
+  DP("RANK %d - Waiting on allocation requests receive\n", comm_rank);
+  MPI_Waitall((comm_size - 1) * 3, reqs, MPI_STATUS_IGNORE);
+  DP("RANK %d - All allocation requests received\n", comm_rank);
+
+  return TARGETDART_SUCCESS;
+}
+
+tdrc TD_Communicator::receive_allocation_request(int source, void **base_ptr, size_t *size, tddev *device) {
+  MPI_Aint addr;
+
+  MPI_Recv(&addr, 1, MPI_AINT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
+  MPI_Recv(size, 1, MPI_UNSIGNED_LONG, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
+  MPI_Recv(device, 1, MPI_INT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
+
+  *base_ptr = (void *)addr;
+
+  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", size: %lu, device: %d\n", comm_rank, source, DPxPTR(*base_ptr), *size, *device);
+
+  return TARGETDART_SUCCESS;
+}
+
+tdrc TD_Communicator::test_and_receive_allocation_request(void **base_ptr, size_t *size, tddev *device) {
+    MPI_Status status;
+    int flag;
+
+    MPI_Iprobe(MPI_ANY_SOURCE, SEND_ALLOCATION_REQUEST, targetdart_comm, &flag, &status);
+    if (flag) {
+        return receive_allocation_request(status.MPI_SOURCE, base_ptr, size, device);
+    }
+    return TARGETDART_FAILURE;
+
 }

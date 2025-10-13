@@ -221,7 +221,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
         TRACE_START("sched_loop\n");
         DP("Starting scheduler thread\n");
         int iter = 5;
-        while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->size > 1) {
+        while (comm_man->test_finalization(!schedule_man->is_empty() || !is_finalizing) && comm_man->comm_size > 1) {
             if (schedule_man->do_repartition()) {
                 iter = 0;
                 schedule_man->reset_repartition();
@@ -256,7 +256,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
     receiver_thread_loop = [&] (int deviceID) {
         TRACE_START("recv_loop\n");
         DP("Starting Receiver thread\n");
-        while ((!scheduler_done.load() || !schedule_man->is_empty()) && comm_man->size > 1) {
+        while ((!scheduler_done.load() || !schedule_man->is_empty()) && comm_man->comm_size > 1) {
             td_task_t task;
             if (comm_man->test_and_receive_results(&task) == TARGETDART_SUCCESS) {
                 schedule_man->notify_task_completion(task.uid, false);
@@ -268,6 +268,13 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 // Move the remote task to the heap so it does not get deallocated
                 td_task_t *heap_task = new td_task_t(std::move(task));
                 schedule_man->add_remote_task(heap_task, heap_task->affinity);
+            }
+
+            void *base_ptr;
+            size_t size;
+            tddev device;
+            if (comm_man->test_and_receive_allocation_request(&base_ptr, &size, &device) == TARGETDART_SUCCESS) {
+                // TODO:
             }
 
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
@@ -302,7 +309,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                     //exit(-1);
                 } */
                 //finalize after the task finished
-                if (task->uid.rank != comm_man->rank) {
+                if (task->uid.rank != comm_man->comm_rank) {
                     comm_man->send_task_result(task);
                     schedule_man->notify_task_completion(task->uid, false);
                     DP("finished remote execution of task (%ld%ld)\n", task->uid.rank, task->uid.id);

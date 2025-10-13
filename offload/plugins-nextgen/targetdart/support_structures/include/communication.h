@@ -9,7 +9,21 @@
 
 #define COST_MPI_DATA_TYPE MPI_DOUBLE
 
-enum MpiTaskTransferTag {SIGNAL_TASK_SEND, SEND_TASK, SEND_KERNEL_ARGS, SEND_PARAM_SIZES, SEND_PARAM_TYPES, SEND_BASE_PTRS, SEND_PARAMS, SEND_SOURCE_LOCS, SEND_LOCS_PSOURCE, SEND_RESULT_UID, SEND_RESULT_DATA, SEND_RESULT_RETURN_CODE};
+enum MpiTaskTransferTag {
+    SIGNAL_TASK_SEND, 
+    SEND_TASK, 
+    SEND_KERNEL_ARGS, 
+    SEND_PARAM_SIZES, 
+    SEND_PARAM_TYPES, 
+    SEND_BASE_PTRS, 
+    SEND_PARAMS, 
+    SEND_SOURCE_LOCS, 
+    SEND_LOCS_PSOURCE, 
+    SEND_RESULT_UID, 
+    SEND_RESULT_DATA, 
+    SEND_RESULT_RETURN_CODE,
+    SEND_ALLOCATION_REQUEST,
+};
 
 typedef struct global_sched_params_t{
     COST_DATA_TYPE        total_cost;
@@ -53,8 +67,8 @@ public:
     TD_Communicator(TD_Memory_Manager *memory_manager);
     ~TD_Communicator();
 
-    int size;
-    int rank;
+    int comm_size;
+    int comm_rank;
 
     // sends a task to another process
     tdrc send_task(int dest, td_task_t *task);
@@ -117,6 +131,11 @@ public:
     * If local_repartition is false, the local process will only check if a repartitioning is necessary.
     */
     bool test_repartitioning(bool local_repartition);
+
+    tdrc send_allocation_request(void *base_ptr, size_t size, tddev device);
+    tdrc receive_allocation_request(int source, void **base_ptr, size_t *size, tddev *device);
+
+    tdrc test_and_receive_allocation_request(void **base_ptr, size_t *size, tddev *device);
 };
 
 #endif // _TARGETDART_COMMUNICTION_H

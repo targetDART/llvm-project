@@ -75,7 +75,7 @@ td_task_t *TD_Scheduling_Manager::create_task(intptr_t hostptr, KernelArgsTy *Ke
 
     task->affinity = extract_device_affinity(DeviceID);    
 
-    task->uid = {local_id_tracker.fetch_add(1), comm_man->rank};
+    task->uid = {local_id_tracker.fetch_add(1), comm_man->comm_rank};
 
     DP("__kmpc_omp_get_event:" DPxMOD ", __kmpc_global_thread_num:" DPxMOD "\n", DPxPTR(&__kmpc_omp_get_event), DPxPTR(&__kmpc_global_thread_num) );
     task->Event = __kmpc_omp_get_event(__kmpc_global_thread_num(NULL));
@@ -254,15 +254,15 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                                                                                     return a.cost < b.cost;
                                                                                 });
 
-    int local_idx = comm_man->size;
+    int local_idx = comm_man->comm_size;
     for (size_t i = 0; i < combined_vector.size(); i++) {
-        if (combined_vector.at(i).id == comm_man->rank) {
+        if (combined_vector.at(i).id == comm_man->comm_rank) {
             local_idx = i;
             break;
         }
     }
     
-    if (local_idx == comm_man->size) {
+    if (local_idx == comm_man->comm_size) {
         handle_error_en(1, "local rank not found in index search.");
     }
 
@@ -287,7 +287,7 @@ void TD_Scheduling_Manager::iterative_schedule(device_affinity affinity) {
                 tdrc ret_send_code = comm_man->send_task(partner_proc, task);
                 if(ret_send_code == TARGETDART_FAILURE) {
                     affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).addTask(task);
-                    DP("Sending Task from %d to %d failed\n", comm_man->rank, partner_proc);
+                    DP("Sending Task from %d to %d failed\n", comm_man->comm_rank, partner_proc);
                 }
             } else {
                 //comm_man->signal_task_send(partner_proc, false);
@@ -321,7 +321,7 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
         td_task_t *next_task;
         tdrc return_code = get_migrateable_task(affinity, &next_task);
         if (return_code == TARGETDART_FAILURE) {
-            DP("Can't get a migratable task from node %d for coarse scheduling\n", comm_man->rank);
+            DP("Can't get a migratable task from node %d for coarse scheduling\n", comm_man->comm_rank);
             break;
         } else {
             transferred_tasks.push_back(next_task);
@@ -332,12 +332,12 @@ void TD_Scheduling_Manager::partial_global_reschedule(double target_load, device
     }
     
     for (size_t t = 0; t < transferred_tasks.size(); t++) {
-        tdrc return_code = comm_man->send_task(comm_man->rank + offset, transferred_tasks.at(t));
+        tdrc return_code = comm_man->send_task(comm_man->comm_rank + offset, transferred_tasks.at(t));
 
         //put task back into own queue
         if(return_code == TARGETDART_FAILURE) {
             affinity_queues->at(physical_device_count + 1 + affinity + TD_MIGRATABLE_OFFSET).addTask(transferred_tasks.at(t));
-            DP("Can't migrate task from node %d to %d for coarse scheduling, skipping transfer of remaining tasks...\n", comm_man->rank, comm_man->rank + offset);
+            DP("Can't migrate task from node %d to %d for coarse scheduling, skipping transfer of remaining tasks...\n", comm_man->comm_rank, comm_man->comm_rank + offset);
             break;
         }
     }
@@ -353,7 +353,7 @@ bool TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     global_sched_params_t params = comm_man->global_cost_communicator(local_cost);
     DP("Local cost: %f, Total cost: %f, Prefix sum: %f\n", params.local_cost, params.total_cost, params.prefix_sum);
     // optimum load for each process
-    double target_load = (double) params.total_cost / (double) comm_man->size;
+    double target_load = (double) params.total_cost / (double) comm_man->comm_size;
 
     if (target_load <= 1) {
         DP("Skip global reschedule with target load %f\n", target_load);
@@ -368,17 +368,17 @@ bool TD_Scheduling_Manager::global_reschedule(device_affinity affinity) {
     COST_DATA_TYPE post_transfer = 0;
 
     //compute pre_transfer
-    if (comm_man->rank != 0) {
-        COST_DATA_TYPE predecessor_load = params.prefix_sum / comm_man->rank;
-        pre_transfer = (target_load - predecessor_load) * comm_man->rank;
+    if (comm_man->comm_rank != 0) {
+        COST_DATA_TYPE predecessor_load = params.prefix_sum / comm_man->comm_rank;
+        pre_transfer = (target_load - predecessor_load) * comm_man->comm_rank;
     }
 
     DP("Send a load of %f to predecessors\n", pre_transfer);
 
     //compute post_transfer
-    if (comm_man->rank != comm_man->size - 1) {
+    if (comm_man->comm_rank != comm_man->comm_size - 1) {
         COST_DATA_TYPE successor_cost = params.total_cost - params.local_cost - params.prefix_sum;
-        int num_successors = comm_man->size - 1 - comm_man->rank; //inverted rank
+        int num_successors = comm_man->comm_size - 1 - comm_man->comm_rank; //inverted rank
         COST_DATA_TYPE successor_load = successor_cost/num_successors;
         post_transfer = (target_load - successor_load) * num_successors;
     }
@@ -634,4 +634,8 @@ tdrc TD_Scheduling_Manager::fulfill_event(td_task_t *task) {
 
 TD_Memory_Manager *TD_Scheduling_Manager::get_memory_manager() {
     return memory_manager;
+}
+
+TD_Communicator *TD_Scheduling_Manager::get_communication_manager() {
+    return comm_man;
 }
