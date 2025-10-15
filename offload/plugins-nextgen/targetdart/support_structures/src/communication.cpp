@@ -175,11 +175,11 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     //fprintf(stderr, "send_task (%ld%ld) to process %d\n", task->uid.rank, task->uid.id, dest);
 
     //Update argument sizes and types for remote tasks
-    for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
-        if (task->KernelArgs->ArgSizes[i] == 0) {
-            task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
-        }
-    }
+    //for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
+    //    if (task->KernelArgs->ArgSizes[i] == 0) {
+    //        task->KernelArgs->ArgSizes[i] = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+    //    }
+    //}
 
     //TODO: Use MPI pack to summarize the messages into a single Send
     //TODO: Use non-blocking send
@@ -226,7 +226,7 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs; i++) {
         size_t size = task->KernelArgs->ArgSizes[i];
         if (size == 0) {
-            size = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
+            //size = memory_manager->get_data_mapping_size(task->KernelArgs->ArgPtrs[i]);
         }
         if (size > 0) {
             //Test if data needs to be transfered to the kernel. Defined in omptarget.h (tgt_map_type).
@@ -621,7 +621,7 @@ tdrc TD_Communicator::send_allocation_request(void *base_ptr, size_t size, tddev
     return  TARGETDART_SUCCESS;
   }
 
-  DP("RANK %d - Sending allocation requests: base_ptr: " DPxMOD ", size: %lu, device: %d\n", comm_rank, DPxPTR(base_ptr), size, device);
+  DP("RANK %d - Sending allocation requests: base_ptr: " DPxMOD ", size: %lu, tddev: %d\n", comm_rank, DPxPTR(base_ptr), size, device);
   MPI_Request reqs[(comm_size - 1) * 3];
   int idx = 0;
   MPI_Aint addr = (MPI_Aint)base_ptr;
@@ -640,7 +640,7 @@ tdrc TD_Communicator::send_allocation_request(void *base_ptr, size_t size, tddev
   return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::receive_allocation_request(int source, void **base_ptr, size_t *size, tddev *device) {
+tdrc TD_Communicator::receive_allocation_request(int cpu_device, int source, void **base_ptr, size_t *size, tddev *device) {
   MPI_Aint addr;
 
   MPI_Recv(&addr, 1, MPI_AINT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
@@ -649,18 +649,29 @@ tdrc TD_Communicator::receive_allocation_request(int source, void **base_ptr, si
 
   *base_ptr = (void *)addr;
 
-  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", size: %lu, device: %d\n", comm_rank, source, DPxPTR(*base_ptr), *size, *device);
+  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", size: %lu, tddev: %d\n", comm_rank, source, DPxPTR(*base_ptr), *size, *device);
+
+  if (*device & TD_CPU) {
+    // allocate on host memory
+    //void *ptr_d = std::malloc(*size);
+    //memory_manager->register_allocation(*base_ptr, ptr_d, *size, {comm_rank, cpu_device});
+    
+  }
+
+  if (*device & TD_OFFLOAD) {
+    // allocate on device memories
+  }
 
   return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::test_and_receive_allocation_request(void **base_ptr, size_t *size, tddev *device) {
+tdrc TD_Communicator::test_and_receive_allocation_request(int cpu_device, void **base_ptr, size_t *size, tddev *device) {
     MPI_Status status;
     int flag;
 
     MPI_Iprobe(MPI_ANY_SOURCE, SEND_ALLOCATION_REQUEST, targetdart_comm, &flag, &status);
     if (flag) {
-        return receive_allocation_request(status.MPI_SOURCE, base_ptr, size, device);
+        return receive_allocation_request(cpu_device, status.MPI_SOURCE, base_ptr, size, device);
     }
     return TARGETDART_FAILURE;
 

@@ -273,8 +273,8 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
             void *base_ptr;
             size_t size;
             tddev device;
-            if (comm_man->test_and_receive_allocation_request(&base_ptr, &size, &device) == TARGETDART_SUCCESS) {
-                // TODO:
+            if (comm_man->test_and_receive_allocation_request(schedule_man->total_device_count(), &base_ptr, &size, &device) == TARGETDART_SUCCESS) {
+                // TODO: 
             }
 
             //std::this_thread::sleep_for(std::chrono::microseconds(100));

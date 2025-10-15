@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <memory.h>
 #include <omp.h>
@@ -408,12 +409,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
   Error dataSubmitImpl(void *TgtPtr, const void *HstPtr, int64_t Size,
                        AsyncInfoWrapperTy &AsyncInfoWrapper) override {
 
-    static int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+    int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+    int comm_rank = td_sched->get_communication_manager()->comm_rank;
 
     if (deviceID == CPU_DEVICE) {
       // In this case no data has to be copied
 
-      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      td_sched->get_memory_manager()->add_data_mapping(HstPtr, TgtPtr, CPU_DEVICE, comm_rank);
       return Plugin::success();
     } else if (deviceID < PM->getPhysicalDevices()) {
       // Physical offload device
@@ -426,16 +428,32 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       DeviceOrErr->synchronize(TargetAsyncInfo);
 
       if (res)
-        td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+        td_sched->get_memory_manager()->add_data_mapping(HstPtr, TgtPtr, deviceID, comm_rank);
       return res;
     } 
 
+    int plugin_cpu_device = PM->getNumDevices() - 1;
+
     if (deviceID >= PM->getPhysicalDevices() + 3) {
-      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+
+      int32_t real_device_id = 0;
+
+      if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
+        real_device_id = plugin_cpu_device;
+      } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET) {
+        real_device_id = 0;
+      } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET) {
+        real_device_id = plugin_cpu_device;
+      }
+
+      td_sched->get_memory_manager()->add_data_mapping(HstPtr, TgtPtr, real_device_id, comm_rank);
+      // handle CPU
+      void *real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(HstPtr, plugin_cpu_device, comm_rank);
+      if (real_TgtPtr)
+        std::memcpy(real_TgtPtr, HstPtr, Size);
       // handle other devices
-      // CPU device can be skipped for now
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
-        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(i, HstPtr);
+        real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(HstPtr, i, comm_rank);
         if (!real_TgtPtr)
           continue;
         auto DeviceOrErr = PM->getDevice(i);
@@ -514,36 +532,39 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
     DP("Allocating on device %d\n", deviceID);
 
     // The last device is always the CPU
-    static int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+    int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+
+    int comm_rank = td_sched->get_communication_manager()->comm_rank;
 
     if (deviceID == CPU_DEVICE) {
       // Data is allocated on the physical CPU device
-      void *ptr_d = std::malloc(Size);
-      if (ptr_d == nullptr)
+      void *base_ptr = std::malloc(Size);
+      if (base_ptr == nullptr)
         return nullptr;
-      td_sched->get_memory_manager()->register_allocation(ptr_d, ptr_d, Size, deviceID);
-      return ptr_d;
+      td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, deviceID, comm_rank, deviceID, comm_rank);
+      return base_ptr;
     } else if (deviceID < PM->getPhysicalDevices()) {
       // Data is allocated to a Physical Offload Device
       auto DeviceOrErr = PM->getDevice(deviceID);
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      void *ptr_d = physical_device->allocate(Size, ptr, Kind);
-      if (ptr_d == nullptr)
+      void *base_ptr = physical_device->allocate(Size, ptr, Kind);
+      if (base_ptr == nullptr)
         return nullptr;
-      td_sched->get_memory_manager()->register_allocation(ptr_d, ptr_d, Size, deviceID);
-      return ptr_d;
+      td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, deviceID, comm_rank, deviceID, comm_rank);
+      return base_ptr;
     }
 
     void *base_ptr = nullptr;
+    int32_t plugin_cpu_device = PM->getNumDevices() - 1;
 
     if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
       // TARGETDART_DEVICE_CPU
       DP("Allocating on local CPU device\n");
       base_ptr = std::malloc(Size);
       if (base_ptr) {
-        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, CPU_DEVICE);
+        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, plugin_cpu_device, comm_rank, plugin_cpu_device, comm_rank);
 
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
           DP("Additionally allocating on all remote CPU devices\n");
@@ -562,7 +583,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
       base_ptr = physical_device->allocate(Size, ptr, Kind);
       if (base_ptr) {
-        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, 0);
+        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, 0, comm_rank, 0, comm_rank);
 
         // handle other devices
         for (int i = 1; i < PM->getPhysicalDevices(); i++) {
@@ -570,9 +591,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
           if (!DeviceOrErr)
             FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
           physical_device = &DeviceOrErr->RTL->getDevice(i);
-          void *ptr_d = physical_device->allocate(Size, ptr, Kind);
-          if (ptr_d)
-            td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+          void *device_ptr = physical_device->allocate(Size, ptr, Kind);
+          if (device_ptr)
+            td_sched->get_memory_manager()->register_allocation(base_ptr, device_ptr, Size, 0, comm_rank, i, comm_rank);      
         }
 
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
@@ -587,16 +608,16 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
       base_ptr = std::malloc(Size);
       if (base_ptr) {
-        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, CPU_DEVICE);
+        td_sched->get_memory_manager()->register_allocation(base_ptr, base_ptr, Size, plugin_cpu_device, comm_rank, plugin_cpu_device, comm_rank);
 
         for (int i = 0; i < PM->getPhysicalDevices(); i++) {
           auto DeviceOrErr = PM->getDevice(i);
           if (!DeviceOrErr)
             FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
           auto physical_device = &DeviceOrErr->RTL->getDevice(i);
-          void *ptr_d = physical_device->allocate(Size, ptr, Kind);
-          if (ptr_d)
-            td_sched->get_memory_manager()->register_allocation(base_ptr, ptr_d, Size, i);      
+          void *device_ptr = physical_device->allocate(Size, ptr, Kind);
+          if (device_ptr)
+            td_sched->get_memory_manager()->register_allocation(base_ptr, device_ptr, Size, plugin_cpu_device, comm_rank, i, comm_rank);      
         }
 
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET) {
@@ -617,15 +638,17 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
+    DP("DEBUG: Free\n");
     if (isDeinitializing) {
       return OFFLOAD_SUCCESS;
     }
 
-    static int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+    int CPU_DEVICE = PM->getNumDevices() - PM->getPhysicalDevices() - 1;
+    int comm_rank = td_sched->get_communication_manager()->comm_rank;
 
     if (deviceID == CPU_DEVICE) {
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
       std::free(TgtPtr);
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr, deviceID, comm_rank);
       return OFFLOAD_SUCCESS;
     }
 
@@ -634,9 +657,13 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       if (!DeviceOrErr)
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());      
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
-      return physical_device->free(TgtPtr, Kind);      
+      int ret = physical_device->free(TgtPtr, Kind);      
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr, deviceID, comm_rank);
+      return ret;
     } 
+
+    int plugin_cpu_device = PM->getNumDevices() - 1;
+
 
     // TARGETDART Group devices
     if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
@@ -648,7 +675,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         DP("Additionally freeing on all remote CPU devices\n");
         // TODO:
       }
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr, plugin_cpu_device, comm_rank);
 
     } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET) {
       // TARGETDART_DEVICE_OFFLOAD
@@ -666,19 +693,18 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
         physical_device = &DeviceOrErr->RTL->getDevice(i);
 
-        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr);
-        if (real_TgtPtr == nullptr)
+        void *real_device_ptr = td_sched->get_memory_manager()->get_data_grouping(TgtPtr, 0, comm_rank, i, comm_rank);
+        if (real_device_ptr == nullptr)
           continue;
 
-        physical_device->free(real_TgtPtr);
-
-        if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
-          DP("Additionally freeing on all remote GPU devices\n");
-          // TODO:
-        }
-
-        td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+        physical_device->free(real_device_ptr);
       }
+
+      if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
+        DP("Additionally freeing on all remote GPU devices\n");
+        // TODO:
+      }
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr, 0, comm_rank);
 
     } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET) {
       // TARGETDART_DEVICE_ANY
@@ -691,18 +717,18 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
         auto physical_device = &DeviceOrErr->RTL->getDevice(i);
 
-        void *real_TgtPtr = td_sched->get_memory_manager()->get_data_grouping(i, TgtPtr);
-        if (real_TgtPtr == nullptr)
+        void *real_device_ptr = td_sched->get_memory_manager()->get_data_grouping(TgtPtr, plugin_cpu_device, comm_rank, i, comm_rank);
+        if (real_device_ptr == nullptr)
           continue;
 
-        physical_device->free(real_TgtPtr);
+        physical_device->free(real_device_ptr);
       }
 
       if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET) {
         DP("Additionally freeing on all remote devices\n");
         // TODO:
       }
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr);
+      td_sched->get_memory_manager()->register_deallocation(TgtPtr, PM->getNumDevices() - 1, comm_rank);
 
     } else {
       // Only CPU should come after this but should be handled with physical devices
@@ -864,7 +890,7 @@ struct targetDARTPluginTy : public GenericPluginTy {
 
     init_task_structures();
 
-    td_mem = new TD_Memory_Manager(external_devices);
+    td_mem = new TD_Memory_Manager();
     td_comm = new TD_Communicator(td_mem);
     td_sched = new TD_Scheduling_Manager(external_devices, td_comm, td_mem);
     td_thread = new TD_Thread_Manager(external_devices, td_comm, td_sched);

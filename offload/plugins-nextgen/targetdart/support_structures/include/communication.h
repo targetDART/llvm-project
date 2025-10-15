@@ -133,9 +133,9 @@ public:
     bool test_repartitioning(bool local_repartition);
 
     tdrc send_allocation_request(void *base_ptr, size_t size, tddev device);
-    tdrc receive_allocation_request(int source, void **base_ptr, size_t *size, tddev *device);
+    tdrc receive_allocation_request(int cpu_device, int source, void **base_ptr, size_t *size, tddev *device);
 
-    tdrc test_and_receive_allocation_request(void **base_ptr, size_t *size, tddev *device);
+    tdrc test_and_receive_allocation_request(int cpu_device, void **base_ptr, size_t *size, tddev *device);
 };
 
 #endif // _TARGETDART_COMMUNICTION_H

@@ -36,6 +36,8 @@ TD_Scheduling_Manager::TD_Scheduling_Manager(int32_t external_device_count, TD_C
 
     comm_man = communicator;
 
+
+
     // Create affinity queues: GPUS + CPU + targetDART Scheduling devices {(local, migratable, replica, replicated, remote) * (CPU, GPU, ANY)}
     // two additional padding slots are required to ensure that GPU/ANY replicated, remote queues are accessed correctly.
     affinity_queues = new std::vector<TD_Task_Queue>(physical_device_count + 1 + 5 * 3 + 2);
@@ -524,7 +526,7 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
         if (noAllocation(i)) {
             if (task->KernelArgs->ArgSizes[i] == 0) {
                 // Avoid data transfers for pre transfered data
-                devicePtrs[i] = memory_manager->get_data_mapping(effective_device, task->KernelArgs->ArgPtrs[i]);
+                devicePtrs[i] = memory_manager->get_data_mapping(task->KernelArgs->ArgPtrs[i], (int32_t)effective_device, comm_man->comm_rank);
             } 
             if (devicePtrs[i] == nullptr) {                
                 // Avoid data transfers for CPU execution
