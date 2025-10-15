@@ -412,13 +412,12 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         FATAL_MESSAGE(deviceID, "%s", toString(DeviceOrErr.takeError()).c_str());
       AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);    
       GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(deviceID);
-      TgtPtr = td_sched->get_memory_manager()->get_data_mapping(deviceID, HstPtr);
       auto res = physical_device->dataSubmit(TgtPtr, HstPtr, Size, TargetAsyncInfo);
       DeviceOrErr->synchronize(TargetAsyncInfo);
-      //td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       return res;
     } else if (deviceID >= PM->getPhysicalDevices() + 4) { // All devices that cover multiple accelerators
-      //td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
+      td_sched->get_memory_manager()->add_data_mapping(TgtPtr, HstPtr);
       // handle other devices
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
         auto DeviceOrErr = PM->getDevice(i);
