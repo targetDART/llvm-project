@@ -357,6 +357,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
             task->KernelArgs->ArgBasePtrs[i] = (void *) malloc(sizeof(int64_t) * (task->KernelArgs->ArgSizes[i] + diff[i]));
             task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
             memory_manager->register_allocation(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], 0);
+            memory_manager->add_data_mapping(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgPtrs[i]);
             /*} catch (std::bad_alloc& badAlloc) {
                 enoughSpace = 0;
             }*/
