@@ -103,7 +103,6 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
 }
 
 KernelArgsTy *partialcopyKernelArgs(KernelArgsTy *KernelArgs, TD_Memory_Manager *memory_manager) {
-    DP("custom copyKernelArgs 1\n");
     KernelArgsTy *LocalKernelArgs = new KernelArgsTy();
     LocalKernelArgs->Version = KernelArgs-> Version;
     LocalKernelArgs->NumArgs = KernelArgs->NumArgs;
@@ -111,17 +110,14 @@ KernelArgsTy *partialcopyKernelArgs(KernelArgsTy *KernelArgs, TD_Memory_Manager 
     LocalKernelArgs->ArgTypes = new int64_t[LocalKernelArgs->NumArgs];
     //LocalKernelArgs->ArgPtrs = new void*[KernelArgs->NumArgs];
     //LocalKernelArgs->ArgBasePtrs = new void*[KernelArgs->NumArgs];
-    DP("custom copyKernelArgs 2\n");
     LocalKernelArgs->ArgBasePtrs = KernelArgs->ArgBasePtrs;
     LocalKernelArgs->ArgPtrs = KernelArgs->ArgPtrs;
-    DP("custom copyKernelArgs 3\n");
     for(int i = 0; i < LocalKernelArgs->NumArgs; i++) {
         LocalKernelArgs->ArgSizes[i] = KernelArgs->ArgSizes[i];
         LocalKernelArgs->ArgTypes[i] = KernelArgs->ArgTypes[i];
         //int64_t diff = (int64_t)KernelArgs->ArgPtrs[i] - (int64_t)KernelArgs->ArgBasePtrs[i];
         //memory_manager->register_allocation(base_ptr, base_ptr, Size, 0);
     }
-    DP("custom copyKernelArgs 4\n");
     LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
     LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;
     LocalKernelArgs->Tripcount = KernelArgs->Tripcount;

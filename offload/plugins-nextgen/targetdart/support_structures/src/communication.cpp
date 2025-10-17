@@ -356,6 +356,7 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
             //task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
             task->KernelArgs->ArgBasePtrs[i] = (void *) malloc(sizeof(int64_t) * (task->KernelArgs->ArgSizes[i] + diff[i]));
             task->KernelArgs->ArgPtrs[i] = (void *) (((int64_t) task->KernelArgs->ArgBasePtrs[i]) + diff[i]);
+            memory_manager->register_allocation(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], 0);
             /*} catch (std::bad_alloc& badAlloc) {
                 enoughSpace = 0;
             }*/
@@ -461,7 +462,7 @@ tdrc TD_Communicator::send_task_result(td_task_t *task) {
             if (IsMapFrom != 0) {
                 MPI_Ssend(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, task->uid.rank, SEND_RESULT_DATA, targetdart_comm);
                 DP("Sending result for task (%ld%ld) at " DPxMOD " \n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]));
-                DP("Before Sending Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
+                //DP("Before Sending Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
             }
         }
     }
@@ -507,7 +508,7 @@ tdrc TD_Communicator::receive_task_result(int source, td_uid_t *uid) {
             if (IsMapFrom != 0) {
                 MPI_Recv(task->KernelArgs->ArgPtrs[i], task->KernelArgs->ArgSizes[i], MPI_BYTE, source, SEND_RESULT_DATA, targetdart_comm, MPI_STATUS_IGNORE);
                 DP("Recv result for task (%ld%ld) at " DPxMOD " from process %d\n", task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), source);
-                DP("After recv Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
+                //DP("After recv Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
             }
         }
     }
