@@ -6,7 +6,10 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
+#include <memory.h>
 #include <unordered_map>
 #include <vector>
 #include "sys/types.h"
@@ -243,7 +246,16 @@ tdrc TD_Communicator::send_task(int dest, td_task_t *task) {
         }
         else {
             if (task->KernelArgs->ArgPtrs[i] != nullptr) {
-                DP("Arg %d: WARNING! The size=0 entry for task (%ld%ld) with value " DPxMOD " will be set to zero on the remote execution device on rank %d. You may have forgotten a map clause. :)\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+                //DP("Arg %d: WARNING! The size=0 entry for task (%ld%ld) with value " DPxMOD " will be set to zero on the remote execution device on rank %d. You may have forgotten a map clause. :)\n", i, task->uid.rank, task->uid.id, DPxPTR(task->KernelArgs->ArgPtrs[i]), dest);
+                // This pointer was previously mapped in data region -> Just send the base_ptr 
+                global_ptr global_base_ptr = memory_manager->get_global_base_ptr(task->KernelArgs->ArgPtrs[i]);
+                if (global_base_ptr.ptr) {
+                    MPI_Aint base_addr = (MPI_Aint)global_base_ptr.ptr;
+                    MPI_Send(&base_addr, 1, MPI_AINT, dest, SEND_PARAMS, targetdart_comm);
+                    MPI_Send(&global_base_ptr.gdi.deviceID, 1, MPI_INT32_T, dest, SEND_PARAMS, targetdart_comm);
+                    DP("Arg %d: Send base_ptr " DPxMOD " (deviceID: %d, rank: %d) for host_ptr " DPxMOD "\n", 
+                       i, DPxPTR(global_base_ptr.ptr), global_base_ptr.gdi.deviceID, global_base_ptr.gdi.rank, DPxPTR(task->KernelArgs->ArgPtrs[i]));
+                }
             }
         }
     }
@@ -362,7 +374,16 @@ tdrc TD_Communicator::receive_task(int source, td_task_t *task) {
             }
         }
         else {
-            DP("Arg %d: assumed to be nullptr for task (%ld%ld)\n", i, task->uid.rank, task->uid.id);
+            //DP("Arg %d: assumed to be nullptr for task (%ld%ld)\n", i, task->uid.rank, task->uid.id);
+            // Size = 0 -> Argument was send in data region already; only receive base_ptr
+            MPI_Aint base_addr;
+            int32_t base_deviceID;
+            MPI_Recv(&base_addr, 1, MPI_AINT, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
+            MPI_Recv(&base_deviceID, 1, MPI_INT32_T, source, SEND_PARAMS, targetdart_comm, MPI_STATUS_IGNORE);
+            void *base_ptr = (void *)base_addr;
+            DP("Arg %d: Recv base_ptr: " DPxMOD "(deviceID: %d, rank %d)\n", i, DPxPTR(base_ptr), base_deviceID, source);
+            task->KernelArgs->ArgPtrs[i] = (void *)memory_manager->get_host_ptr(base_ptr, base_deviceID, source);
+            
         }
 
         //Fill Mappers and Names with null
@@ -615,26 +636,30 @@ bool TD_Communicator::test_finalization(bool local_finalize) {
     return result;
 }
 
-tdrc TD_Communicator::send_allocation_request(void *base_ptr, size_t size, tddev device)  {
+tdrc TD_Communicator::send_allocation_request(void *base_ptr, int32_t base_deviceID, size_t size, tddev device)  {
   if (comm_size <= 1) {
     DP("No remote ranks registered\n");
     return  TARGETDART_SUCCESS;
   }
 
   DP("RANK %d - Sending allocation requests: base_ptr: " DPxMOD ", size: %lu, tddev: %d\n", comm_rank, DPxPTR(base_ptr), size, device);
-  MPI_Request reqs[(comm_size - 1) * 3];
-  int idx = 0;
+  std::vector<MPI_Request> reqs;
   MPI_Aint addr = (MPI_Aint)base_ptr;
 
   for (int dest = 0; dest < comm_size; dest++) {
     if (dest != comm_rank) {
-      MPI_Isend(&addr, 1, MPI_AINT, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs[idx++]);
-      MPI_Isend(&size, 1, MPI_UNSIGNED_LONG, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs[idx++]);
-      MPI_Isend(&device, 1, MPI_INT, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs[idx++]);
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&addr, 1, MPI_AINT, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&base_deviceID, 1, MPI_INT32_T, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&size, 1, MPI_UNSIGNED_LONG, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&device, 1, MPI_INT, dest, SEND_ALLOCATION_REQUEST, targetdart_comm, &reqs.back());
     }
   }
   DP("RANK %d - Waiting on allocation requests receive\n", comm_rank);
-  MPI_Waitall((comm_size - 1) * 3, reqs, MPI_STATUS_IGNORE);
+  MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUS_IGNORE);
   DP("RANK %d - All allocation requests received\n", comm_rank);
 
   return TARGETDART_SUCCESS;
@@ -643,19 +668,21 @@ tdrc TD_Communicator::send_allocation_request(void *base_ptr, size_t size, tddev
 tdrc TD_Communicator::receive_allocation_request(int cpu_device, int source, void **base_ptr, size_t *size, tddev *device) {
   MPI_Aint addr;
 
+  int32_t base_deviceID;
+
   MPI_Recv(&addr, 1, MPI_AINT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
+  MPI_Recv(&base_deviceID, 1, MPI_INT32_T, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
   MPI_Recv(size, 1, MPI_UNSIGNED_LONG, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
   MPI_Recv(device, 1, MPI_INT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
 
   *base_ptr = (void *)addr;
 
-  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", size: %lu, tddev: %d\n", comm_rank, source, DPxPTR(*base_ptr), *size, *device);
+  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", (device %d) size: %lu, tddev: %d\n", comm_rank, source, DPxPTR(*base_ptr), base_deviceID, *size, *device);
 
   if (*device & TD_CPU) {
     // allocate on host memory
-    //void *ptr_d = std::malloc(*size);
-    //memory_manager->register_allocation(*base_ptr, ptr_d, *size, {comm_rank, cpu_device});
-    
+    void *device_ptr = std::malloc(*size);
+    memory_manager->register_allocation(*base_ptr, device_ptr, *size, base_deviceID, source, cpu_device, comm_rank);
   }
 
   if (*device & TD_OFFLOAD) {
@@ -666,13 +693,88 @@ tdrc TD_Communicator::receive_allocation_request(int cpu_device, int source, voi
 }
 
 tdrc TD_Communicator::test_and_receive_allocation_request(int cpu_device, void **base_ptr, size_t *size, tddev *device) {
-    MPI_Status status;
-    int flag;
+  MPI_Status status;
+  int flag;
 
-    MPI_Iprobe(MPI_ANY_SOURCE, SEND_ALLOCATION_REQUEST, targetdart_comm, &flag, &status);
-    if (flag) {
-        return receive_allocation_request(cpu_device, status.MPI_SOURCE, base_ptr, size, device);
+  MPI_Iprobe(MPI_ANY_SOURCE, SEND_ALLOCATION_REQUEST, targetdart_comm, &flag, &status);
+  if (flag) {
+      return receive_allocation_request(cpu_device, status.MPI_SOURCE, base_ptr, size, device);
+  }
+  return TARGETDART_FAILURE;
+
+}
+
+tdrc TD_Communicator::send_data_submit(void const *host_ptr, size_t size, void *base_ptr, int32_t base_deviceID) {
+   if (comm_size <= 1) {
+    DP("No remote ranks registered\n");
+    return  TARGETDART_SUCCESS;
+  }
+
+  DP("RANK %d - Sending data submit: host_ptr: " DPxMOD ", size: %lu base_ptr " DPxMOD " device %d, rank %d\n", comm_rank, DPxPTR(host_ptr), size, DPxPTR(base_ptr), base_deviceID, comm_rank);
+  std::vector<MPI_Request> reqs;
+
+  MPI_Aint base_addr = (MPI_Aint)base_ptr;
+
+  for (int dest = 0; dest < comm_size; dest++) {
+    if (dest != comm_rank) {
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&size, 1, MPI_UNSIGNED_LONG, dest, SEND_DATA_SUBMIT, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(host_ptr, size, MPI_BYTE, dest, SEND_DATA_SUBMIT, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&base_addr, 1, MPI_AINT, dest, SEND_DATA_SUBMIT, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&base_deviceID, 1, MPI_INT32_T, dest, SEND_DATA_SUBMIT, targetdart_comm, &reqs.back());
     }
-    return TARGETDART_FAILURE;
+  }
+  DP("RANK %d - Waiting on data submits to be received\n", comm_rank);
+  MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUS_IGNORE);
+  DP("RANK %d - All data submits received\n", comm_rank);
 
+  return TARGETDART_SUCCESS;
+}
+
+tdrc TD_Communicator::receive_data_submit(int cpu_device, int source) {
+  size_t size;
+  void *host_ptr;
+  void *base_ptr;
+  MPI_Aint base_addr;
+  int32_t base_deviceID;
+
+  MPI_Recv(&size, 1 , MPI_UNSIGNED_LONG, source, SEND_DATA_SUBMIT, targetdart_comm, MPI_STATUS_IGNORE);
+
+  host_ptr = std::malloc(size);
+
+  MPI_Recv(host_ptr, size , MPI_BYTE, source, SEND_DATA_SUBMIT, targetdart_comm, MPI_STATUS_IGNORE);
+
+  MPI_Recv(&base_addr, 1, MPI_AINT, source, SEND_DATA_SUBMIT, targetdart_comm, MPI_STATUS_IGNORE);
+
+  base_ptr = (void *)base_addr;
+
+  MPI_Recv(&base_deviceID, 1, MPI_INT32_T, source, SEND_DATA_SUBMIT, targetdart_comm, MPI_STATUS_IGNORE);
+  
+
+  DP("RANK %d - Received data submits from rank %d: host_ptr: " DPxMOD ", size: %lu, base_ptr " DPxMOD " deviceID %d rank %d\n", 
+     comm_rank, source, DPxPTR(host_ptr), size, DPxPTR(base_ptr), base_deviceID, source);
+
+
+  memory_manager->add_data_mapping(host_ptr, base_ptr, base_deviceID, source);
+
+  // handle CPU
+  void *device_ptr = memory_manager->get_data_mapping(host_ptr, cpu_device, comm_rank);
+  if (device_ptr)
+    std::memcpy(device_ptr, host_ptr, size);
+
+  return TARGETDART_SUCCESS;
+}
+
+tdrc TD_Communicator::test_and_receive_data_submit(int cpu_device) {
+  MPI_Status status;
+  int flag;
+
+  MPI_Iprobe(MPI_ANY_SOURCE, SEND_DATA_SUBMIT, targetdart_comm, &flag, &status);
+  if (flag) {
+      return receive_data_submit(cpu_device, status.MPI_SOURCE);
+  }
+  return TARGETDART_FAILURE;
 }

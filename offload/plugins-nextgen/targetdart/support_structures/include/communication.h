@@ -23,6 +23,7 @@ enum MpiTaskTransferTag {
     SEND_RESULT_DATA, 
     SEND_RESULT_RETURN_CODE,
     SEND_ALLOCATION_REQUEST,
+    SEND_DATA_SUBMIT,
 };
 
 typedef struct global_sched_params_t{
@@ -132,10 +133,13 @@ public:
     */
     bool test_repartitioning(bool local_repartition);
 
-    tdrc send_allocation_request(void *base_ptr, size_t size, tddev device);
+    tdrc send_allocation_request(void *base_ptr, int32_t base_deviceID, size_t size, tddev device);
     tdrc receive_allocation_request(int cpu_device, int source, void **base_ptr, size_t *size, tddev *device);
-
     tdrc test_and_receive_allocation_request(int cpu_device, void **base_ptr, size_t *size, tddev *device);
+
+    tdrc send_data_submit(void const *host_ptr, size_t size, void *base_ptr, int32_t base_deviceID);
+    tdrc receive_data_submit(int cpu_device, int source);
+    tdrc test_and_receive_data_submit(int cpu_device);
 };
 
 #endif // _TARGETDART_COMMUNICTION_H

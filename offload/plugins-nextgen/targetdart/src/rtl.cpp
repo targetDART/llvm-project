@@ -464,6 +464,9 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         auto res = physical_device->dataSubmit(real_TgtPtr, HstPtr, Size, TargetAsyncInfo);
         DeviceOrErr->synchronize(TargetAsyncInfo);
       }
+
+      // Handle remote nodes that may have data allocated
+      td_sched->get_communication_manager()->send_data_submit(HstPtr, Size, TgtPtr, real_device_id);
     }
     return Plugin::success();
   }
@@ -569,7 +572,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
           DP("Additionally allocating on all remote CPU devices\n");
           // TODO:
-          td_sched->get_communication_manager()->send_allocation_request(base_ptr, Size, TD_CPU);
+          td_sched->get_communication_manager()->send_allocation_request(base_ptr, plugin_cpu_device, Size, TD_CPU);
         }
       }
 
@@ -638,7 +641,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
   /// Free the memory. Use std::free in all cases.
   int free(void *TgtPtr, TargetAllocTy Kind) override {
-    DP("DEBUG: Free\n");
     if (isDeinitializing) {
       return OFFLOAD_SUCCESS;
     }
