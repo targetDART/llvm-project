@@ -102,6 +102,36 @@ KernelArgsTy *copyKernelArgs(KernelArgsTy *KernelArgs) {
     return LocalKernelArgs;
 }
 
+KernelArgsTy *partialcopyKernelArgs(KernelArgsTy *KernelArgs, TD_Memory_Manager *memory_manager) {
+    KernelArgsTy *LocalKernelArgs = new KernelArgsTy();
+    LocalKernelArgs->Version = KernelArgs-> Version;
+    LocalKernelArgs->NumArgs = KernelArgs->NumArgs;
+    LocalKernelArgs->ArgSizes = new int64_t[LocalKernelArgs->NumArgs];
+    LocalKernelArgs->ArgTypes = new int64_t[LocalKernelArgs->NumArgs];
+    //LocalKernelArgs->ArgPtrs = new void*[KernelArgs->NumArgs];
+    //LocalKernelArgs->ArgBasePtrs = new void*[KernelArgs->NumArgs];
+    LocalKernelArgs->ArgBasePtrs = KernelArgs->ArgBasePtrs;
+    LocalKernelArgs->ArgPtrs = KernelArgs->ArgPtrs;
+    for(int i = 0; i < LocalKernelArgs->NumArgs; i++) {
+        LocalKernelArgs->ArgSizes[i] = KernelArgs->ArgSizes[i];
+        LocalKernelArgs->ArgTypes[i] = KernelArgs->ArgTypes[i];
+        //int64_t diff = (int64_t)KernelArgs->ArgPtrs[i] - (int64_t)KernelArgs->ArgBasePtrs[i];
+        //memory_manager->register_allocation(base_ptr, base_ptr, Size, 0);
+    }
+    LocalKernelArgs->ArgNames = KernelArgs->ArgNames;
+    LocalKernelArgs->ArgMappers = KernelArgs->ArgMappers;
+    LocalKernelArgs->Tripcount = KernelArgs->Tripcount;
+    LocalKernelArgs->Flags = KernelArgs->Flags;
+    LocalKernelArgs->DynCGroupMem = 0;
+    LocalKernelArgs->NumTeams[0] = KernelArgs->NumTeams[0];
+    LocalKernelArgs->NumTeams[1] = 0;
+    LocalKernelArgs->NumTeams[2] = 0;
+    LocalKernelArgs->ThreadLimit[0] = KernelArgs->ThreadLimit[0];
+    LocalKernelArgs->ThreadLimit[1] = 0;
+    LocalKernelArgs->ThreadLimit[2] = 0;
+    return LocalKernelArgs;
+}
+
 
 device_affinity TD_Scheduling_Manager::extract_device_affinity(int DeviceID) {
     int internalID = DeviceID;
@@ -592,11 +622,25 @@ tdrc TD_Scheduling_Manager::invoke_task(td_task_t *task, int64_t Device) {
 
     TRACE_START("D2H_transfer_task (%ld%ld)\n", task->uid.rank, task->uid.id);
     // Deallocate data on the device and transfer it from device to host if necessary
+    double check;
     for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
         const bool hasFlagFrom = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_FROM;
+        const bool hasFlagLiteral = task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL;
         if (hasFlagFrom && task->KernelArgs->ArgSizes[i] > 0) {
             DP("(%ld%ld) Entry %2d: D2H copy\n", task->uid.rank, task->uid.id, i);
+            DP("D2H copy from %p to %p\n", devicePtrs[i], task->KernelArgs->ArgPtrs[i]);
             DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
+            check = *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i])));
+            DP("Result (%ld%ld): %f\n", task->uid.rank, task->uid.id, check);
+        }
+    }
+    if(check == 0.0) {
+        for (uint32_t i = 0; i < task->KernelArgs->NumArgs - 1; i++) {
+            DP("added part in scheduling.cpp\n");
+            if(task->KernelArgs->ArgSizes[i] == 0) { //cllt besser mit >= 8 weil es dann auch wirklich ein double sein kann/ interpretiert werden kann
+                DeviceOrErr->retrieveData(task->KernelArgs->ArgPtrs[i], devicePtrs[i], task->KernelArgs->ArgSizes[i], TargetAsyncInfo);
+                DP("(%ld%ld) Entry %2d value: %f\n", task->uid.rank, task->uid.id, i, *(reinterpret_cast<double*>((task->KernelArgs->ArgPtrs[i]))));
+            }
         }
     }
 
