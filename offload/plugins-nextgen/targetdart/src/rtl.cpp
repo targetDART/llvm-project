@@ -664,80 +664,51 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
       return ret;
     } 
 
+    // TARGETDART Group devices
     int plugin_cpu_device = PM->getNumDevices() - 1;
 
-
-    // TARGETDART Group devices
+    int base_device = 0;
+    bool remote = false;
     if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
-      // TARGETDART_DEVICE_CPU
-      DP("Freeing on local CPU device\n");
-      std::free(TgtPtr);
-
-      if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
-        DP("Additionally freeing on all remote CPU devices\n");
-        // TODO:
-      }
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr, plugin_cpu_device, comm_rank);
-
+      base_device = plugin_cpu_device;
+      remote = deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET;
     } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET) {
-      // TARGETDART_DEVICE_OFFLOAD
-      DP("Freeing on all local GPU devices\n");
-      auto DeviceOrErr = PM->getDevice(0);
-      if (!DeviceOrErr)
-        FATAL_MESSAGE(0, "%s", toString(DeviceOrErr.takeError()).c_str());      
-
-      GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(0);
-      physical_device->free(TgtPtr);
-      // handle other devices
-      for (int i = 1; i < PM->getPhysicalDevices(); i++) {
-        DeviceOrErr = PM->getDevice(i);
-        if (!DeviceOrErr)
-          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
-        physical_device = &DeviceOrErr->RTL->getDevice(i);
-
-        void *real_device_ptr = td_sched->get_memory_manager()->get_data_grouping(TgtPtr, 0, comm_rank, i, comm_rank);
-        if (real_device_ptr == nullptr)
-          continue;
-
-        physical_device->free(real_device_ptr);
-      }
-
-      if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
-        DP("Additionally freeing on all remote GPU devices\n");
-        // TODO:
-      }
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr, 0, comm_rank);
-
+      base_device = 0;
+      remote = deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET;
     } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET) {
-      // TARGETDART_DEVICE_ANY
-      DP("Freeing on all local devices\n");
-
-      std::free(TgtPtr);
-      for (int i = 0; i < PM->getPhysicalDevices(); i++) {
-        auto DeviceOrErr = PM->getDevice(i);
-        if (!DeviceOrErr)
-          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
-        auto physical_device = &DeviceOrErr->RTL->getDevice(i);
-
-        void *real_device_ptr = td_sched->get_memory_manager()->get_data_grouping(TgtPtr, plugin_cpu_device, comm_rank, i, comm_rank);
-        if (real_device_ptr == nullptr)
-          continue;
-
-        physical_device->free(real_device_ptr);
-      }
-
-      if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET) {
-        DP("Additionally freeing on all remote devices\n");
-        // TODO:
-      }
-      td_sched->get_memory_manager()->register_deallocation(TgtPtr, PM->getNumDevices() - 1, comm_rank);
-
-    } else {
-      // Only CPU should come after this but should be handled with physical devices
-      FATAL_MESSAGE(0, "%s", "Error: Unknown Device");
-
-      
+      base_device = plugin_cpu_device;
+      remote = deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET;
     }
+
+    // TgtPtr equals the base ptr
+    // CPU
+    void *device_ptr = td_sched->get_memory_manager()->get_data_grouping(TgtPtr, base_device, comm_rank, plugin_cpu_device, comm_rank);
+    if (device_ptr) {
+      DP("Freeing device_ptr: " DPxMOD " on rank %d device %d (CPU) device\n", DPxPTR(device_ptr), comm_rank, plugin_cpu_device);
+      std::free(device_ptr);
+    }
+
+    // Offload
+    for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+      auto DeviceOrErr = PM->getDevice(i);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      auto physical_device = &DeviceOrErr->RTL->getDevice(i);
+
+      device_ptr = td_sched->get_memory_manager()->get_data_grouping(TgtPtr, base_device, comm_rank, i, comm_rank);
+      if (!device_ptr)
+        continue;
+
+      DP("Freeing device_ptr: " DPxMOD " on rank %d device %d (OFFLOAD) device\n", DPxPTR(device_ptr), comm_rank, i);
+      physical_device->free(device_ptr);
+    }
+
+    // Remote
+    if (remote) {
+      td_sched->get_communication_manager()->send_free_request(TgtPtr, base_device);
+    }
+
+    td_sched->get_memory_manager()->register_deallocation(TgtPtr, base_device, comm_rank);
 
     return OFFLOAD_SUCCESS;
   }

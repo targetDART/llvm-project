@@ -24,6 +24,7 @@ enum MpiTaskTransferTag {
     SEND_RESULT_RETURN_CODE,
     SEND_ALLOCATION_REQUEST,
     SEND_DATA_SUBMIT,
+    SEND_DATA_FREE,
 };
 
 typedef struct global_sched_params_t{
@@ -140,6 +141,10 @@ public:
     tdrc send_data_submit(void const *host_ptr, size_t size, void *base_ptr, int32_t base_deviceID);
     tdrc receive_data_submit(int cpu_device, int source);
     tdrc test_and_receive_data_submit(int cpu_device);
+
+    tdrc send_free_request(void *base_ptr, int32_t base_deviceID);
+    tdrc receive_free_request(int cpu_device, int source);
+    tdrc test_and_receive_free_request(int cpu_device);
 };
 
 #endif // _TARGETDART_COMMUNICTION_H

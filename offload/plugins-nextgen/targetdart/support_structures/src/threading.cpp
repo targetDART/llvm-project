@@ -281,6 +281,10 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 // TODO: ?
             }
 
+            if (comm_man->test_and_receive_free_request(schedule_man->total_device_count()) == TARGETDART_SUCCESS) {
+                // TODO: ?
+            }
+
             //std::this_thread::sleep_for(std::chrono::microseconds(100));
         }
         TRACE_END("recv_loop\n");

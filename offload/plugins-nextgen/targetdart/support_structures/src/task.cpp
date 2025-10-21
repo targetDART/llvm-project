@@ -54,9 +54,13 @@ tdrc delete_task(td_task_t *task, bool local) {
             const auto notLiteral = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_LITERAL) == 0;
             const auto notPrivate = (task->KernelArgs->ArgTypes[i] & OMP_TGT_MAPTYPE_PRIVATE) == 0;
             if (notLiteral && notPrivate) {
-                // zero-size data should have a zero pointer, or hidden data near the base arg
-                DP("(%ld%ld) Entry %d: delete data at " DPxMOD " \n", task->uid.rank, task->uid.id, i, DPxPTR(task->KernelArgs->ArgBasePtrs[i]));
-                std::free(task->KernelArgs->ArgBasePtrs[i]);
+                bool isDataRegion = task->KernelArgs->ArgSizes[i] == 0;
+                if (!isDataRegion) {
+                    DP("(%ld%ld) Entry %d: delete data at " DPxMOD " \n", task->uid.rank, task->uid.id, i, DPxPTR(task->KernelArgs->ArgBasePtrs[i]));
+                    std::free(task->KernelArgs->ArgBasePtrs[i]);
+                } else {
+                    DP("(%ld%ld) Entry %d: skipping data deletion due to targetData region\n", task->uid.rank, task->uid.id, i);
+                }
             }
         }
         delete task->Loc;

@@ -778,3 +778,74 @@ tdrc TD_Communicator::test_and_receive_data_submit(int cpu_device) {
   }
   return TARGETDART_FAILURE;
 }
+
+
+tdrc TD_Communicator::send_free_request(void *base_ptr, int32_t base_deviceID) {
+  if (comm_size <= 1) {
+    DP("No remote ranks registered\n");
+    return  TARGETDART_SUCCESS;
+  }
+
+  DP("RANK %d - Sending free requests: base_ptr: " DPxMOD ", base_deviceID %d\n", comm_rank, DPxPTR(base_ptr), base_deviceID);
+  std::vector<MPI_Request> reqs;
+  MPI_Aint addr = (MPI_Aint)base_ptr;
+
+  for (int dest = 0; dest < comm_size; dest++) {
+    if (dest != comm_rank) {
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&addr, 1, MPI_AINT, dest, SEND_DATA_FREE, targetdart_comm, &reqs.back());
+      reqs.emplace_back(MPI_REQUEST_NULL);
+      MPI_Isend(&base_deviceID, 1, MPI_INT32_T, dest, SEND_DATA_FREE, targetdart_comm, &reqs.back());
+    }
+  }
+  DP("RANK %d - Waiting on free requests to be received\n", comm_rank);
+  MPI_Waitall(static_cast<int>(reqs.size()), reqs.data(), MPI_STATUS_IGNORE);
+  DP("RANK %d - All free requests received\n", comm_rank);
+
+  return TARGETDART_SUCCESS;
+
+}
+tdrc TD_Communicator::receive_free_request(int cpu_device, int source) {
+  MPI_Aint addr;
+  int32_t base_deviceID;
+
+  MPI_Recv(&addr, 1, MPI_AINT, source, SEND_DATA_FREE, targetdart_comm, MPI_STATUS_IGNORE);
+  MPI_Recv(&base_deviceID, 1, MPI_INT32_T, source, SEND_DATA_FREE, targetdart_comm, MPI_STATUS_IGNORE);
+
+  void *base_ptr = (void *)addr;
+
+  DP("RANK %d - Received free request from rank %d: base_ptr: " DPxMOD ", (device %d)\n", comm_rank, source, DPxPTR(base_ptr), base_deviceID);
+
+  // CPU free
+  void *device_ptr = memory_manager->get_data_grouping(base_ptr, base_deviceID, source, cpu_device, comm_rank);
+  if (device_ptr) {
+    DP("RANK %d: Freeing device_ptr: " DPxMOD " on rank %d device %d (Remote CPU) device\n", comm_rank, DPxPTR(device_ptr), comm_rank, cpu_device);
+    std::free(device_ptr);
+  }
+
+  //TODO: Handle Offload
+  
+  // Remove fake host ptr
+  void const *host_ptr = memory_manager->get_host_ptr(base_ptr, base_deviceID, source);
+  if (host_ptr) {
+    DP("RANK %d: Freeing fake host_ptr:" DPxMOD " for remote target data region\n", comm_rank, DPxPTR(host_ptr));
+    // This is technically undefined behavior but it is fine here, because host_ptr is only a fake remote copy of the 
+    // host_ptr on the original node, so freeing it does not cause any issues since it will not be used further
+    std::free((void *)host_ptr);
+  }
+
+  memory_manager->register_deallocation(base_ptr, base_deviceID, source);
+
+  return TARGETDART_SUCCESS;
+
+}
+tdrc TD_Communicator::test_and_receive_free_request(int cpu_device) {
+  MPI_Status status;
+  int flag;
+
+  MPI_Iprobe(MPI_ANY_SOURCE, SEND_DATA_FREE, targetdart_comm, &flag, &status);
+  if (flag) {
+      return receive_free_request(cpu_device, status.MPI_SOURCE);
+  }
+  return TARGETDART_FAILURE;
+}
