@@ -436,37 +436,38 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
     if (deviceID >= PM->getPhysicalDevices() + 3) {
 
-      int32_t real_device_id = 0;
+      int32_t base_deviceID = 0;
 
       if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET) {
-        real_device_id = plugin_cpu_device;
+        base_deviceID = plugin_cpu_device;
       } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET) {
-        real_device_id = 0;
+        base_deviceID = 0;
       } else if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET) {
-        real_device_id = plugin_cpu_device;
+        base_deviceID = plugin_cpu_device;
       }
 
-      td_sched->get_memory_manager()->add_data_mapping(HstPtr, TgtPtr, real_device_id, comm_rank);
+      // TgtPtr equals the base_ptr
+      td_sched->get_memory_manager()->add_data_mapping(HstPtr, TgtPtr, base_deviceID, comm_rank);
       // handle CPU
-      void *real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(HstPtr, plugin_cpu_device, comm_rank);
-      if (real_TgtPtr)
-        std::memcpy(real_TgtPtr, HstPtr, Size);
+      void *device_ptr = td_sched->get_memory_manager()->get_data_mapping(HstPtr, plugin_cpu_device, comm_rank);
+      if (device_ptr)
+        std::memcpy(device_ptr, HstPtr, Size);
       // handle other devices
       for (int i = 0; i < PM->getPhysicalDevices(); i++) {
-        real_TgtPtr = td_sched->get_memory_manager()->get_data_mapping(HstPtr, i, comm_rank);
-        if (!real_TgtPtr)
+        device_ptr = td_sched->get_memory_manager()->get_data_mapping(HstPtr, i, comm_rank);
+        if (!device_ptr)
           continue;
         auto DeviceOrErr = PM->getDevice(i);
         if (!DeviceOrErr)
           FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
         AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
         GenericDeviceTy *physical_device = &DeviceOrErr->RTL->getDevice(i);
-        auto res = physical_device->dataSubmit(real_TgtPtr, HstPtr, Size, TargetAsyncInfo);
+        auto res = physical_device->dataSubmit(device_ptr, HstPtr, Size, TargetAsyncInfo);
         DeviceOrErr->synchronize(TargetAsyncInfo);
       }
 
       // Handle remote nodes that may have data allocated
-      td_sched->get_communication_manager()->send_data_submit(HstPtr, Size, TgtPtr, real_device_id);
+      td_sched->get_communication_manager()->send_data_submit(HstPtr, Size, TgtPtr, base_deviceID);
     }
     return Plugin::success();
   }
@@ -571,7 +572,6 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_CPU_OFFSET + TD_LOCAL_OFFSET) {
           DP("Additionally allocating on all remote CPU devices\n");
-          // TODO:
           td_sched->get_communication_manager()->send_allocation_request(base_ptr, plugin_cpu_device, Size, TD_CPU);
         }
       }
@@ -601,7 +601,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_OFFLOAD_OFFSET + TD_LOCAL_OFFSET) {
           DP("Additionally allocating on all remote GPU devices\n");
-          // TODO:
+            td_sched->get_communication_manager()->send_allocation_request(base_ptr, 0, Size, TD_OFFLOAD);
         }
       }
 
@@ -625,7 +625,7 @@ struct targetDARTDeviceTy : public GenericDeviceTy {
 
         if (deviceID < PM->getPhysicalDevices() + 4 + TD_ANY_OFFSET + TD_LOCAL_OFFSET) {
           DP("Additionally allocating on all remote devices\n");
-          // TODO:
+          td_sched->get_communication_manager()->send_allocation_request(base_ptr, plugin_cpu_device, Size, TD_ANY);
         }
       }
 

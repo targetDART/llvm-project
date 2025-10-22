@@ -270,10 +270,7 @@ TD_Thread_Manager::TD_Thread_Manager(int32_t device_count, TD_Communicator *comm
                 schedule_man->add_remote_task(heap_task, heap_task->affinity);
             }
 
-            void *base_ptr;
-            size_t size;
-            tddev device;
-            if (comm_man->test_and_receive_allocation_request(schedule_man->total_device_count(), &base_ptr, &size, &device) == TARGETDART_SUCCESS) {
+            if (comm_man->test_and_receive_allocation_request(schedule_man->total_device_count()) == TARGETDART_SUCCESS) {
                 // TODO: ?
             }
 

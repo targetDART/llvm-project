@@ -14,6 +14,7 @@
 #include <vector>
 #include "sys/types.h"
 #include "sys/sysinfo.h"
+#include "PluginManager.h"
 
 
 void TD_Communicator::transfer_setup() {
@@ -665,40 +666,51 @@ tdrc TD_Communicator::send_allocation_request(void *base_ptr, int32_t base_devic
   return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::receive_allocation_request(int cpu_device, int source, void **base_ptr, size_t *size, tddev *device) {
+tdrc TD_Communicator::receive_allocation_request(int cpu_device, int source) {
   MPI_Aint addr;
 
   int32_t base_deviceID;
+  size_t size;
+  tddev device;
 
   MPI_Recv(&addr, 1, MPI_AINT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
   MPI_Recv(&base_deviceID, 1, MPI_INT32_T, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
-  MPI_Recv(size, 1, MPI_UNSIGNED_LONG, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
-  MPI_Recv(device, 1, MPI_INT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
+  MPI_Recv(&size, 1, MPI_UNSIGNED_LONG, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
+  MPI_Recv(&device, 1, MPI_INT, source, SEND_ALLOCATION_REQUEST, targetdart_comm, MPI_STATUS_IGNORE);
 
-  *base_ptr = (void *)addr;
+  void *base_ptr = (void *)addr;
 
-  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", (device %d) size: %lu, tddev: %d\n", comm_rank, source, DPxPTR(*base_ptr), base_deviceID, *size, *device);
+  DP("RANK %d - Received allocation request from rank %d: base_ptr: " DPxMOD ", (device %d) size: %lu, tddev: %d\n", comm_rank, source, DPxPTR(base_ptr), base_deviceID, size, device);
 
-  if (*device & TD_CPU) {
+  if (device & TD_CPU) {
     // allocate on host memory
-    void *device_ptr = std::malloc(*size);
-    memory_manager->register_allocation(*base_ptr, device_ptr, *size, base_deviceID, source, cpu_device, comm_rank);
+    void *device_ptr = std::malloc(size);
+    memory_manager->register_allocation(base_ptr, device_ptr, size, base_deviceID, source, cpu_device, comm_rank);
   }
 
-  if (*device & TD_OFFLOAD) {
+  if (device & TD_OFFLOAD) {
     // allocate on device memories
+    for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+      auto DeviceOrErr = PM->getDevice(i);
+      if (!DeviceOrErr)
+          FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      auto physical_device = &DeviceOrErr->RTL->getDevice(i);
+      void *device_ptr = physical_device->allocate(size, nullptr, TARGET_ALLOC_DEFAULT);
+      if (device_ptr)
+        memory_manager->register_allocation(base_ptr, device_ptr, size, base_deviceID, source, i, comm_rank);      
+    }
   }
 
   return TARGETDART_SUCCESS;
 }
 
-tdrc TD_Communicator::test_and_receive_allocation_request(int cpu_device, void **base_ptr, size_t *size, tddev *device) {
+tdrc TD_Communicator::test_and_receive_allocation_request(int cpu_device) {
   MPI_Status status;
   int flag;
 
   MPI_Iprobe(MPI_ANY_SOURCE, SEND_ALLOCATION_REQUEST, targetdart_comm, &flag, &status);
   if (flag) {
-      return receive_allocation_request(cpu_device, status.MPI_SOURCE, base_ptr, size, device);
+      return receive_allocation_request(cpu_device, status.MPI_SOURCE);
   }
   return TARGETDART_FAILURE;
 
@@ -765,6 +777,20 @@ tdrc TD_Communicator::receive_data_submit(int cpu_device, int source) {
   if (device_ptr)
     std::memcpy(device_ptr, host_ptr, size);
 
+  // handle offload
+  for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+    device_ptr = memory_manager->get_data_mapping(host_ptr, i, comm_rank);
+    if (!device_ptr)
+      continue;
+    auto DeviceOrErr = PM->getDevice(i);
+    if (!DeviceOrErr)
+      FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());
+    AsyncInfoTy TargetAsyncInfo(*DeviceOrErr);
+    auto physical_device = &DeviceOrErr->RTL->getDevice(i);
+    auto res = physical_device->dataSubmit(device_ptr, host_ptr, size, TargetAsyncInfo);
+    DeviceOrErr->synchronize(TargetAsyncInfo);
+  }
+
   return TARGETDART_SUCCESS;
 }
 
@@ -823,7 +849,21 @@ tdrc TD_Communicator::receive_free_request(int cpu_device, int source) {
     std::free(device_ptr);
   }
 
-  //TODO: Handle Offload
+  // Handle Offload
+   for (int i = 0; i < PM->getPhysicalDevices(); i++) {
+      auto DeviceOrErr = PM->getDevice(i);
+      if (!DeviceOrErr)
+        FATAL_MESSAGE(i, "%s", toString(DeviceOrErr.takeError()).c_str());      
+      auto physical_device = &DeviceOrErr->RTL->getDevice(i);
+
+      device_ptr = memory_manager->get_data_grouping(base_ptr, base_deviceID, source, i, comm_rank);
+      if (!device_ptr)
+        continue;
+
+      DP("RANK %d: Freeing device_ptr: " DPxMOD " on rank %d device %d (Remote OFFLOAD) device\n", comm_rank, DPxPTR(device_ptr), comm_rank, i);
+      physical_device->free(device_ptr);
+    }
+
   
   // Remove fake host ptr
   void const *host_ptr = memory_manager->get_host_ptr(base_ptr, base_deviceID, source);
